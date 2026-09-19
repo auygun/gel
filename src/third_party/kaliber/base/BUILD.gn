@@ -1,0 +1,18 @@
+source_set("base") {
+  sources = [
+    "closure.h",
+    "file.h",
+    "hash.h",
+    "interpolation.h",
+    "log.cc",
+    "log.h",
+    "sfnt.cc",
+    "sfnt.h",
+    "task_runner.cc",
+    "task_runner.h",
+    "thread_pool.cc",
+    "thread_pool.h",
+    "timer.h",
+    "vecmath.h",
+  ]
+}

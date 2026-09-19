@@ -1,0 +1,10 @@
+source_set("stb") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+
+  sources = [
+    "stb_image.cc",
+    "stb_image.h",
+  ]
+
+  deps = []
+}

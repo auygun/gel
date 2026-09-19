@@ -1,0 +1,170 @@
+config("glslang_public") {
+  include_dirs = [ "glslang" ]
+
+  cflags = []
+
+  if (target_os == "win") {
+    cflags += [
+      "/wd4464",  # relative include path contains '..'
+      "/wd4458",  # declaration hides class member
+    ]
+  } else {
+    cflags += [ "-fno-finite-math-only" ]
+  }
+}
+
+config("glslang_warnings") {
+  cflags = []
+
+  if (!is_win) {
+    if (!is_clang) {
+      cflags += [ "-Wno-stringop-overread" ]
+    } else {
+      cflags += [ "-Wno-deprecated-enum-enum-conversion" ]
+    }
+  }
+}
+
+action("glslang_build_info") {
+  script = "glslang/build_info.py"
+
+  src_dir = "glslang"
+  changes_file = "glslang/CHANGES.md"
+  template_file = "glslang/build_info.h.tmpl"
+  out_file = "${target_gen_dir}/include/glslang/build_info.h"
+
+  inputs = [
+    changes_file,
+    "glslang/build_info.py",
+    template_file,
+  ]
+  outputs = [ out_file ]
+  args = [
+    rebase_path(src_dir, root_build_dir),
+    "-i",
+    rebase_path(template_file, root_build_dir),
+    "-o",
+    rebase_path(out_file, root_build_dir),
+  ]
+}
+
+source_set("glslang") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+  public_configs = [ ":glslang_public" ]
+
+  include_dirs = [ "${target_gen_dir}/include" ]
+
+  sources = [
+    "glslang/SPIRV/GLSL.ext.AMD.h",
+    "glslang/SPIRV/GLSL.ext.ARM.h",
+    "glslang/SPIRV/GLSL.ext.EXT.h",
+    "glslang/SPIRV/GLSL.ext.KHR.h",
+    "glslang/SPIRV/GLSL.ext.NV.h",
+    "glslang/SPIRV/GLSL.ext.QCOM.h",
+    "glslang/SPIRV/GLSL.std.450.h",
+    "glslang/SPIRV/GlslangToSpv.cpp",
+    "glslang/SPIRV/GlslangToSpv.h",
+    "glslang/SPIRV/InReadableOrder.cpp",
+    "glslang/SPIRV/Logger.cpp",
+    "glslang/SPIRV/Logger.h",
+    "glslang/SPIRV/NonSemanticDebugPrintf.h",
+    "glslang/SPIRV/NonSemanticShaderDebugInfo.h",
+    "glslang/SPIRV/SpvBuilder.cpp",
+    "glslang/SPIRV/SpvBuilder.h",
+    "glslang/SPIRV/SpvPostProcess.cpp",
+    "glslang/SPIRV/SpvTools.cpp",
+    "glslang/SPIRV/SpvTools.h",
+    "glslang/SPIRV/bitutils.h",
+    "glslang/SPIRV/disassemble.cpp",
+    "glslang/SPIRV/disassemble.h",
+    "glslang/SPIRV/doc.cpp",
+    "glslang/SPIRV/doc.h",
+    "glslang/SPIRV/hex_float.h",
+    # "glslang/SPIRV/spirv.hpp11", gn-error: hpp11 is not one of the valid types
+    "glslang/SPIRV/spvIR.h",
+    "glslang/SPIRV/spvUtil.h",
+    "glslang/glslang/GenericCodeGen/CodeGen.cpp",
+    "glslang/glslang/GenericCodeGen/Link.cpp",
+    "glslang/glslang/Include/BaseTypes.h",
+    "glslang/glslang/Include/Common.h",
+    "glslang/glslang/Include/ConstantUnion.h",
+    "glslang/glslang/Include/defer.h",
+    "glslang/glslang/Include/InfoSink.h",
+    "glslang/glslang/Include/InitializeGlobals.h",
+    "glslang/glslang/Include/intermediate.h",
+    "glslang/glslang/Include/PoolAlloc.h",
+    "glslang/glslang/Include/ResourceLimits.h",
+    "glslang/glslang/Include/ShHandle.h",
+    "glslang/glslang/Include/SpirvIntrinsics.h",
+    "glslang/glslang/Include/Types.h",
+    "glslang/glslang/Include/arrays.h",
+    "glslang/glslang/Include/visibility.h",
+    "glslang/glslang/MachineIndependent/Constant.cpp",
+    "glslang/glslang/MachineIndependent/InfoSink.cpp",
+    "glslang/glslang/MachineIndependent/Initialize.cpp",
+    "glslang/glslang/MachineIndependent/Initialize.h",
+    "glslang/glslang/MachineIndependent/IntermTraverse.cpp",
+    "glslang/glslang/MachineIndependent/Intermediate.cpp",
+    "glslang/glslang/MachineIndependent/LiveTraverser.h",
+    "glslang/glslang/MachineIndependent/ParseContextBase.cpp",
+    "glslang/glslang/MachineIndependent/ParseHelper.cpp",
+    "glslang/glslang/MachineIndependent/ParseHelper.h",
+    "glslang/glslang/MachineIndependent/PoolAlloc.cpp",
+    "glslang/glslang/MachineIndependent/RemoveTree.cpp",
+    "glslang/glslang/MachineIndependent/RemoveTree.h",
+    "glslang/glslang/MachineIndependent/Scan.cpp",
+    "glslang/glslang/MachineIndependent/Scan.h",
+    "glslang/glslang/MachineIndependent/ScanContext.h",
+    "glslang/glslang/MachineIndependent/ShaderLang.cpp",
+    "glslang/glslang/MachineIndependent/SpirvIntrinsics.cpp",
+    "glslang/glslang/MachineIndependent/SymbolTable.cpp",
+    "glslang/glslang/MachineIndependent/SymbolTable.h",
+    "glslang/glslang/MachineIndependent/Versions.cpp",
+    "glslang/glslang/MachineIndependent/Versions.h",
+    "glslang/glslang/MachineIndependent/attribute.cpp",
+    "glslang/glslang/MachineIndependent/attribute.h",
+    "glslang/glslang/MachineIndependent/gl_types.h",
+    "glslang/glslang/MachineIndependent/glslang_tab.cpp",
+    "glslang/glslang/MachineIndependent/glslang_tab.cpp.h",
+    "glslang/glslang/MachineIndependent/intermOut.cpp",
+    "glslang/glslang/MachineIndependent/iomapper.cpp",
+    "glslang/glslang/MachineIndependent/iomapper.h",
+    "glslang/glslang/MachineIndependent/limits.cpp",
+    "glslang/glslang/MachineIndependent/linkValidate.cpp",
+    "glslang/glslang/MachineIndependent/localintermediate.h",
+    "glslang/glslang/MachineIndependent/parseConst.cpp",
+    "glslang/glslang/MachineIndependent/parseVersions.h",
+    "glslang/glslang/MachineIndependent/pch.h",
+    "glslang/glslang/MachineIndependent/preprocessor/Pp.cpp",
+    "glslang/glslang/MachineIndependent/preprocessor/PpAtom.cpp",
+    "glslang/glslang/MachineIndependent/preprocessor/PpContext.cpp",
+    "glslang/glslang/MachineIndependent/preprocessor/PpContext.h",
+    "glslang/glslang/MachineIndependent/preprocessor/PpScanner.cpp",
+    "glslang/glslang/MachineIndependent/preprocessor/PpTokens.cpp",
+    "glslang/glslang/MachineIndependent/preprocessor/PpTokens.h",
+    "glslang/glslang/MachineIndependent/propagateNoContraction.cpp",
+    "glslang/glslang/MachineIndependent/propagateNoContraction.h",
+    "glslang/glslang/MachineIndependent/reflection.cpp",
+    "glslang/glslang/MachineIndependent/reflection.h",
+    "glslang/glslang/MachineIndependent/span.h",
+    "glslang/glslang/OSDependent/osinclude.h",
+    "glslang/glslang/Public/ResourceLimits.h",
+    "glslang/glslang/Public/ShaderLang.h",
+    "glslang/glslang/ResourceLimits/ResourceLimits.cpp",
+    "glslang/glslang/ResourceLimits/resource_limits_c.cpp",
+    "glslang/glslang/Public/resource_limits_c.h",
+  ]
+
+  configs += [ ":glslang_warnings" ]
+
+  if (target_os == "linux") {
+    sources += [ "glslang/glslang/OSDependent/Unix/ossource.cpp" ]
+  } else if (target_os == "win") {
+    sources += [ "glslang/glslang/OSDependent/Windows/ossource.cpp" ]
+  } else if (target_os == "android") {
+    sources += [ "glslang/glslang/OSDependent/Unix/ossource.cpp" ]
+    cflags += [ "-Wno-deprecated-enum-enum-conversion" ]
+  }
+
+  deps = [ ":glslang_build_info" ]
+}

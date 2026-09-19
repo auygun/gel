@@ -1,0 +1,15 @@
+config("volk_public") {
+  include_dirs = [ "volk" ]
+}
+
+source_set("volk") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+  public_configs = [ ":volk_public" ]
+
+  sources = [
+    "volk/volk.c",
+    "volk/volk.h",
+  ]
+
+  public_deps = [ "//src/third_party/vulkan" ]
+}

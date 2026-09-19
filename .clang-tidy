@@ -1,0 +1,44 @@
+---
+# Clang-Tidy configuration for Gel
+#
+# Run: clang-tidy -p compile_commands.json src/gel/**/*.cc
+# Generate compile_commands.json: ninja -C out/release -t compdb > compile_commands.json
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-branch-clone,
+  -bugprone-command-processor,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-invalid-enum-default-initialization,
+  -bugprone-macro-parentheses,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-narrowing-conversions,
+  -bugprone-reserved-identifier,
+  -bugprone-suspicious-missing-comma,
+  -bugprone-throwing-static-initialization,
+  -bugprone-unchecked-string-to-number-conversion,
+  clang-analyzer-*,
+  -clang-analyzer-deadcode.DeadStores,
+  -clang-analyzer-nullability.*,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-optin.performance.Padding,
+  modernize-use-emplace,
+  modernize-use-scoped-lock,
+  performance-*,
+  -performance-enum-size,
+  -performance-move-const-arg,
+  -performance-no-int-to-ptr,
+  -performance-unnecessary-value-param,
+
+WarningsAsErrors: >
+  bugprone-empty-catch,
+  bugprone-use-after-move,
+  clang-analyzer-cplusplus.Move,
+  clang-analyzer-core.NonNullParamChecker,
+
+HeaderFilterRegex: 'src/(gel|base|third_party/kaliber)/.*'
+
+CheckOptions:
+  - key: bugprone-argument-comment.StrictMode
+    value: false

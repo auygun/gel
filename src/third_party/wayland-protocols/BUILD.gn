@@ -1,0 +1,6 @@
+source_set("wayland-protocols") {
+  sources = [
+    "primary-selection-unstable-v1-client-protocol.c",
+    "primary-selection-unstable-v1-client-protocol.h",
+  ]
+}

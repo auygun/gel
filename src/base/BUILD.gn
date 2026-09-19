@@ -1,0 +1,27 @@
+# Copyright (C) 2026 Opera Norway AS. All rights reserved.
+#
+# This file is an original work developed by Opera.
+
+source_set("base") {
+  sources = [
+    "command_line.cc",
+    "command_line.h",
+    "double_buffer.h",
+    "exec.cc",
+    "exec.h",
+    "pipe.cc",
+    "pipe.h",
+    "text_search.cc",
+    "text_search.h",
+    "utf8.cc",
+    "utf8.h",
+  ]
+
+  if (target_os == "win") {
+    sources += [ "exec_win.cc" ]
+  } else {
+    sources += [ "exec_posix.cc" ]
+  }
+
+  deps = [ "//src/third_party/kaliber/base" ]
+}

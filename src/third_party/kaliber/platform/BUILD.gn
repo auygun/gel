@@ -1,0 +1,62 @@
+source_set("platform") {
+  sources = [
+    "platform.h",
+    "platform_glfw.cc",
+    "platform_observer.h",
+  ]
+
+  if (target_os == "linux") {
+    sources += [
+      "desktop_entry_linux.cc",
+      "platform_linux.cc",
+      "wayland_selection.cc",
+      "wayland_selection.h",
+    ]
+  } else if (target_os == "mac") {
+    sources += [ "platform_mac.mm" ]
+  } else if (target_os == "win") {
+    sources += [ "platform_win.cc" ]
+  }
+
+  libs = []
+
+  deps = [
+    "//src/third_party/glfw",
+    "//src/third_party/kaliber:input_codes",
+    "//src/third_party/kaliber/base",
+  ]
+
+  if (target_os == "linux") {
+    deps += [ "//src/third_party/wayland-protocols" ]
+    include_dirs = [ "//src/third_party/glfw/glfw/src" ]
+
+    # Force the generated wayland-client-protocol.h (built from the vendored
+    # wayland.xml) to take precedence over the system-installed one. Some
+    # distributions ship the generated core protocol header in /usr/include,
+    # where it shadows the vendored version via the quoted include in
+    # wayland-client.h, and may define a newer protocol than the vendored XML.
+    cflags = [
+      "-include",
+      "wayland-client-protocol.h",
+    ]
+    libs += [
+      "fontconfig",
+      "wayland-client",
+    ]
+  } else if (target_os == "mac") {
+    frameworks = [
+      "AppKit.framework",
+      "CoreFoundation.framework",
+      "CoreText.framework",
+      "Foundation.framework",
+    ]
+  } else if (target_os == "win") {
+    libs += [
+      "shell32.lib",
+      "advapi32.lib",
+      "dwmapi.lib",
+      "dwrite.lib",
+      "ole32.lib",
+    ]
+  }
+}

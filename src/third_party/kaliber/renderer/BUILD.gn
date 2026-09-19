@@ -1,0 +1,32 @@
+source_set("renderer") {
+  sources = [
+    "opengl/renderer_opengl.cc",
+    "opengl/renderer_opengl.h",
+    "opengl/renderer_opengl_glfw.cc",
+    "renderer.cc",
+    "renderer.h",
+    "renderer_types.cc",
+    "renderer_types.h",
+    "shader_source.cc",
+    "shader_source.h",
+    "vulkan/renderer_vulkan.cc",
+    "vulkan/renderer_vulkan_glfw.cc",
+    "vulkan/vulkan_context.cc",
+    "vulkan/vulkan_context_glfw.cc",
+  ]
+
+  deps = [
+    "//src/third_party/glfw",
+    "//src/third_party/glslang",
+    "//src/third_party/kaliber/base",
+    "//src/third_party/kaliber/platform",
+    "//src/third_party/spirv-reflect",
+  ]
+
+  public_deps = [
+    "//src/third_party/vma",
+    "//src/third_party/volk",
+  ]
+
+  deps += [ "//src/third_party/glad" ]
+}

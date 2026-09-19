@@ -1,0 +1,133 @@
+toolchain("gcc") {
+  CC = "$compile_preprocess $cc"
+  CPP = "$compile_preprocess $cxx"
+
+  lib_switch = "-l"
+  lib_dir_switch = "-L"
+
+  tool("asm") {
+    depfile = "{{output}}.d"
+    command = "$CC -MD -MF $depfile {{defines}} {{include_dirs}} {{asmflags}} -c {{source}} -o {{output}}"
+    depsformat = "gcc"
+    outputs =
+        [ "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.o" ]
+    description = "assemble {{source}}"
+  }
+
+  tool("cc") {
+    depfile = "{{output}}.d"
+    command = "$CC -MMD -MF $depfile {{defines}} {{include_dirs}} {{cflags}} {{cflags_c}} -c {{source}} -o {{output}}"
+    depsformat = "gcc"
+    outputs =
+        [ "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.o" ]
+    description = "compile {{output}}"
+  }
+
+  tool("cxx") {
+    depfile = "{{output}}.d"
+    command = "$CPP -MMD -MF $depfile {{defines}} {{include_dirs}} {{cflags}} {{cflags_cc}} -c {{source}} -o {{output}}"
+    depsformat = "gcc"
+    outputs =
+        [ "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.o" ]
+    description = "compile {{output}}"
+  }
+
+  tool("objc") {
+    depfile = "{{output}}.d"
+    command = "$CC -MMD -MF $depfile {{defines}} {{include_dirs}} {{framework_dirs}} {{cflags}} {{cflags_c}} {{cflags_objc}} -c {{source}} -o {{output}}"
+    depsformat = "gcc"
+    outputs =
+        [ "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.o" ]
+    description = "compile {{output}}"
+  }
+
+  tool("objcxx") {
+    depfile = "{{output}}.d"
+    command = "$CPP -MMD -MF $depfile {{defines}} {{include_dirs}} {{framework_dirs}} {{cflags}} {{cflags_cc}} {{cflags_objcc}} -c {{source}} -o {{output}}"
+    depsformat = "gcc"
+    outputs =
+        [ "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.o" ]
+    description = "compile {{output}}"
+  }
+
+  if (is_mac) {
+    not_needed([ "ar" ])  # libtool is used instead.
+  }
+
+  tool("alink") {
+    if (is_mac) {
+      command =
+          "libtool -static -o {{output}} -no_warning_for_no_symbols {{inputs}}"
+    } else {
+      command = "rm -f {{output}} && $ar rcs {{output}} {{inputs}}"
+    }
+    outputs =
+        [ "{{target_out_dir}}/{{target_output_name}}{{output_extension}}" ]
+    default_output_extension = ".a"
+    output_prefix = "lib"
+    description = "link {{target_output_name}}{{output_extension}}"
+  }
+
+  tool("solink") {
+    soname = "{{target_output_name}}{{output_extension}}"
+    sofile = "{{output_dir}}/$soname"
+    rspfile = soname + ".rsp"
+    if (is_mac) {
+      os_specific_option = "-install_name @executable_path/$sofile"
+      rspfile_content = "{{inputs}} {{solibs}} {{libs}}"
+    } else {
+      os_specific_option = "-Wl,-soname=$soname"
+      rspfile_content = "-Wl,--whole-archive {{inputs}} {{solibs}} -Wl,--no-whole-archive {{libs}}"
+    }
+    command = "$CPP -shared {{ldflags}} {{frameworks}} -o $sofile $os_specific_option @$rspfile"
+    default_output_extension = ".so"
+    default_output_dir = "{{root_out_dir}}"
+    outputs = [ sofile ]
+    link_output = sofile
+    depend_output = sofile
+    output_prefix = "lib"
+    description = "link $soname"
+  }
+
+  tool("link") {
+    outfile = "{{target_output_name}}{{output_extension}}"
+    rspfile = "$outfile.rsp"
+    rspfile_content = "{{inputs}}"
+    if (is_mac) {
+      command = "$CPP {{ldflags}} {{solibs}} {{libs}} {{frameworks}} -o $outfile @$rspfile"
+    } else {
+      command = "$CPP {{ldflags}} -o $outfile -Wl,--start-group @$rspfile {{solibs}} -Wl,--end-group {{libs}}"
+    }
+    default_output_dir = "{{root_out_dir}}"
+    outputs = [ outfile ]
+    description = "link $outfile"
+  }
+
+  if (host_os == "win") {
+    tool("stamp") {
+      command = "cmd.exe /c echo > {{output}}"
+      description = "stamp {{output}}"
+    }
+
+    tool("copy") {
+      # Note: The build in copy command can't handle forward slashes as path separators.
+      # Use a python script as a work around.
+      # command = "cmd.exe /c copy /Y {{source}} {{output}}"
+
+      copy_cmd = rebase_path("../copy.py")
+      command = "python \"$copy_cmd\" {{source}} {{output}}"
+
+      description = "copy {{source}} {{output}}"
+    }
+  } else {
+    tool("stamp") {
+      command = "touch {{output}}"
+      description = "stamp {{output}}"
+    }
+
+    tool("copy") {
+      command = "cp -af {{source}} {{output}}"
+      description = "copy {{source}} {{output}}"
+    }
+  }
+}

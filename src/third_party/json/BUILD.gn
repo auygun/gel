@@ -1,0 +1,10 @@
+source_set("json") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+
+  sources = [
+    "json.h",
+    "json.hpp",
+  ]
+
+  deps = []
+}

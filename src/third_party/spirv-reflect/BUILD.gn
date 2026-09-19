@@ -1,0 +1,10 @@
+source_set("spirv-reflect") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+
+  sources = [
+    "spirv-reflect/include/spirv/unified1/spirv.h",
+    "spirv-reflect/spirv_reflect.c",
+  ]
+
+  deps = []
+}

@@ -1,0 +1,16 @@
+source_set("glad") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+  public_configs = [ ":glad_public" ]
+
+  sources = [
+    "gles2.c",
+    "include/KHR/khrplatform.h",
+    "include/glad/gles2.h",
+  ]
+
+  deps = []
+}
+
+config("glad_public") {
+  include_dirs = [ "include" ]
+}

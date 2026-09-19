@@ -1,0 +1,19 @@
+config("vma_public") {
+  defines = []
+
+  if (target_os != "win") {
+    cflags = [ "-Wno-nullability-completeness" ]
+  }
+}
+
+source_set("vma") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+  public_configs = [ ":vma_public" ]
+
+  sources = [
+    "vk_mem_alloc.cpp",
+    "vma/include/vk_mem_alloc.h",
+  ]
+
+  public_deps = [ "//src/third_party/volk" ]
+}

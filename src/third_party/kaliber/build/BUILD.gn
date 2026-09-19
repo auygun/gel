@@ -1,0 +1,216 @@
+config("default") {
+  if (is_linux) {
+    defines = [ "OS_LINUX" ]
+  } else if (is_mac) {
+    defines = [ "OS_MAC" ]
+  } else if (is_win) {
+    defines = [ "OS_WIN" ]
+  }
+  if (is_mac) {
+    defines += [ "OS_APPLE" ]
+  }
+
+  cflags_cc = []
+  if (is_win) {
+    cflags_cc += [ "/std:c++20" ]
+  } else {
+    cflags_cc += [ "-std=c++20" ]
+  }
+
+  cflags = []
+  if (is_win) {
+    cflags += [
+      "/permissive-",  # Don't enable nonconforming code to compile.
+      "/EHsc",  # Use C++ exception handling.
+      "/Gd",  # __cdecl calling convention.
+      "/utf-8",  # Set Source and Executable character set.
+    ]
+    defines += [
+      # Windows headers from MS and third party expects these to be set.
+      "_WINDOWS",
+      "_UNICODE",
+      "UNICODE",
+
+      # Don't want MS specific extensions for C stdlib functions.
+      "_CRT_SECURE_NO_WARNINGS",
+
+      # Clean up the Windows headers.
+      "WIN32_LEAN_AND_MEAN",
+      "NOMINMAX",
+    ]
+  } else {
+    if (is_linux) {
+      cflags += [
+        "-fPIC",  # Emit position-independent code suitable for dynamic linking.
+      ]
+      libs = [
+        "dl",  # Dynamic loading (dlopen/dlsym).
+        "pthread",  # Use the POSIX thread library.
+      ]
+    } else if (is_mac) {
+      asmflags = [
+        "-target",
+        "arm64-apple-macos12",
+      ]
+      cflags += [
+        "-target",
+        "arm64-apple-macos12",
+      ]
+      ldflags = [
+        "-target",
+        "arm64-apple-macos12",
+      ]
+    }
+  }
+
+  # Avoid relative paths everywhere.
+  include_dirs = [ "//src" ]
+}
+
+config("debug") {
+  defines = [ "_DEBUG" ]
+
+  if (is_win) {
+    cflags = [
+      "/GS",  # Buffer security checks (buffer overruns).
+      "/sdl",  # Enable additional security features and warnings.
+      "/RTC1",  # Enable fast run-time checks.
+      "/Od",  # Disable optimizations.
+      "/fp:precise",  # Floating points are predictable.
+      "/MDd",  # Link with multithread debug DLL run-time libraries.
+      "/Z7",  # Produce obj files that contain full symbolic debugging
+              # information.
+    ]
+    ldflags = [ "/DEBUG:FASTLINK" ]  # Reference the debug symbols in the obj
+                                     # files instead of a PDB file.
+  } else {
+    cflags = [
+      "-g",  # Debug symbols.
+      # TODO: This makes it hard to step through code on Linux.
+      # "-Og",  # Optimizations that works well with debugger.
+    ]
+
+    if (is_linux) {
+      defines += [
+        "_GLIBCXX_DEBUG=1",  # Enable asserts in stl headers.
+      ]
+    }
+  }
+}
+
+config("release") {
+  defines = [ "NDEBUG" ]
+
+  if (is_win) {
+    cflags = [
+      "/GL",  # Link-time code generation / Whole program optimization.
+      "/Gy",  # Allows converting inline functions to separate functions.
+      "/O2",  # Optimize for maximum speed.
+      "/Oi",  # Enable intrinsics.
+      "/fp:fast",  # Floating points are fast.
+      "/MD",  # Link with multithread release DLL run-time libraries.
+
+      # "/arch:AVX2",   # Minimum CPU architecture.
+    ]
+    ldflags = [
+      "/LTCG",  # Link time code generation.
+      "/OPT:ICF",  # COMDAT (common data) folding, e.g. vtables and big inline
+                   # functions that can't be inlined, but also if identical code
+                   # happens to be generated though common math operations or
+                   # similar.
+      "/OPT:REF",  # Eliminate unreferenced code and data.
+    ]
+  } else {
+    cflags = [
+      "-O3",  # Optimize for speed.
+      "-fno-math-errno",  # Do not check or set errno for invalid input to sqrt
+                          # and other math functions.
+    ]
+
+    if (is_mac) {
+      ldflags = [ "-dead-strip" ]
+    } else {
+      # Place both data and functions in it's their own sections.
+      # Linker optimization that allows for smaller binaries.
+      cflags += [
+        "-fdata-sections",
+        "-ffunction-sections",
+      ]
+      ldflags = [ "-Wl,--gc-sections" ]
+    }
+  }
+}
+
+config("warnings") {
+  if (is_win) {
+    cflags = [
+      "/WX",  # Treat warnings as errors.
+      "/W4",  # Enable useful warnings without noise.
+
+      # Disable the following warnings:
+      "/wd4100",  # unreferenced formal parameter
+      "/wd4201",  # nonstandard extension used: nameless struct/union
+      "/wd4244",  # possible loss of data
+      "/wd4456",  # declaration hides previous local declaration
+      "/wd4702",  # unreachable code
+      "/wd4722",  # destructor never returns
+    ]
+  } else if (is_mac) {
+    cflags = [
+      "-Wno-deprecated-declarations",
+      "-Wno-inconsistent-missing-override",
+      "-Wno-pointer-sign",
+    ]
+  } else {
+    cflags = [
+      # Enable as much warnings as possible.
+      "-Werror",  # Make all warnings into errors.
+      "-Wall",  # Enable (almost) all warnings.
+      "-Wextra",  # Enable even more warnings.
+
+      # forbidden extensions.
+      "-Wvla",  # Warn if variable-length array is used in code.
+
+      # Disable the following warnings:
+      "-Wno-unused-parameter",
+      "-Wno-sign-compare",
+    ]
+  }
+}
+
+config("executable") {
+  if (is_linux) {
+    ldflags = [
+      "-Wl,-rpath,\$ORIGIN",  # Add directory to runtime library search path.
+    ]
+  } else if (is_mac) {
+    ldflags = [ "-Wl,-rpath,@loader_path/." ]
+  }
+}
+
+config("shared_library") {
+  if (is_linux) {
+    ldflags = [
+      "-Wl,-rpath,\$ORIGIN",  # Add directory to runtime library search path.
+    ]
+  } else if (is_mac) {
+    ldflags = [ "-Wl,-rpath,@loader_path/." ]
+  }
+}
+
+# TODO: This needs some more investigation.
+# Is it possible to avoid setting it and rely on defaults?
+# Some tools will be console apps while games will be gui apps.
+# GLFW seems to be using console in debug mode and gui in release mode.
+if (is_win) {
+  config("win_gui") {
+    ldflags = [
+      "/SUBSYSTEM:WINDOWS",
+      "/ENTRY:mainCRTStartup",
+    ]
+  }
+
+  config("win_console") {
+    ldflags = [ "/SUBSYSTEM:CONSOLE" ]
+  }
+}

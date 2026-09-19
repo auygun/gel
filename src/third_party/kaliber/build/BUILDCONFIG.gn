@@ -1,0 +1,83 @@
+declare_args() {
+  is_debug = false
+
+  is_clang = false
+
+  # Note that this uses the 'cc' and 'c++' links that should map to GCC on linux
+  # systems and clang on macs.
+  ar = "ar"
+  cc = "cc"
+  cxx = "c++"
+
+  # Useful for tools like 'ccache' and 'icecc' to speed up compilation.
+  compile_preprocess = ""
+}
+
+if (is_clang) {
+  cc = "clang"
+  cxx = "clang++"
+} else if (cc == "clang" && cxx == "clang++") {
+  is_clang = true
+}
+
+if (compile_preprocess == "" &&
+    exec_script("check_binary.py", [ "ccache" ], "value") == 1) {
+  compile_preprocess = "ccache"
+}
+
+# Platform detection
+if (target_os == "") {
+  target_os = host_os
+}
+if (current_os == "") {
+  current_os = target_os
+}
+
+is_linux = current_os == "linux"
+is_mac = current_os == "mac"
+is_win = current_os == "win"
+
+if (target_cpu == "") {
+  target_cpu = host_cpu
+}
+if (target_cpu == "x86_64") {
+  target_cpu = "x64"
+}
+if (current_cpu == "") {
+  current_cpu = target_cpu
+}
+
+# Set defaults
+_default_config = [
+  "//src/third_party/kaliber/build:default",
+  "//src/third_party/kaliber/build:warnings",
+]
+
+if (is_debug) {
+  _default_config += [ "//src/third_party/kaliber/build:debug" ]
+} else {
+  _default_config += [ "//src/third_party/kaliber/build:release" ]
+}
+
+set_defaults("executable") {
+  configs = [ "//src/third_party/kaliber/build:executable" ] + _default_config
+  if (is_win && !is_debug) {
+    configs += [ "//src/third_party/kaliber/build:win_gui" ]
+  }
+}
+set_defaults("static_library") {
+  configs = _default_config
+}
+set_defaults("shared_library") {
+  configs = [ "//src/third_party/kaliber/build:shared_library" ] + _default_config
+}
+set_defaults("source_set") {
+  configs = _default_config
+}
+
+if (is_win) {
+  set_default_toolchain("//src/third_party/kaliber/build/toolchain/msvc")
+} else {
+  # Clang behaves like GCC in most cases.
+  set_default_toolchain("//src/third_party/kaliber/build/toolchain/gcc")
+}

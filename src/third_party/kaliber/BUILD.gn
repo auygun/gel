@@ -1,0 +1,31 @@
+source_set("input_codes") {
+  sources = [ "input_codes.h" ]
+}
+
+source_set("kaliber") {
+  if (target_os != "win") {
+    cflags = [ "-Wno-deprecated-declarations" ]
+  }
+
+  include_dirs = [ "//src/third_party/imgui/imgui" ]
+
+  sources = [
+    "color_bitmap_font_loader.cc",
+    "color_bitmap_font_loader.h",
+    "imgui_backend.cc",
+    "imgui_backend.h",
+  ]
+
+  deps = [
+    "//src/third_party/freetype",
+    "//src/third_party/stb",
+  ]
+
+  public_deps = [
+    ":input_codes",
+    "//src/third_party/imgui",
+    "//src/third_party/kaliber/base",
+    "//src/third_party/kaliber/platform",
+    "//src/third_party/kaliber/renderer",
+  ]
+}

@@ -1,0 +1,132 @@
+source_set("glfw") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+
+  public_configs = [ ":glfw_public" ]
+
+  defines = []
+
+  sources = [
+    "glfw/src/context.c",
+    "glfw/src/egl_context.c",
+    "glfw/src/init.c",
+    "glfw/src/input.c",
+    "glfw/src/monitor.c",
+    "glfw/src/null_init.c",
+    "glfw/src/null_joystick.c",
+    "glfw/src/null_monitor.c",
+    "glfw/src/null_window.c",
+    "glfw/src/osmesa_context.c",
+    "glfw/src/platform.c",
+    "glfw/src/vulkan.c",
+    "glfw/src/window.c",
+  ]
+
+  libs = []
+
+  if (target_os == "linux") {
+    defines += [
+      "_GLFW_X11",
+      "_GLFW_WAYLAND",
+    ]
+    sources += [
+      "glfw/src/glx_context.c",
+      "glfw/src/linux_joystick.c",
+      "glfw/src/posix_module.c",
+      "glfw/src/posix_poll.c",
+      "glfw/src/posix_thread.c",
+      "glfw/src/posix_time.c",
+      "glfw/src/wl_init.c",
+      "glfw/src/wl_monitor.c",
+      "glfw/src/wl_window.c",
+      "glfw/src/x11_init.c",
+      "glfw/src/x11_monitor.c",
+      "glfw/src/x11_window.c",
+      "glfw/src/xkb_unicode.c",
+    ]
+    libs += [ "X11" ]
+    public_deps = [ ":wayland_protocols" ]
+  } else if (target_os == "win") {
+    defines += [ "_GLFW_WIN32" ]
+    sources += [
+      "glfw/src/wgl_context.c",
+      "glfw/src/win32_init.c",
+      "glfw/src/win32_joystick.c",
+      "glfw/src/win32_module.c",
+      "glfw/src/win32_monitor.c",
+      "glfw/src/win32_thread.c",
+      "glfw/src/win32_time.c",
+      "glfw/src/win32_window.c",
+    ]
+    libs += [
+      "gdi32.lib",
+      "user32.lib",
+    ]
+    deps = []
+  } else if (target_os == "mac") {
+    defines += [ "_GLFW_COCOA" ]
+    sources += [
+      "glfw/src/cocoa_init.m",
+      "glfw/src/cocoa_joystick.m",
+      "glfw/src/cocoa_monitor.m",
+      "glfw/src/cocoa_window.m",
+      "glfw/src/macos_time.c",
+      "glfw/src/nsgl_context.m",
+      "glfw/src/posix_module.c",
+      "glfw/src/posix_poll.c",
+      "glfw/src/posix_thread.c",
+    ]
+    frameworks = [
+      "Cocoa.framework",
+      "IOKit.framework",
+      "CoreFoundation.framework",
+      "QuartzCore.framework",
+    ]
+    deps = []
+  } else {
+    deps = []
+  }
+}
+
+if (target_os == "linux") {
+  _wayland_protocols = [
+    "fractional-scale-v1",
+    "idle-inhibit-unstable-v1",
+    "pointer-constraints-unstable-v1",
+    "relative-pointer-unstable-v1",
+    "viewporter",
+    "wayland",
+    "xdg-activation-v1",
+    "xdg-decoration-unstable-v1",
+    "xdg-shell",
+  ]
+
+  _gen_dir = "$target_gen_dir/wayland"
+
+  action("wayland_protocols") {
+    script = "gen_wayland_protocols.py"
+    sources = []
+    outputs = []
+    args = [
+      rebase_path(_gen_dir, root_build_dir),
+      rebase_path("glfw/deps/wayland", root_build_dir),
+    ]
+    foreach(proto, _wayland_protocols) {
+      sources += [ "glfw/deps/wayland/${proto}.xml" ]
+      outputs += [
+        "${_gen_dir}/${proto}-client-protocol.h",
+        "${_gen_dir}/${proto}-client-protocol-code.h",
+      ]
+      args += [ proto ]
+    }
+  }
+
+  config("wayland_protocol_include") {
+    include_dirs = [ _gen_dir ]
+  }
+}
+
+config("glfw_public") {
+  if (target_os == "linux") {
+    configs = [ ":wayland_protocol_include" ]
+  }
+}

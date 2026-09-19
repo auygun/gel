@@ -1,0 +1,183 @@
+# Copyright (C) 2026 Opera Norway AS. All rights reserved.
+#
+# This file is an original work developed by Opera.
+
+action("help_data") {
+  script = "//build/gen_help_data.py"
+  sources = [ "//HELP.md" ]
+  outputs = [ "$target_gen_dir/help_data.h" ]
+  args = [
+    rebase_path("//HELP.md", root_build_dir),
+    rebase_path("$target_gen_dir/help_data.h", root_build_dir),
+  ]
+  public_configs = [ ":gen_data_include" ]
+}
+
+action("licenses_data") {
+  script = "//build/gen_help_data.py"
+  sources = [ "//LICENSE.md" ]
+  outputs = [ "$target_gen_dir/licenses_data.h" ]
+  args = [
+    rebase_path("//LICENSE.md", root_build_dir),
+    rebase_path("$target_gen_dir/licenses_data.h", root_build_dir),
+    "kLicensesData",
+  ]
+  public_configs = [ ":gen_data_include" ]
+}
+
+# Generates version.h from git tags. Only rewrites the file when the version
+# string actually changes, and GN's restat=1 on actions means Ninja skips
+# recompilation when the content is unchanged. A depfile tracks .git/HEAD and
+# the current branch ref so the action re-runs on commits and branch switches.
+action("version") {
+  script = "//build/gen_version.py"
+  depfile = "$target_gen_dir/version.d"
+  outputs = [ "$target_gen_dir/version.h" ]
+  args = [
+    rebase_path("$target_gen_dir/version.h", root_build_dir),
+    rebase_path("$target_gen_dir/version.d", root_build_dir),
+    rebase_path("//", root_build_dir),
+  ]
+  if (is_debug) {
+    args += [ "--debug" ]
+  }
+  public_configs = [ ":gen_data_include" ]
+}
+
+action("icon_data") {
+  script = "//build/gen_icon_data.py"
+  sources = [ "icon.png" ]
+  outputs = [ "$target_gen_dir/icon_data.h" ]
+  args = [
+    rebase_path("icon.png", root_build_dir),
+    rebase_path("$target_gen_dir/icon_data.h", root_build_dir),
+  ]
+  public_configs = [ ":gen_data_include" ]
+}
+
+if (is_win) {
+  action("icon_ico") {
+    script = "//build/gen_icon_ico.py"
+    sources = [ "icon.png" ]
+    outputs = [ "$target_gen_dir/icon.ico" ]
+    args = [
+      rebase_path("icon.png", root_build_dir),
+      rebase_path("$target_gen_dir/icon.ico", root_build_dir),
+    ]
+    public_configs = [ ":gen_data_include" ]
+  }
+}
+
+config("gen_data_include") {
+  include_dirs = [ "$target_gen_dir" ]
+}
+
+executable("gel") {
+  sources = [
+    "commands/git.cc",
+    "commands/git.h",
+    "commands/git_blame.cc",
+    "commands/git_blame.h",
+    "commands/git_cat_file.cc",
+    "commands/git_cat_file.h",
+    "commands/git_cmd.cc",
+    "commands/git_cmd.h",
+    "commands/git_diff.cc",
+    "commands/git_diff.h",
+    "commands/git_diff_tree.cc",
+    "commands/git_diff_tree.h",
+    "commands/git_local_status.cc",
+    "commands/git_local_status.h",
+    "commands/git_log.cc",
+    "commands/git_log.h",
+    "dejavu_sans_mono.h",
+    "gel.cc",
+    "gel.h",
+    "git_repo.cc",
+    "git_repo.h",
+    "persistent_settings.cc",
+    "persistent_settings.h",
+    "ui/colored_line.h",
+    "ui/commit_search.cc",
+    "ui/commit_search.h",
+    "ui/completion_data.h",
+    "ui/directory_browser.cc",
+    "ui/directory_browser.h",
+    "ui/git_cmd_runner.cc",
+    "ui/git_cmd_runner.h",
+    "ui/git_console_window.cc",
+    "ui/git_console_window.h",
+    "ui/help_modal.cc",
+    "ui/help_modal.h",
+    "ui/icons.cc",
+    "ui/icons.h",
+    "ui/image_diff_viewer.cc",
+    "ui/image_diff_viewer.h",
+    "ui/lower_panel/blame_lookup.cc",
+    "ui/lower_panel/blame_lookup.h",
+    "ui/lower_panel/charts/bar_chart.cc",
+    "ui/lower_panel/charts/bar_chart.h",
+    "ui/lower_panel/charts/chart_renderer.cc",
+    "ui/lower_panel/charts/chart_renderer.h",
+    "ui/lower_panel/charts/donut_chart.cc",
+    "ui/lower_panel/charts/donut_chart.h",
+    "ui/lower_panel/charts/treemap_chart.cc",
+    "ui/lower_panel/charts/treemap_chart.h",
+    "ui/lower_panel/commit_diff.cc",
+    "ui/lower_panel/commit_diff.h",
+    "ui/lower_panel/commit_size.cc",
+    "ui/lower_panel/commit_size.h",
+    "ui/lower_panel/diff_content.cc",
+    "ui/lower_panel/diff_content.h",
+    "ui/lower_panel/file_list.cc",
+    "ui/lower_panel/file_list.h",
+    "ui/lower_panel/size_file_tree.cc",
+    "ui/lower_panel/size_file_tree.h",
+    "ui/main_window.cc",
+    "ui/main_window.h",
+    "ui/modules/markdown_renderer.cc",
+    "ui/modules/markdown_renderer.h",
+    "ui/modules/search_bar.cc",
+    "ui/modules/search_bar.h",
+    "ui/modules/text_viewer.cc",
+    "ui/modules/text_viewer.h",
+    "ui/modules/text_viewer_search.cc",
+    "ui/modules/text_viewer_search.h",
+    "ui/popup_modal.cc",
+    "ui/popup_modal.h",
+    "ui/settings_modal.cc",
+    "ui/settings_modal.h",
+    "ui/style.cc",
+    "ui/style.h",
+    "ui/syntax_highlight.cc",
+    "ui/syntax_highlight.h",
+    "ui/toolbar.cc",
+    "ui/toolbar.h",
+    "ui/upper_panel/commit_context_menu.cc",
+    "ui/upper_panel/commit_context_menu.h",
+    "ui/upper_panel/commit_graph.cc",
+    "ui/upper_panel/commit_graph.h",
+    "ui/upper_panel/commit_history.cc",
+    "ui/upper_panel/commit_history.h",
+    "ui/upper_panel/commit_modal.cc",
+    "ui/upper_panel/commit_modal.h",
+    "ui/utils.cc",
+    "ui/utils.h",
+  ]
+
+  deps = [
+    ":help_data",
+    ":icon_data",
+    ":licenses_data",
+    ":version",
+    "//src/base",
+    "//src/third_party/json",
+    "//src/third_party/kaliber",
+    "//src/third_party/stb",
+  ]
+
+  if (is_win) {
+    sources += [ "gel.rc" ]
+    deps += [ ":icon_ico" ]
+  }
+}

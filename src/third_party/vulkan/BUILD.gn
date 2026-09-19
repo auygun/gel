@@ -1,0 +1,61 @@
+config("vulkan_public") {
+  include_dirs = [ "vulkan/include" ]
+
+  if (target_os == "linux") {
+    defines = [
+      "VK_USE_PLATFORM_XLIB_KHR",
+      "VK_USE_PLATFORM_WAYLAND_KHR",
+    ]
+  } else if (target_os == "win") {
+    defines = [ "VK_USE_PLATFORM_WIN32_KHR" ]
+  } else if (target_os == "android") {
+    defines = [ "VK_USE_PLATFORM_ANDROID_KHR" ]
+  } else if (target_os == "mac") {
+    defines = [ "VK_USE_PLATFORM_METAL_EXT" ]
+  }
+}
+
+source_set("vulkan") {
+  configs -= [ "//src/third_party/kaliber/build:warnings" ]
+  public_configs = [ ":vulkan_public" ]
+
+  sources = [
+    "vulkan/include/vulkan/vk_icd.h",
+    "vulkan/include/vulkan/vk_layer.h",
+    "vulkan/include/vulkan/vk_platform.h",
+    "vulkan/include/vulkan/vulkan.h",
+    "vulkan/include/vulkan/vulkan.hpp",
+    "vulkan/include/vulkan/vulkan_android.h",
+    "vulkan/include/vulkan/vulkan_beta.h",
+    "vulkan/include/vulkan/vulkan_core.h",
+    "vulkan/include/vulkan/vulkan_directfb.h",
+    "vulkan/include/vulkan/vulkan_enums.hpp",
+    "vulkan/include/vulkan/vulkan_extension_inspection.hpp",
+    "vulkan/include/vulkan/vulkan_format_traits.hpp",
+    "vulkan/include/vulkan/vulkan_fuchsia.h",
+    "vulkan/include/vulkan/vulkan_funcs.hpp",
+    "vulkan/include/vulkan/vulkan_ggp.h",
+    "vulkan/include/vulkan/vulkan_handles.hpp",
+    "vulkan/include/vulkan/vulkan_hash.hpp",
+    "vulkan/include/vulkan/vulkan_hpp_macros.hpp",
+    "vulkan/include/vulkan/vulkan_ios.h",
+    "vulkan/include/vulkan/vulkan_macos.h",
+    "vulkan/include/vulkan/vulkan_metal.h",
+    "vulkan/include/vulkan/vulkan_raii.hpp",
+    "vulkan/include/vulkan/vulkan_screen.h",
+    "vulkan/include/vulkan/vulkan_shared.hpp",
+    "vulkan/include/vulkan/vulkan_static_assertions.hpp",
+    "vulkan/include/vulkan/vulkan_structs.hpp",
+    "vulkan/include/vulkan/vulkan_to_string.hpp",
+    "vulkan/include/vulkan/vulkan_video.hpp",
+    "vulkan/include/vulkan/vulkan_vi.h",
+    "vulkan/include/vulkan/vulkan_wayland.h",
+    "vulkan/include/vulkan/vulkan_win32.h",
+    "vulkan/include/vulkan/vulkan_xcb.h",
+    "vulkan/include/vulkan/vulkan_xlib.h",
+    "vulkan/include/vulkan/vulkan_xlib_xrandr.h",
+    "vk_enum_string_helper.h",
+  ]
+
+  deps = []
+}

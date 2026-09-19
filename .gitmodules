@@ -1,0 +1,24 @@
+[submodule "src/third_party/glfw"]
+	path = src/third_party/glfw/glfw
+	url = https://github.com/glfw/glfw
+[submodule "src/third_party/imgui/imgui"]
+	path = src/third_party/imgui/imgui
+	url = https://github.com/ocornut/imgui
+[submodule "src/third_party/freetype/freetype"]
+	path = src/third_party/freetype/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "src/third_party/glslang/glslang"]
+	path = src/third_party/glslang/glslang
+	url = https://github.com/KhronosGroup/glslang.git
+[submodule "src/third_party/spirv-reflect/spirv-reflect"]
+	path = src/third_party/spirv-reflect/spirv-reflect
+	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+[submodule "src/third_party/vulkan/vulkan"]
+	path = src/third_party/vulkan/vulkan
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "src/third_party/volk/volk"]
+	path = src/third_party/volk/volk
+	url = https://github.com/zeux/volk.git
+[submodule "src/third_party/vma/vma"]
+	path = src/third_party/vma/vma
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

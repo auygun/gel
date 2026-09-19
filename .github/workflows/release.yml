@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: gel-linux
+          - os: windows-latest
+            artifact: gel-windows
+          - os: macos-latest
+            artifact: gel-macos
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Update submodules
+      run: |
+        git submodule sync --recursive
+        git submodule update --init --recursive
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y generate-ninja libwayland-dev libgl-dev libfontconfig-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev
+
+    - name: Install GN and Ninja (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\tools" | Out-Null
+        curl.exe -fL -o "$env:RUNNER_TEMP\gn.zip" "https://chrome-infra-packages.appspot.com/dl/gn/gn/windows-amd64/+/latest"
+        curl.exe -fL -o "$env:RUNNER_TEMP\ninja.zip" "https://github.com/ninja-build/ninja/releases/latest/download/ninja-win.zip"
+        Expand-Archive -Path "$env:RUNNER_TEMP\gn.zip" -DestinationPath "$env:RUNNER_TEMP\tools"
+        Expand-Archive -Path "$env:RUNNER_TEMP\ninja.zip" -DestinationPath "$env:RUNNER_TEMP\tools"
+        Add-Content -Path "$env:GITHUB_PATH" -Value "$env:RUNNER_TEMP\tools"
+
+    - name: Install GN and Ninja (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        mkdir -p "$RUNNER_TEMP/tools"
+        if [ "$(uname -m)" = "x86_64" ]; then gn_arch="amd64"; else gn_arch="arm64"; fi
+        curl -fL -o /tmp/gn.zip "https://chrome-infra-packages.appspot.com/dl/gn/gn/mac-${gn_arch}/+/latest"
+        curl -fL -o /tmp/ninja.zip "https://github.com/ninja-build/ninja/releases/latest/download/ninja-mac.zip"
+        unzip -o /tmp/gn.zip -d "$RUNNER_TEMP/tools"
+        unzip -o /tmp/ninja.zip -d "$RUNNER_TEMP/tools"
+        echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+    - name: Build
+      if: runner.os != 'Windows'
+      run: |
+        gn gen out/release
+        ninja -C out/release
+
+    # The MSVC environment (cl.exe, link.exe, ...) is set up with the
+    # Visual Studio DevShell module and the build runs in the same step,
+    # because the environment does not persist across steps.
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+        $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $vsPath) { throw "No Visual Studio installation with C++ tools found" }
+        Write-Host "Using Visual Studio at: $vsPath"
+        $devShell = Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+        if (-not (Test-Path $devShell)) { throw "DevShell module not found at $devShell" }
+        Import-Module $devShell
+        Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64" | Out-Null
+        Write-Host "cl.exe: $((Get-Command cl.exe -ErrorAction SilentlyContinue).Source)"
+        gn --version
+        gn gen out/release
+        ninja -C out/release
+
+    - name: Stage binary (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        mkdir -p dist
+        cp out/release/gel dist/gel-linux-x64
+
+    - name: Stage binary (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        mkdir -p dist
+        case "$(uname -m)" in
+          arm64) arch=arm64 ;;
+          *) arch=x64 ;;
+        esac
+        cp out/release/gel "dist/gel-macos-${arch}"
+
+    - name: Stage binary (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force dist | Out-Null
+        Copy-Item out/release/gel.exe dist/gel-windows-x64.exe
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact }}
+        path: dist
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    # gh release create --generate-notes runs git locally to build the
+    # notes, so the repo must be checked out with full history.
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/download-artifact@v4
+      with:
+        path: dist
+
+    - name: Create GitHub release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        tag="${GITHUB_REF#refs/tags/}"
+        args=(--title "$tag" --generate-notes)
+        case "$tag" in
+          *alpha*|*beta*|*rc*) args+=(--prerelease) ;;
+        esac
+        gh release create "$tag" "${args[@]}" dist/*/*

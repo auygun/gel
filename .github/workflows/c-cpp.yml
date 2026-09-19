@@ -1,0 +1,86 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        mode: [ release, debug ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Update submodules
+      run: |
+        git submodule sync --recursive
+        git submodule update --init --recursive
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y generate-ninja libwayland-dev libgl-dev libfontconfig-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev
+
+    - name: Install GN and Ninja (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\tools" | Out-Null
+        curl.exe -fL -o "$env:RUNNER_TEMP\gn.zip" "https://chrome-infra-packages.appspot.com/dl/gn/gn/windows-amd64/+/latest"
+        curl.exe -fL -o "$env:RUNNER_TEMP\ninja.zip" "https://github.com/ninja-build/ninja/releases/latest/download/ninja-win.zip"
+        Expand-Archive -Path "$env:RUNNER_TEMP\gn.zip" -DestinationPath "$env:RUNNER_TEMP\tools"
+        Expand-Archive -Path "$env:RUNNER_TEMP\ninja.zip" -DestinationPath "$env:RUNNER_TEMP\tools"
+        Add-Content -Path "$env:GITHUB_PATH" -Value "$env:RUNNER_TEMP\tools"
+
+    - name: Install GN and Ninja (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        mkdir -p "$RUNNER_TEMP/tools"
+        if [ "$(uname -m)" = "x86_64" ]; then gn_arch="amd64"; else gn_arch="arm64"; fi
+        curl -fL -o /tmp/gn.zip "https://chrome-infra-packages.appspot.com/dl/gn/gn/mac-${gn_arch}/+/latest"
+        curl -fL -o /tmp/ninja.zip "https://github.com/ninja-build/ninja/releases/latest/download/ninja-mac.zip"
+        unzip -o /tmp/gn.zip -d "$RUNNER_TEMP/tools"
+        unzip -o /tmp/ninja.zip -d "$RUNNER_TEMP/tools"
+        echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+    - name: gn
+      if: runner.os != 'Windows'
+      run: |
+        if [ "${{ matrix.mode }}" = "debug" ]; then
+          gn gen --args=is_debug=true out/${{ matrix.mode }}
+        else
+          gn gen out/${{ matrix.mode }}
+        fi
+    - name: ninja
+      if: runner.os != 'Windows'
+      run: ninja -C out/${{ matrix.mode }}
+
+    # The MSVC environment (cl.exe, link.exe, ...) is set up with the
+    # Visual Studio DevShell module and the build runs in the same step,
+    # because the environment does not persist across steps.
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+        $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $vsPath) { throw "No Visual Studio installation with C++ tools found" }
+        Write-Host "Using Visual Studio at: $vsPath"
+        $devShell = Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+        if (-not (Test-Path $devShell)) { throw "DevShell module not found at $devShell" }
+        Import-Module $devShell
+        Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64" | Out-Null
+        Write-Host "cl.exe: $((Get-Command cl.exe -ErrorAction SilentlyContinue).Source)"
+        gn --version
+        if ("${{ matrix.mode }}" -eq "debug") {
+          gn gen --args=is_debug=true out/${{ matrix.mode }}
+        } else {
+          gn gen out/${{ matrix.mode }}
+        }
+        ninja -C out/${{ matrix.mode }}
