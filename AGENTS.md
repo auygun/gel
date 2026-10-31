@@ -62,7 +62,7 @@ clang-tidy -p compile_commands.json <files>
 
 **`MainWindow`** (`ui/main_window.h/cc`) — Central coordinator. Owns all UI panels and git workers. Implements delegate interfaces for `CommitHistory`, `CommitDiff`, `Toolbar`, and `DirectoryBrowser`. Merges worker data each frame and dispatches user actions.
 
-**Git command workers** (`commands/`) — Each worker (GitLog, GitDiff, GitLocalStatus, GitBlame, GitCatFile, GitDiffTree) inherits from `Git` base class which runs git as a subprocess in a background thread. Workers parse output incrementally and expose results via thread-safe double-buffers or locked fields. `GitCmdRunner` (`ui/git_cmd_runner.h`) handles interactive git operations (cherry-pick, revert, rebase, merge).
+**Git command workers** (`commands/`) — Each worker (GitLog, GitDiff, GitLocalStatus, GitBlame, GitCatFile, GitDiffTree, GitRefs, GitPeelTags) inherits from `Git` base class which runs git as a subprocess in a background thread. Workers parse output incrementally and expose results via thread-safe double-buffers or locked fields. `GitCmdRunner` (`ui/git_cmd_runner.h`) handles interactive git operations (cherry-pick, revert, rebase, merge).
 
 **UI panels** (`ui/`) — Separate classes for each UI region:
 - `upper_panel/` — CommitHistory (table + graph), CommitContextMenu, CommitGraph
@@ -90,7 +90,7 @@ UI panels communicate with `MainWindow` via delegate interfaces (e.g., `CommitHi
 
 ### Double-Buffer Pattern
 
-Workers expose results to the main thread via `base::DoubleBuffer<T>`. Writers call `GetBack()` + `Swap()`, readers call `GetFront()`. Never access worker-owned data outside this pattern.
+Workers that stream results expose them to the main thread via `DoubleBuffer<Ts...>` (`base/double_buffer.h`). The worker calls `Push()` for each item and `Reset()` when a new run starts; the main thread calls `Merge()` once per frame and reads the accumulated items through `data()`. Workers with a single one-shot result instead hand it over under a mutex. Never access worker-owned data outside these patterns.
 
 ### Dependencies
 

@@ -9,11 +9,14 @@
 
 #include "base/text_search.h"
 #include "gel/commands/git_log.h"
+#include "gel/ref_decorations.h"
 
 // Returns true if any of |commit|'s searchable fields contain |term|: author,
-// committer, message, tag names, branch names and the "stash" label. Callers
-// scanning many commits should build the term once and pass it in.
+// committer, message, and the tag names, branch names and "stash" label in
+// |decoration| (may be null). Callers scanning many commits should build the
+// term once and pass it in.
 bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
+                         const RefDecorations::Decoration* decoration,
                          const base::SearchTerm& term);
 
 // Searches commit fields (see CommitMatchesSearch) on the main thread using
@@ -21,7 +24,7 @@ bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
 // time budget so the UI stays responsive even for very large histories.
 class CommitSearch {
  public:
-  explicit CommitSearch(GitLog& git_log);
+  CommitSearch(GitLog& git_log, RefDecorations& ref_decorations);
   ~CommitSearch();
 
   CommitSearch(CommitSearch const&) = delete;
@@ -49,6 +52,7 @@ class CommitSearch {
 
  private:
   GitLog& git_log_;
+  RefDecorations& ref_decorations_;
 
   base::SearchTerm term_;
   int start_ = -1;

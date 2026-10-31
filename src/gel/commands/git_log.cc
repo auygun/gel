@@ -4,8 +4,6 @@
 
 #include "gel/commands/git_log.h"
 
-#include <algorithm>
-
 #include "third_party/kaliber/base/log.h"
 
 using namespace base;
@@ -23,7 +21,6 @@ enum Field : size_t {
   kAuthorDate,
   kCommitter,
   kCommitterDate,
-  kBranch,
   kSubject,
   kBody,
   kFieldCount,
@@ -48,10 +45,11 @@ void GitLog::SetPathFilter(std::vector<std::string> args) {
 
 bool GitLog::Run() {
   std::vector<std::string> args = {
-      "log", "--parents", "--decorate=full",
-      "--date=format-local:%Y-%m-%d %H:%M:%S",
+      // No %d: decorating makes git read every ref's object before printing
+      // the first commit. RefDecorations loads the labels instead.
+      "log", "--parents", "--date=format-local:%Y-%m-%d %H:%M:%S",
       "--pretty=tformat:"
-      "%H%x01%P%x01%aN <%aE>%x01%ad%x01%cN <%cE>%x01%cd%x01%d%x01%s%x01%b"};
+      "%H%x01%P%x01%aN <%aE>%x01%ad%x01%cN <%cE>%x01%cd%x01%s%x01%b"};
   args.insert(args.end(), extra_args_.begin(), extra_args_.end());
   if (!path_filter_.empty()) {
     args.emplace_back("--");
@@ -66,12 +64,6 @@ void GitLog::Update() {
 
 void GitLog::FlushPendingCommit() {
   if (pending_commit_) {
-    std::sort(pending_commit_->tags.begin(), pending_commit_->tags.end());
-    std::sort(pending_commit_->branches.begin(),
-              pending_commit_->branches.end(),
-              [](const BranchInfo& a, const BranchInfo& b) {
-                return a.name < b.name;
-              });
     commit_history_.Push(std::move(*pending_commit_));
     pending_commit_.reset();
   }
@@ -80,10 +72,6 @@ void GitLog::FlushPendingCommit() {
 void GitLog::OnStarted() {
   pending_commit_.reset();
   commit_history_.Reset();
-  {
-    std::scoped_lock lock(head_branch_lock_);
-    head_branch_.clear();
-  }
   {
     std::scoped_lock lock(error_lock_);
     has_info_message_ = false;
@@ -132,100 +120,6 @@ void GitLog::OnOutput(std::string line) {
   info.author_date = std::move(fields_[kAuthorDate]);
   info.committer = std::move(fields_[kCommitter]);
   info.committer_date = std::move(fields_[kCommitterDate]);
-
-  // %d includes a leading space before the opening parenthesis.
-  // Strip "HEAD -> " / "<remote>/HEAD" from the decoration so only
-  // branch and tag names are shown.
-  std::string& bt = fields_[kBranch];
-  if (!bt.empty()) {
-    // Trim leading space.
-    if (bt[0] == ' ')
-      bt.erase(0, 1);
-
-    size_t paren_open = bt.find('(');
-    size_t paren_close = bt.find(')');
-    if (paren_open != std::string::npos && paren_close != std::string::npos &&
-        paren_open == 0) {
-      auto remove = [&](const std::string& pattern) {
-        size_t pos = bt.find(pattern, paren_open);
-        if (pos == std::string::npos || pos + pattern.size() > paren_close)
-          return false;
-        bt.erase(pos, pattern.size());
-        paren_close -= pattern.size();
-        return true;
-      };
-      // Extract the HEAD branch name before stripping it.
-      // With --decorate=full: "HEAD -> refs/heads/<branch>".
-      {
-        const std::string head_prefix = "HEAD -> refs/heads/";
-        size_t head_pos = bt.find(head_prefix, paren_open);
-        if (head_pos != std::string::npos &&
-            head_pos + head_prefix.size() <= paren_close) {
-          size_t name_end =
-              bt.find_first_of(",)", head_pos + head_prefix.size());
-          if (name_end != std::string::npos) {
-            std::scoped_lock lock(head_branch_lock_);
-            head_branch_ = bt.substr(head_pos + head_prefix.size(),
-                                     name_end - head_pos - head_prefix.size());
-          }
-        }
-      }
-      remove("HEAD -> ");
-
-      // Remove "refs/remotes/{remote}/HEAD" entries.
-      for (;;) {
-        size_t pos = bt.find("/HEAD", paren_open);
-        if (pos == std::string::npos || pos + 5 > paren_close)
-          break;
-        size_t name_start = pos;
-        while (name_start > 0 && bt[name_start - 1] != ' ' &&
-               bt[name_start - 1] != '(')
-          --name_start;
-        std::string entry = bt.substr(name_start, pos + 5 - name_start);
-        if (!remove(", " + entry))
-          if (!remove(entry + ", "))
-            remove(entry);
-      }
-
-      // If only empty parens remain, e.g. "()", clear the branch entirely.
-      if (bt == "()")
-        bt.clear();
-    }
-    // Split the cleaned decoration string into separate tag and branch names.
-    // The string looks like "(refs/heads/main, tag: refs/tags/v1, ...)".
-    // Walk comma-separated entries, trim whitespace, and classify each by
-    // its ref prefix.
-    if (bt.size() > 2) {
-      size_t s = (bt.front() == '(') ? 1 : 0;
-      size_t e = (bt.back() == ')') ? bt.size() - 1 : bt.size();
-      size_t p = s;
-      while (p < e) {
-        // Skip leading whitespace of the entry.
-        while (p < e && bt[p] == ' ')
-          ++p;
-        // Find the end of this entry (next comma or end of string).
-        size_t comma = bt.find(',', p);
-        size_t ne = (comma != std::string::npos && comma < e) ? comma : e;
-        // Trim trailing whitespace.
-        size_t tr = ne;
-        while (tr > p && bt[tr - 1] == ' ')
-          --tr;
-        if (tr > p) {
-          std::string name = bt.substr(p, tr - p);
-          if (name.starts_with("tag: refs/tags/")) {
-            info.tags.push_back(name.substr(15));
-          } else if (name.starts_with("refs/remotes/")) {
-            info.branches.push_back({name.substr(13), true});
-          } else if (name.starts_with("refs/heads/")) {
-            info.branches.push_back({name.substr(11), false});
-          } else if (name == "refs/stash") {
-            info.is_stash = true;
-          }
-        }
-        p = ne + 1;
-      }
-    }
-  }
 
   info.message.push_back(std::move(fields_[kSubject]));
 

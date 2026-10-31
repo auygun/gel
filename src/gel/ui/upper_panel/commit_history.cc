@@ -10,6 +10,7 @@
 #include "base/utf8.h"
 #include "gel/commands/git_log.h"
 #include "gel/persistent_settings.h"
+#include "gel/ref_decorations.h"
 #include "gel/ui/commit_search.h"
 #include "gel/ui/git_cmd_runner.h"
 #include "gel/ui/style.h"
@@ -39,7 +40,7 @@ struct ContextMenuArgs {
 enum class LabelKind { kTag, kBranch, kStash };
 
 void RenderBranchLabels(const std::vector<std::string>& tags,
-                        const std::vector<GitLog::BranchInfo>& branches,
+                        const std::vector<RefDecorations::BranchInfo>& branches,
                         bool is_stash,
                         const std::string& head_branch,
                         TagTooltipArgs* tooltip_args = nullptr,
@@ -163,12 +164,14 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
 CommitHistory::CommitHistory(
     Delegate& delegate,
     GitLog& git_log,
+    RefDecorations& ref_decorations,
     GitCmdRunner& runner,
     GitRepo& git_repo,
     PersistentSettings& settings,
     std::function<void(const std::string&)> open_in_new_window)
     : delegate_(delegate),
       git_log_(git_log),
+      ref_decorations_(ref_decorations),
       runner_(runner),
       context_menu_(runner, std::move(open_in_new_window)),
       settings_(settings),
@@ -597,7 +600,7 @@ void CommitHistory::Update(const std::string& search_term) {
         }
       }
 
-      std::string head_branch = git_log_.head_branch();
+      const std::string& head_branch = ref_decorations_.head_branch();
       // Built once per frame: the rows below all match the same term.
       base::SearchTerm search_needle(search_term, settings_.search_options);
 
@@ -706,8 +709,10 @@ void CommitHistory::Update(const std::string& search_term) {
             // Advance cursor past the graph for this row's text.
             ImGui::SetCursorPosX(cursor.x + text_offset);
 
-            bool flagged =
-                CommitMatchesSearch(commit_history[ci], search_needle);
+            const RefDecorations::Decoration* decoration =
+                ref_decorations_.Find(commit_history[ci].commit);
+            bool flagged = CommitMatchesSearch(commit_history[ci], decoration,
+                                               search_needle);
 
             TagTooltipArgs tooltip_args{any_tag_hovered,
                                         tag_tooltip_suppressed_,
@@ -715,30 +720,25 @@ void CommitHistory::Update(const std::string& search_term) {
             ContextMenuArgs ctx_args{context_menu_, commit_history[ci].commit,
                                      default_window_padding,
                                      default_item_spacing};
-            bool has_labels = !commit_history[ci].tags.empty() ||
-                              !commit_history[ci].branches.empty() ||
-                              commit_history[ci].is_stash;
+            bool has_labels = decoration != nullptr;
             if (flagged) {
               ImGui::SetCursorPos(ImVec2(cursor.x + text_offset + 1, cursor.y));
               if (has_labels) {
-                RenderBranchLabels(commit_history[ci].tags,
-                                   commit_history[ci].branches,
-                                   commit_history[ci].is_stash, head_branch);
+                RenderBranchLabels(decoration->tags, decoration->branches,
+                                   decoration->is_stash, head_branch);
               }
               ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
               ImGui::SetCursorPos(ImVec2(cursor.x + text_offset, cursor.y));
               if (has_labels) {
-                RenderBranchLabels(commit_history[ci].tags,
-                                   commit_history[ci].branches,
-                                   commit_history[ci].is_stash, head_branch,
+                RenderBranchLabels(decoration->tags, decoration->branches,
+                                   decoration->is_stash, head_branch,
                                    &tooltip_args, &ctx_args);
               }
               ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
             } else {
               if (has_labels) {
-                RenderBranchLabels(commit_history[ci].tags,
-                                   commit_history[ci].branches,
-                                   commit_history[ci].is_stash, head_branch,
+                RenderBranchLabels(decoration->tags, decoration->branches,
+                                   decoration->is_stash, head_branch,
                                    &tooltip_args, &ctx_args);
               }
               ImGui::TextUnformatted(commit_history[ci].message[0].c_str());

@@ -16,17 +16,8 @@
 
 class GitLog final : public Git {
  public:
-  struct BranchInfo {
-    std::string name;
-    bool is_remote = false;
-  };
-
+  // Branch and tag labels are loaded separately by RefDecorations.
   struct CommitInfo {
-    std::vector<std::string> tags;
-    std::vector<BranchInfo> branches;
-    // True when the commit is decorated with "refs/stash", i.e. it is the tip
-    // of the stash stack.
-    bool is_stash = false;
     std::string commit;
     // Simplified parents (--parents rewrites these for path-filtered views
     // to only include commits in the output). Use "commit^" for actual parent.
@@ -62,11 +53,6 @@ class GitLog final : public Git {
     return commit_history_.data();
   }
 
-  std::string head_branch() const {
-    std::scoped_lock lock(head_branch_lock_);
-    return head_branch_;
-  }
-
   // Main thread: returns true if the last run failed, moving the error message
   // into |error|.
   bool GetError(std::string& error);
@@ -81,8 +67,6 @@ class GitLog final : public Git {
   std::vector<std::string> extra_args_;
   std::vector<std::string> path_filter_;
   DoubleBuffer<CommitInfo> commit_history_;
-  mutable std::mutex head_branch_lock_;
-  std::string head_branch_;
   bool did_clear_ = false;
   std::optional<CommitInfo> pending_commit_;
   std::vector<std::string> fields_;  // Reusable parse buffer.

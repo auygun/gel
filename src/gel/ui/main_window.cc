@@ -23,6 +23,7 @@ MainWindow::MainWindow(Platform& platform,
       on_busy_changed_(std::move(on_busy_changed)),
       main_thread_busy_(std::move(main_thread_busy)),
       git_log_([this](bool b) { on_busy_changed_(b); }),
+      ref_decorations_([this](bool b) { on_busy_changed_(b); }),
       git_diff_([this](bool b) { on_busy_changed_(b); }),
       git_status_([this](bool b) { on_busy_changed_(b); }),
       runner_(
@@ -64,6 +65,7 @@ MainWindow::MainWindow(Platform& platform,
       commit_history_(
           *this,
           git_log_,
+          ref_decorations_,
           runner_,
           git_repo_,
           settings_,
@@ -94,7 +96,7 @@ MainWindow::MainWindow(Platform& platform,
           [this](const std::string& title, std::string message) {
             ShowPopup(title, std::move(message));
           }),
-      commit_search_(git_log_),
+      commit_search_(git_log_, ref_decorations_),
       popup_modal_([this]() { platform_.Exit(); }),
       directory_browser_(*this) {}
 
@@ -196,6 +198,7 @@ void MainWindow::Refresh() {
   commit_search_.Cancel();
   commit_history_.ClearSelectionHistory();
   git_log_.Run();
+  ref_decorations_.Run();
   if (!browsing_specific_ref_)
     git_status_.Run();
   // For real commits the diff self-heal in MergeWorkerData() will detect the
@@ -247,6 +250,7 @@ void MainWindow::MergeWorkerData() {
   // Merge any new data from the background git workers into the main-thread
   // buffers.
   git_log_.Update();
+  ref_decorations_.Update();
   if (git_log_.DidClear()) {
     commit_history_.ResetGraph();
     commit_history_.ScrollToSelected();

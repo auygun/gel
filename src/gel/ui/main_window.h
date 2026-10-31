@@ -19,6 +19,7 @@
 #include "gel/commands/git_log.h"
 #include "gel/git_repo.h"
 #include "gel/persistent_settings.h"
+#include "gel/ref_decorations.h"
 #include "gel/ui/commit_search.h"
 #include "gel/ui/directory_browser.h"
 #include "gel/ui/git_cmd_runner.h"
@@ -101,6 +102,7 @@ class MainWindow final : public CommitHistory::Delegate,
   // Background workers that run git commands and parse output asynchronously.
   GitRepo git_repo_;
   GitLog git_log_;
+  RefDecorations ref_decorations_;
   GitDiff git_diff_;
   GitLocalStatus git_status_;
   GitCmdRunner runner_;

@@ -7,6 +7,7 @@
 #include "third_party/kaliber/base/timer.h"
 
 bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
+                         const RefDecorations::Decoration* decoration,
                          const base::SearchTerm& term) {
   if (base::Contains(commit.author, term) ||
       base::Contains(commit.committer, term)) {
@@ -16,18 +17,21 @@ bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
     if (base::Contains(line, term))
       return true;
   }
-  for (const auto& tag : commit.tags) {
+  if (!decoration)
+    return false;
+  for (const auto& tag : decoration->tags) {
     if (base::Contains(tag, term))
       return true;
   }
-  for (const auto& branch : commit.branches) {
+  for (const auto& branch : decoration->branches) {
     if (base::Contains(branch.name, term))
       return true;
   }
-  return commit.is_stash && base::Contains("stash", term);
+  return decoration->is_stash && base::Contains("stash", term);
 }
 
-CommitSearch::CommitSearch(GitLog& git_log) : git_log_(git_log) {}
+CommitSearch::CommitSearch(GitLog& git_log, RefDecorations& ref_decorations)
+    : git_log_(git_log), ref_decorations_(ref_decorations) {}
 
 CommitSearch::~CommitSearch() = default;
 
@@ -67,7 +71,8 @@ bool CommitSearch::Update() {
     // Wrap the index into [0, n) regardless of search direction.
     // The double-mod handles negative values from reverse searches.
     int i = ((begin + direction_ * search_offset_) % n + n) % n;
-    if (CommitMatchesSearch(commits[i], term_)) {
+    if (CommitMatchesSearch(commits[i],
+                            ref_decorations_.Find(commits[i].commit), term_)) {
       result_ = i;
       searching_ = false;
       search_progress_ = -1.0f;

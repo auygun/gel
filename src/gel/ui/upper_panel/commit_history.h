@@ -17,6 +17,7 @@ class GitCmdRunner;
 class GitLog;
 class GitRepo;
 class PersistentSettings;
+class RefDecorations;
 
 // Upper panel: scrollable table of commits (message, author, date).
 class CommitHistory {
@@ -35,6 +36,7 @@ class CommitHistory {
 
   CommitHistory(Delegate& delegate,
                 GitLog& git_log,
+                RefDecorations& ref_decorations,
                 GitCmdRunner& runner,
                 GitRepo& git_repo,
                 PersistentSettings& settings,
@@ -90,6 +92,7 @@ class CommitHistory {
  private:
   Delegate& delegate_;
   GitLog& git_log_;
+  RefDecorations& ref_decorations_;
   GitCmdRunner& runner_;
   CommitContextMenu context_menu_;
   PersistentSettings& settings_;
