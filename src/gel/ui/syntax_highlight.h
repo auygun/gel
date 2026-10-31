@@ -40,9 +40,12 @@ Language DetectLanguage(const std::string& filename,
 // Applies syntax highlighting to a diff line. Only processes lines with
 // ' ', '+', or '-' prefix. Returns an empty ColoredLine for headers and
 // hunk markers. When in_block_comment is true, the line starts inside a
-// multi-line block comment (e.g. /* */ or <!-- -->).
+// multi-line block comment (e.g. /* */ or <!-- -->). |prefix_width| is the
+// number of diff prefix characters: 1 for a normal diff, one per parent for a
+// combined diff.
 ColoredLine HighlightSyntax(const std::string& line,
                             Language lang,
-                            bool in_block_comment = false);
+                            bool in_block_comment = false,
+                            size_t prefix_width = 1);
 
 #endif  // GEL_UI_SYNTAX_HIGHLIGHT_H

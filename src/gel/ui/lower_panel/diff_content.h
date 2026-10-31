@@ -139,6 +139,10 @@ class DiffContent : public TextViewer::Delegate {
   // to every parent column of a combined diff.
   std::pair<int, int> ComputeLineNumberDigits() const;
 
+  // Returns the number of diff prefix characters of |line_index|: 1 for a
+  // normal diff hunk, one per parent for a combined diff hunk.
+  size_t GetDiffPrefixWidth(int line_index) const;
+
   // Finds the first '+' or '-' sign character at the start of |line|,
   // respecting combined-diff @-count (skipping leading '@' prefix chars).
   // Returns the sign character, or std::nullopt if none found.

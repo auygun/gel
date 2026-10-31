@@ -415,13 +415,24 @@ void GitDiff::OnOutput(std::string line) {
     current_extra_parent_lines_.resize(at_count > 2 ? at_count - 2 : 0);
   } else if (!line.empty() &&
              (line[0] == ' ' || line[0] == '+' || line[0] == '-')) {
-    std::string_view code(line.data() + 1, line.size() - 1);
+    // Each parent has its own prefix column: one in a normal diff, one per
+    // parent in a combined diff.
+    size_t columns =
+        in_hunk_ ? static_cast<size_t>(std::max(current_hunk_at_count_ - 1, 1))
+                 : 1;
+    std::string_view prefix =
+        std::string_view(line).substr(0, std::min(columns, line.size()));
+    std::string_view code = std::string_view(line).substr(prefix.size());
+    // A '-' in any column means the line is not in the result (old side), a
+    // '+' that it is new in the result relative to some parent (new side).
+    bool removed = prefix.find('-') != std::string_view::npos;
+    bool added = !removed && prefix.find('+') != std::string_view::npos;
     bool old_was = old_in_block_comment_;
     bool new_was = new_in_block_comment_;
-    if (line[0] == '-') {
+    if (removed) {
       old_in_block_comment_ =
           ScanBlockComment(code, worker_lang_, old_in_block_comment_);
-    } else if (line[0] == '+') {
+    } else if (added) {
       new_in_block_comment_ =
           ScanBlockComment(code, worker_lang_, new_in_block_comment_);
     } else {
@@ -436,16 +447,11 @@ void GitDiff::OnOutput(std::string line) {
                                        new_in_block_comment_});
     }
     if (in_hunk_) {
-      // Each parent has its own prefix column. A '-' in column N means the
-      // line is in parent N but not in the result. Otherwise the line is in
-      // the result, and also in every parent whose column is ' ' ('+' means
-      // that parent lacks it).
-      size_t columns =
-          static_cast<size_t>(std::max(current_hunk_at_count_ - 1, 1));
+      // A '-' in column N means the line is in parent N but not in the
+      // result. Otherwise the line is in the result, and also in every parent
+      // whose column is ' ' ('+' means that parent lacks it).
       auto column = [&](size_t i) { return i < line.size() ? line[i] : ' '; };
-      line_in_result_ = true;
-      for (size_t i = 0; i < columns; i++)
-        line_in_result_ &= column(i) != '-';
+      line_in_result_ = !removed;
       char in_parent = line_in_result_ ? ' ' : '-';
       line_in_old_ = column(0) == in_parent;
       if (line_in_old_)

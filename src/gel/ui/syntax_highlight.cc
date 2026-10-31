@@ -948,7 +948,8 @@ Language DetectLanguage(
 
 ColoredLine HighlightSyntax(const std::string& line,
                             Language lang,
-                            bool in_block_comment) {
+                            bool in_block_comment,
+                            size_t prefix_width) {
   if (lang == Language::kNone || line.empty())
     return {};
 
@@ -969,8 +970,9 @@ ColoredLine HighlightSyntax(const std::string& line,
   Emitter em;
   std::string_view code;
   if (has_diff_prefix) {
-    code = std::string_view(line.data() + 1, line.size() - 1);
-    em.Emit(line.substr(0, 1), ColorId::kDefault);
+    size_t width = std::min(prefix_width, line.size());
+    code = std::string_view(line).substr(width);
+    em.Emit(std::string_view(line).substr(0, width), ColorId::kDefault);
   } else {
     code = line;
   }

@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "gel/commands/git_diff.h"
@@ -707,13 +708,18 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
             [](int idx, const SyntaxTransition& t) { return idx < t.line; });
         if (it != stx.begin()) {
           --it;
-          bool is_old_side = !line.empty() && line[0] == '-';
+          // Lines missing from the result ('-' in any prefix column) are on
+          // the old side.
+          bool is_old_side = std::string_view(line)
+                                 .substr(0, GetDiffPrefixWidth(line_index))
+                                 .find('-') != std::string_view::npos;
           in_block_comment =
               is_old_side ? it->old_in_block_comment : it->new_in_block_comment;
         }
       }
       ColoredLine highlighted =
-          HighlightSyntax(line, current_lang_, in_block_comment);
+          HighlightSyntax(line, current_lang_, in_block_comment,
+                          GetDiffPrefixWidth(line_index));
       if (!highlighted.segments.empty()) {
         RenderColoredLine(highlighted);
         return;
@@ -1071,13 +1077,16 @@ std::pair<int, int> DiffContent::ComputeLineNumberDigits() const {
   return {old_digits, new_digits};
 }
 
-std::optional<char> DiffContent::FindDiffSign(int line_index,
-                                              const std::string& line) {
+size_t DiffContent::GetDiffPrefixWidth(int line_index) const {
   auto hunks = git_diff_.GetHunkEntries();
   int hunk_idx = FindHunkForLine(hunks, line_index);
-  int at_count = hunk_idx >= 0 ? hunks[hunk_idx].at_count - 1 : 1;
+  return hunk_idx >= 0 ? std::max(hunks[hunk_idx].at_count - 1, 1) : 1;
+}
 
-  for (int i = 0; i < at_count && i < static_cast<int>(line.size()); i++) {
+std::optional<char> DiffContent::FindDiffSign(int line_index,
+                                              const std::string& line) {
+  size_t width = GetDiffPrefixWidth(line_index);
+  for (size_t i = 0; i < width && i < line.size(); i++) {
     char c = line[i];
     if (c == '+' || c == '-')
       return c;
