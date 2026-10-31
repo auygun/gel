@@ -694,6 +694,12 @@ void MainWindow::OnClearPathFilterRequested() {
   if (git_log_.HasPathFilter()) {
     git_log_.ClearPathFilter();
     Refresh();
+    // Refresh() only reruns the diff for synthetic rows. A real commit keeps
+    // its hash, so the self-heal in MergeWorkerData() won't notice that the
+    // diff is still filtered — rerun it here.
+    if (!commit_history_.IsUnstagedSelected() &&
+        !commit_history_.IsStagedSelected())
+      RerunDiff();
   } else {
     if (!browsing_specific_ref_)
       git_status_.Run();
