@@ -181,6 +181,7 @@ void MainWindow::Initialize(const CommandLine& command_line) {
   browsing_specific_ref_ = !command_line.GetArgs().empty();
 
   git_diff_.SetLinesOfContext(settings_.context_lines);
+  git_diff_.SetMergeDiffMode(settings_.merge_diff_mode);
   git_diff_.SetGitRepo(git_repo_);
   git_repo_.Init([this](bool found) {
     if (found) {
@@ -623,6 +624,15 @@ void MainWindow::UpdateLinesOfContext(int ctx) {
     return;
   git_diff_.SetLinesOfContext(ctx);
   settings_.context_lines = ctx;
+  settings_.Save();
+  RerunDiff(/*preserve_scroll=*/true);
+}
+
+void MainWindow::UpdateMergeDiffMode(MergeDiffMode mode) {
+  if (mode == git_diff_.GetMergeDiffMode())
+    return;
+  git_diff_.SetMergeDiffMode(mode);
+  settings_.merge_diff_mode = mode;
   settings_.Save();
   RerunDiff(/*preserve_scroll=*/true);
 }

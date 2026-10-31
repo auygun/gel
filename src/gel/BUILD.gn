@@ -90,6 +90,7 @@ executable("gel") {
     "commands/git_local_status.h",
     "commands/git_log.cc",
     "commands/git_log.h",
+    "commands/merge_diff_mode.h",
     "dejavu_sans_mono.h",
     "gel.cc",
     "gel.h",

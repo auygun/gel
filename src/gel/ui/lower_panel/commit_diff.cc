@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 #include "gel/commands/git_diff.h"
 #include "gel/persistent_settings.h"
@@ -126,7 +127,9 @@ void CommitDiff::RenderOverlayControls() {
       ImGui::CalcTextSize("+").x + ImGui::GetStyle().FramePadding.x * 2;
 
   bool show_refresh = IsUnstagedSelected() || IsStagedSelected();
-  float total_width = (show_refresh ? frame_h + spacing : 0.0f) + frame_h +
+  bool show_merge_mode = IsMergeShown();
+  float total_width = (show_refresh ? frame_h + spacing : 0.0f) +
+                      (show_merge_mode ? frame_h + spacing : 0.0f) + frame_h +
                       spacing + ctx_input_w + ctx_btn_w;
   ImVec2 pad = ImGui::GetStyle().WindowPadding;
   pad.x *= 0.5f;
@@ -157,6 +160,22 @@ void CommitDiff::RenderOverlayControls() {
         ImGui::Button("##diff_refresh", ImVec2(frame_h, frame_h));
     DrawRefreshIcon();
     ItemTooltip("Refresh diff", any_hovered, overlay_tooltip_suppressed_);
+    ImGui::SameLine();
+  }
+  std::optional<MergeDiffMode> merge_mode_requested;
+  if (show_merge_mode) {
+    // On while the merge is diffed against its first parent rather than as
+    // the default combined diff.
+    bool first_parent =
+        git_diff_.GetLastRunMergeDiffMode() == MergeDiffMode::kFirstParent;
+    if (ToggleButton("##merge_diff_mode", first_parent,
+                     ImVec2(frame_h, frame_h)))
+      merge_mode_requested =
+          first_parent ? MergeDiffMode::kCombined : MergeDiffMode::kFirstParent;
+    DrawMergeIcon();
+    ItemTooltip(first_parent ? "Merge diff: against first parent"
+                             : "Merge diff: combined (conflict resolutions)",
+                any_hovered, overlay_tooltip_suppressed_);
     ImGui::SameLine();
   }
   bool has_filter = delegate_.HasDiffPathFilter();
@@ -224,6 +243,15 @@ void CommitDiff::RenderOverlayControls() {
   if (clear_filter_requested)
     delegate_.OnClearDiffPathFilterRequested();
   delegate_.UpdateLinesOfContext(ctx);
+  if (merge_mode_requested)
+    delegate_.UpdateMergeDiffMode(*merge_mode_requested);
+}
+
+bool CommitDiff::IsMergeShown() const {
+  if (IsUnstagedSelected() || IsStagedSelected())
+    return false;
+  const std::string& commit = git_diff_.GetLastRunCommitHash();
+  return !commit.empty() && file_list_.GetCommitParents(commit).size() > 1;
 }
 
 void CommitDiff::Update(const std::string& search_term) {

@@ -31,6 +31,9 @@ void DrawArrowDownIcon(bool enabled);
 // Draw a funnel with an "X" overlay for removing a path filter.
 void DrawClearFilterIcon();
 
+// Draw a merge icon (two branches joining into one) for the merge diff mode.
+void DrawMergeIcon();
+
 // Draw a panel-toggle icon (two horizontal panels with an arrow).
 void DrawDiffPanelIcon();
 void DrawSizePanelIcon();

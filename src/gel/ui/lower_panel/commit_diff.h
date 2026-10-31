@@ -8,6 +8,7 @@
 #include <functional>
 #include <string>
 
+#include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/lower_panel/diff_content.h"
 #include "gel/ui/lower_panel/file_list.h"
 
@@ -40,6 +41,8 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
     virtual bool IsStagedSelected() const = 0;
     virtual void OnBlameSearchCancel() = 0;
     virtual void UpdateLinesOfContext(int ctx) = 0;
+    // Re-runs the diff with |mode| if it differs from the current one.
+    virtual void UpdateMergeDiffMode(MergeDiffMode mode) = 0;
     virtual void OnClearDiffPathFilterRequested() = 0;
     virtual void OnDiffRefreshRequested() = 0;
     virtual bool HasDiffPathFilter() const = 0;
@@ -102,6 +105,9 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
   void OnNavigateToCommit(const std::string& commit) final;
 
   void RenderOverlayControls();
+
+  // Returns true if the diff shows a merge commit.
+  bool IsMergeShown() const;
 
   Delegate& delegate_;
   PersistentSettings& settings_;

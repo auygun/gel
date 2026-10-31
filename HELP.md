@@ -420,7 +420,8 @@ Features:
 
 - Line numbers displayed alongside diff content (toggleable in Settings).
   Combined diffs of merge commits show one column per parent followed by
-  the merge result.
+  the merge result. How merge commits are diffed is chosen in the diff
+  overlay (see [Diff Overlay Controls](#diff-overlay-controls)).
 - Color-coded additions (green) and deletions (red).
 - Optional syntax highlighting for diff content (configurable in Settings).
 - File header lines (diff --git ...) have a distinct background color.
@@ -495,6 +496,15 @@ A floating overlay in the upper-right corner of the diff content area provides
 diff-specific controls:
 
 - **Refresh** -- Refresh the diff only (without reloading the commit history).
+- **Merge diff mode** -- Shown for merge commits only. Toggles how the merge
+  is diffed:
+  - **Combined** (default, button off) -- Combined diff against all parents.
+    Only the hunks where the merge differs from every parent are shown, i.e.
+    conflict resolutions. A merge without conflicts shows no files.
+  - **First parent** (button on) -- Normal diff against the first parent:
+    everything the merge brought in.
+
+  The choice is remembered. Switching keeps the view on the same code.
 - **Clear filter** -- Clear the diff/status path filter without affecting the
   log filter.
 - **Context lines** -- Number field with +/- buttons to adjust diff context

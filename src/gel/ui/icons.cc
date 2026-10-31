@@ -240,6 +240,31 @@ void DrawClearFilterIcon() {
               ImVec2(x_cx - x_sz, x_cy + x_sz), x_color, x_thick);
 }
 
+void DrawMergeIcon() {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 btn_min = ImGui::GetItemRectMin();
+  ImVec2 btn_max = ImGui::GetItemRectMax();
+  float w = btn_max.x - btn_min.x;
+  float h = btn_max.y - btn_min.y;
+  float size = std::min(w, h);
+  float thickness = std::max(1.5f, size * 0.08f);
+  ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  float cx = (btn_min.x + btn_max.x) * 0.5f;
+  float cy = (btn_min.y + btn_max.y) * 0.5f;
+
+  // Two parent commits at the top joining into the merge commit below.
+  float r = size * 0.08f;
+  ImVec2 left(cx - size * 0.18f, cy - size * 0.22f);
+  ImVec2 right(cx + size * 0.18f, cy - size * 0.22f);
+  ImVec2 merge(cx - size * 0.18f, cy + size * 0.22f);
+  dl->AddLine(left, merge, color, thickness);
+  dl->AddBezierCubic(right, ImVec2(right.x, cy + size * 0.05f),
+                     ImVec2(merge.x, cy), merge, color, thickness);
+  dl->AddCircleFilled(left, r, color);
+  dl->AddCircleFilled(right, r, color);
+  dl->AddCircleFilled(merge, r * 1.3f, color);
+}
+
 void DrawDiffPanelIcon() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();

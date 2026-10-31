@@ -331,6 +331,7 @@ std::optional<DiffContent::ScrollAnchor> DiffContent::MakeScrollAnchor() const {
   anchor.staged = git_diff_.IsLastRunStaged();
   anchor.file_index = file_idx;
   anchor.file = files[file_idx].path;
+  anchor.merge_mode = git_diff_.GetLastRunMergeDiffMode();
 
   int file_start = static_cast<int>(files[file_idx].start_line);
   int file_end = file_idx + 1 < static_cast<int>(files.size())
@@ -371,6 +372,22 @@ std::optional<DiffContent::ScrollAnchor> DiffContent::MakeScrollAnchor() const {
   }
   for (int i = std::min(top, limit) - 1; i >= file_start && !found; i--)
     found = take(i);
+
+  // For a line only in parents 2..N, also remember the nearest line in the
+  // result, in case the merge diff mode changes.
+  if (found && anchor.side > 1) {
+    for (int d = 1; d < limit - file_start && anchor.result_line == 0; d++) {
+      for (int i : {top + anchor.lead + d, top + anchor.lead - d}) {
+        if (i < file_start || i >= limit)
+          continue;
+        if (int line = GetSideLineNumber(i, 0); line > 0) {
+          anchor.result_line = line;
+          anchor.result_lead = i - top;
+          break;
+        }
+      }
+    }
+  }
 
   return anchor;
 }
@@ -423,6 +440,13 @@ bool DiffContent::TryRestoreScrollAnchor(ScrollAnchor& anchor) {
 
   if (anchor.resolved_line >= 0)
     return scroll_to(anchor.resolved_line);
+
+  if (anchor.side > 1 &&
+      anchor.merge_mode != git_diff_.GetLastRunMergeDiffMode()) {
+    anchor.side = 0;
+    anchor.line = anchor.result_line;
+    anchor.lead = anchor.result_lead;
+  }
 
   int file_start = static_cast<int>(files[file_idx].start_line);
   // A file entry is only added to the list once the file after it starts, so

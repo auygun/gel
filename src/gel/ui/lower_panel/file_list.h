@@ -63,6 +63,10 @@ class FileList {
   void Reset();
   void RevertAll();
 
+  // Returns the parent hashes of |commit| in order, read from the diff. Empty
+  // if the diff is not showing |commit| (yet).
+  std::vector<std::string> GetCommitParents(const std::string& commit) const;
+
  private:
   Delegate& delegate_;
   GitDiff& git_diff_;
@@ -72,10 +76,6 @@ class FileList {
   ConfirmCallback on_confirm_;
 
   std::vector<std::string> GetSelectedPaths(bool include_old_paths = false);
-
-  // Returns the parent hashes of |commit| in order, read from the diff. Empty
-  // if the diff is not showing |commit| (yet).
-  std::vector<std::string> GetCommitParents(const std::string& commit) const;
 
   // Renders one menu item per parent in |parents|, labeled with its short
   // hash and subject. Returns the 1-based index of the clicked parent, or 0.

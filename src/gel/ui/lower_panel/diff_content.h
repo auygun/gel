@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/text_search.h"
+#include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/modules/text_viewer.h"
 #include "gel/ui/syntax_highlight.h"
 
@@ -198,6 +199,12 @@ class DiffContent : public TextViewer::Delegate {
     // Distance from the top line to the numbered line the anchor was taken
     // from, negative when that line is above the top line.
     int lead = 0;
+    // Merge diff mode at capture time. Parents 2..N only have line numbers in
+    // a combined diff. When the mode changed and the anchor is on one of
+    // them, the nearest line in the result is used instead.
+    MergeDiffMode merge_mode = MergeDiffMode::kCombined;
+    int result_line = 0;
+    int result_lead = 0;
     // Fallback for lines with no numbers: offset from the file's start line.
     int line_offset = 0;
     // Set once the old content has been cleared, so the anchor is not matched

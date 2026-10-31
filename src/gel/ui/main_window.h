@@ -171,6 +171,7 @@ class MainWindow final : public CommitHistory::Delegate,
   bool IsStagedSelected() const final;
   void OnBlameSearchCancel() final;
   void UpdateLinesOfContext(int ctx) final;
+  void UpdateMergeDiffMode(MergeDiffMode mode) final;
   void OnClearDiffPathFilterRequested() final;
   void OnDiffRefreshRequested() final;
   bool HasDiffPathFilter() const final;

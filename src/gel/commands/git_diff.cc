@@ -96,6 +96,7 @@ void GitDiff::SetExtMappings(
 
 bool GitDiff::RunTree(std::vector<std::string> extra_args) {
   last_run_mode_ = Mode::kTree;
+  last_run_merge_diff_mode_ = merge_diff_mode_;
   last_run_commit_hash_ = extra_args.empty() ? std::string{} : extra_args[0];
   {
     std::scoped_lock lock(params_lock_);
@@ -107,13 +108,17 @@ bool GitDiff::RunTree(std::vector<std::string> extra_args) {
     pending_params_.path_filter = path_filter_;
   }
   std::string context_flag = "-U" + std::to_string(lines_of_context_);
+  // Only affects merge commits. Others are diffed against their parent.
+  const char* merge_flag = merge_diff_mode_ == MergeDiffMode::kFirstParent
+                               ? "--diff-merges=first-parent"
+                               : "--cc";
   std::vector<std::string> args = {"diff-tree",
                                    "-r",
                                    "-p",
                                    "--textconv",
                                    "--submodule",
                                    "-C",
-                                   "--cc",
+                                   merge_flag,
                                    "--pretty=format:commit %H%n"
                                    "Parents: %P%n"
                                    "Author: %an <%ae>  %ad%n"

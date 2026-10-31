@@ -13,6 +13,7 @@
 
 #include "base/double_buffer.h"
 #include "gel/commands/git.h"
+#include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/syntax_highlight.h"
 
 class GitRepo;
@@ -107,6 +108,14 @@ class GitDiff final : public Git {
   void SetLinesOfContext(int n) { lines_of_context_ = n; }
   int GetLinesOfContext() const { return lines_of_context_; }
 
+  void SetMergeDiffMode(MergeDiffMode mode) { merge_diff_mode_ = mode; }
+  MergeDiffMode GetMergeDiffMode() const { return merge_diff_mode_; }
+
+  // Main thread: mode the last RunTree() used. Only meaningful for a merge.
+  MergeDiffMode GetLastRunMergeDiffMode() const {
+    return last_run_merge_diff_mode_;
+  }
+
   void Update();
 
   bool DidClear() const { return did_clear_; }
@@ -152,6 +161,7 @@ class GitDiff final : public Git {
 
  private:
   int lines_of_context_ = 3;
+  MergeDiffMode merge_diff_mode_ = MergeDiffMode::kCombined;
   GitRepo* git_repo_ = nullptr;
   std::vector<std::string> extra_args_;
   std::vector<std::string> path_filter_;
@@ -172,6 +182,7 @@ class GitDiff final : public Git {
   // Main-thread only. Set by Run*() to track what the diff is showing.
   std::string last_run_commit_hash_;
   Mode last_run_mode_ = Mode::kTree;
+  MergeDiffMode last_run_merge_diff_mode_ = MergeDiffMode::kCombined;
 
   // Main-thread state passed to the worker through pending_params_.
   struct Params {

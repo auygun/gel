@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/text_search.h"
+#include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/style.h"
 #include "third_party/kaliber/renderer/renderer.h"
 
@@ -31,6 +32,7 @@ enum class ColumnData {
 };
 
 const char* GetDiffColorModeName(DiffColorMode mode);
+const char* GetMergeDiffModeName(MergeDiffMode mode);
 const char* GetColumnDataName(ColumnData data);
 const char* GetChartStyleName(ChartStyle chart_style);
 const char* GetSizeTreeSortName(SizeTreeSort sort);
@@ -72,6 +74,7 @@ class PersistentSettings {
   bool console_window_collapsed = false;
 
   int context_lines = 3;
+  MergeDiffMode merge_diff_mode = MergeDiffMode::kCombined;
   float upper_panel_height = 300.0f;
   float file_list_width = 200.0f;
   float size_tree_width = 250.0f;

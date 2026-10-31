@@ -26,6 +26,18 @@ const char* GetDiffColorModeName(DiffColorMode mode) {
   return "ANSI colors";
 }
 
+const char* GetMergeDiffModeName(MergeDiffMode mode) {
+  switch (mode) {
+    case MergeDiffMode::kCombined:
+      return "Combined";
+    case MergeDiffMode::kFirstParent:
+      return "First parent";
+    case MergeDiffMode::kCount:
+      break;
+  }
+  return "Combined";
+}
+
 const char* GetColumnDataName(ColumnData data) {
   switch (data) {
     case ColumnData::kAuthor:
@@ -235,6 +247,10 @@ void PersistentSettings::Load() {
   }
   if (j.contains("context_lines") && j["context_lines"].is_number_integer())
     context_lines = j["context_lines"].get<int>();
+  if (j.contains("merge_diff_mode") && j["merge_diff_mode"].is_string())
+    merge_diff_mode = ParseEnum(j["merge_diff_mode"].get<std::string>(),
+                                MergeDiffMode::kCount, GetMergeDiffModeName,
+                                MergeDiffMode::kCombined);
   if (j.contains("display_backend")) {
     if (j["display_backend"].is_string())
       display_backend = ParseEnum(j["display_backend"].get<std::string>(),
@@ -371,6 +387,7 @@ void PersistentSettings::Save() {
   j["console_window_open"] = console_window_open;
   j["console_window_collapsed"] = console_window_collapsed;
   j["context_lines"] = context_lines;
+  j["merge_diff_mode"] = GetMergeDiffModeName(merge_diff_mode);
   j["upper_panel_height"] = upper_panel_height;
   j["file_list_width"] = file_list_width;
   j["size_tree_width"] = size_tree_width;
