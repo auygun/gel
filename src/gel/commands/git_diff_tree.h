@@ -19,7 +19,8 @@ struct DiffTreeEntry {
 };
 
 // Runs "git diff-tree" to list files changed by a commit with their blob
-// hashes. Results are delivered to the main thread via Update().
+// hashes. A merge commit is compared with its first parent. Results are
+// delivered to the main thread via Update().
 class GitDiffTree final : public Git {
  public:
   explicit GitDiffTree(std::function<void(bool)> busy_callback);

@@ -14,8 +14,10 @@ GitDiffTree::~GitDiffTree() {
 }
 
 bool GitDiffTree::Run(const std::string& commit_hash) {
-  return RunWithArgs(
-      {"diff-tree", "-r", "--root", "--no-commit-id", commit_hash});
+  // Without a --diff-merges mode diff-tree prints nothing for a merge commit.
+  // Compare it with its first parent: the files the merge brought in.
+  return RunWithArgs({"diff-tree", "-r", "--root", "--no-commit-id",
+                      "--diff-merges=first-parent", commit_hash});
 }
 
 bool GitDiffTree::Update(std::vector<DiffTreeEntry>& result) {

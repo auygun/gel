@@ -510,7 +510,8 @@ The overlay appears on hover and has a semi-transparent background.
 Press **F6** or click the panel toggle button to switch the lower panel from
 the diff view to the size view. The size view shows the files touched by the
 selected commit, organized in a file tree with sizes, alongside an interactive
-chart.
+chart. For a merge commit, these are the files the merge brought in relative to
+its first parent.
 
 ### File Tree (Left Side)
 
