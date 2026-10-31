@@ -159,6 +159,7 @@ class DiffContent : public TextViewer::Delegate {
 
   // Finds the first '+' or '-' sign character at the start of |line|,
   // respecting combined-diff @-count (skipping leading '@' prefix chars).
+  // Submodule commit lines ("  > " / "  < ") map to '+' / '-'.
   // Returns the sign character, or std::nullopt if none found.
   std::optional<char> FindDiffSign(int line_index, const std::string& line);
 

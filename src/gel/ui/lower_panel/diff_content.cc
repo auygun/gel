@@ -718,9 +718,11 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
     int file_idx = FindFileForLine(files, line_index);
     if (file_idx != current_lang_file_idx_) {
       current_lang_file_idx_ = file_idx;
-      current_lang_ = file_idx >= 0 ? DetectLanguage(files[file_idx].path,
-                                                     settings_.ext_mappings)
-                                    : Language::kNone;
+      // A submodule entry lists commits, not file content.
+      current_lang_ =
+          file_idx >= 0 && files[file_idx].status != FileStatus::kSubmodule
+              ? DetectLanguage(files[file_idx].path, settings_.ext_mappings)
+              : Language::kNone;
     }
     if (current_lang_ != Language::kNone) {
       bool in_block_comment = false;
@@ -1069,6 +1071,16 @@ size_t DiffContent::GetDiffPrefixWidth(int line_index) const {
 
 std::optional<char> DiffContent::FindDiffSign(int line_index,
                                               const std::string& line) {
+  // A submodule pointer update lists the affected commits as "  > subject"
+  // (added) and "  < subject" (removed).
+  if (line.size() >= 4 && line.starts_with("  ") && line[3] == ' ' &&
+      (line[2] == '>' || line[2] == '<')) {
+    auto files = git_diff_.GetFileList();
+    int file_idx = FindFileForLine(files, line_index);
+    if (file_idx >= 0 && files[file_idx].status == FileStatus::kSubmodule)
+      return line[2] == '>' ? '+' : '-';
+  }
+
   size_t width = GetDiffPrefixWidth(line_index);
   for (size_t i = 0; i < width && i < line.size(); i++) {
     char c = line[i];
