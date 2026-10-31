@@ -5,7 +5,6 @@
 #include "gel/ui/lower_panel/blame_lookup.h"
 
 #include <algorithm>
-#include <cstdlib>
 
 #include "gel/commands/git_diff.h"
 #include "gel/commands/git_log.h"
@@ -29,21 +28,19 @@ BlameLookup::BlameLookup(CommitHistory& commit_history,
       show_popup_(std::move(show_popup)),
       git_blame_(busy_callback_) {}
 
-std::string BlameLookup::GetRevision(const std::string& file,
-                                     int line_number,
-                                     bool is_old_side) const {
+std::string BlameLookup::GetRevision(int parent) const {
   std::string commit = commit_history_.GetSelectedCommit();
   if (commit_history_.IsUnstagedSelected() ||
       commit_history_.IsStagedSelected()) {
     return "HEAD";
   }
-  return is_old_side ? (commit + "^") : commit;
+  return parent > 0 ? commit + "^" + std::to_string(parent) : commit;
 }
 
 void BlameLookup::ShowLineOrigin(const std::string& file,
                                  int line_number,
-                                 bool is_old_side) {
-  std::string revision = GetRevision(file, line_number, is_old_side);
+                                 int parent) {
+  std::string revision = GetRevision(parent);
   busy_ = true;
   git_blame_.Run(revision, file, line_number, git_repo_.toplevel());
 }
@@ -88,8 +85,6 @@ void BlameLookup::PollBlame() {
   scan_file_idx_ = -1;
   scan_pos_ = -1;
   scan_file_count_ = -1;
-  scan_new_line_ = 0;
-  scan_in_hunk_ = false;
   wait_for_clear_ = !same_commit;
 }
 
@@ -129,7 +124,7 @@ void BlameLookup::ScanDiffContent() {
     return;
 
   auto files = git_diff_.GetFileList();
-  auto content = git_diff_.GetDiffContent();
+  auto line_numbers = git_diff_.GetLineNumbers();
   int prev_scan_pos = scan_pos_;
   int prev_file_count = scan_file_count_;
   scan_file_count_ = static_cast<int>(files.size());
@@ -141,40 +136,22 @@ void BlameLookup::ScanDiffContent() {
           files[i].path == pending_file_) {
         scan_file_idx_ = static_cast<int>(i);
         scan_pos_ = static_cast<int>(files[i].start_line);
-        scan_new_line_ = 0;
-        scan_in_hunk_ = false;
         break;
       }
     }
   }
 
   if (scan_file_idx_ >= 0) {
-    int end_line = static_cast<int>(content.size());
+    int end_line = static_cast<int>(line_numbers.size());
     if (scan_file_idx_ + 1 < static_cast<int>(files.size()))
       end_line = std::min(
           end_line, static_cast<int>(files[scan_file_idx_ + 1].start_line));
 
-    int new_line = scan_new_line_;
-    bool in_hunk = scan_in_hunk_;
+    // Blame reports the line number in the commit's version of the file,
+    // which is the result side of its diff, for normal and combined diffs.
     bool found = false;
-
     for (int j = scan_pos_; j < end_line; j++) {
-      const std::string& text = content[j];
-
-      if (text.starts_with("@@")) {
-        size_t plus = text.find('+', 3);
-        if (plus != std::string::npos)
-          new_line = std::atoi(text.c_str() + plus + 1);
-        in_hunk = true;
-        continue;
-      }
-
-      if (!in_hunk)
-        continue;
-
-      char ch = text.empty() ? '\0' : text[0];
-
-      if ((ch == ' ' || ch == '+') && new_line == pending_line_) {
+      if (line_numbers[j].new_line == pending_line_) {
         commit_diff_.HighlightLine(j);
         pending_file_.clear();
         pending_line_ = 0;
@@ -182,18 +159,12 @@ void BlameLookup::ScanDiffContent() {
         found = true;
         break;
       }
-
-      if (ch == ' ' || ch == '+')
-        new_line++;
-      // '-' lines don't increment new_line.
     }
 
     if (!found) {
       // Save progress for the next frame. Use max to avoid going
-      // backwards when end_line is clamped to content.size().
+      // backwards when end_line is clamped to the parsed content.
       scan_pos_ = std::max(scan_pos_, end_line);
-      scan_new_line_ = new_line;
-      scan_in_hunk_ = in_hunk;
 
       // Give up only when the worker is done AND no progress was made
       // since the last frame. This avoids a race where busy() returns

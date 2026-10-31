@@ -581,23 +581,15 @@ void MainWindow::OnNavigateToCommit(const std::string& commit) {
 
 void MainWindow::OnRunGitGuiBlame(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) {
-  std::string commit = commit_history_.GetSelectedCommit();
-  std::string revision;
-  if (commit_history_.IsUnstagedSelected() ||
-      commit_history_.IsStagedSelected())
-    revision = "HEAD";
-  else
-    revision = is_old_side ? (commit + "^") : commit;
-
+                                  int parent) {
   runner_.Spawn({"gui", "blame", "--line=" + std::to_string(line_number),
-                 revision, file});
+                 blame_lookup_.GetRevision(parent), file});
 }
 
 void MainWindow::OnShowLineOrigin(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) {
-  blame_lookup_.ShowLineOrigin(file, line_number, is_old_side);
+                                  int parent) {
+  blame_lookup_.ShowLineOrigin(file, line_number, parent);
 }
 
 // -- Toolbar::Delegate --------------------------------------------------------

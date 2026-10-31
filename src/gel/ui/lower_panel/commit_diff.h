@@ -32,10 +32,10 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
     virtual void SetPrimarySelection(const std::string& text) = 0;
     virtual void OnShowLineOrigin(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) = 0;
+                                  int parent) = 0;
     virtual void OnRunGitGuiBlame(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) = 0;
+                                  int parent) = 0;
     virtual bool IsUnstagedSelected() const = 0;
     virtual bool IsStagedSelected() const = 0;
     virtual void OnBlameSearchCancel() = 0;
@@ -94,10 +94,10 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
   void SetPrimarySelection(const std::string& text) final;
   void OnShowLineOrigin(const std::string& file,
                         int line_number,
-                        bool is_old_side) final;
+                        int parent) final;
   void OnRunGitGuiBlame(const std::string& file,
                         int line_number,
-                        bool is_old_side) final;
+                        int parent) final;
   void OnBlameSearchCancel() final;
   void OnNavigateToCommit(const std::string& commit) final;
 

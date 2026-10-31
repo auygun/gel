@@ -28,12 +28,14 @@ class DiffContent : public TextViewer::Delegate {
    public:
     virtual ~Delegate() = default;
     virtual void SetPrimarySelection(const std::string& text) = 0;
+    // |line_number| is a line of |file| in the selected commit when |parent|
+    // is 0, or in its |parent|th parent otherwise.
     virtual void OnShowLineOrigin(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) = 0;
+                                  int parent) = 0;
     virtual void OnRunGitGuiBlame(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) = 0;
+                                  int parent) = 0;
     virtual bool IsUnstagedSelected() const = 0;
     virtual bool IsStagedSelected() const = 0;
     virtual void OnBlameSearchCancel() = 0;
@@ -114,11 +116,18 @@ class DiffContent : public TextViewer::Delegate {
   void OnContextMenu(int line_index) override;
   void OnSearchInput(char* buf, size_t buf_size) override;
 
-  void ComputeLineOrigin(int file_idx,
-                         std::string& out_file,
-                         int& out_line,
-                         bool& out_is_old,
-                         int target_line);
+  // Where to blame a diff line from: |line| of |file| in the commit when
+  // |parent| is 0, or in its |parent|th parent otherwise.
+  struct LineOrigin {
+    std::string file;
+    int line = 0;
+    int parent = 0;
+  };
+
+  // Returns the origin of |line_index| in file |file_idx|, or nothing if the
+  // line cannot be blamed.
+  std::optional<LineOrigin> ComputeLineOrigin(int file_idx,
+                                              int line_index) const;
 
   // Returns the number of line number columns of |line_index|: one per parent
   // followed by one for the result (2 for a normal diff hunk, more for a

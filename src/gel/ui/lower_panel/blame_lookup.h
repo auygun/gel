@@ -33,9 +33,13 @@ class BlameLookup {
 
   // Looks up the origin of a diff line by running "git blame --porcelain",
   // then navigates to the originating commit and highlights the line.
-  void ShowLineOrigin(const std::string& file,
-                      int line_number,
-                      bool is_old_side);
+  // |line_number| is a line of |file| in the selected commit when |parent| is
+  // 0, or in its |parent|th parent otherwise.
+  void ShowLineOrigin(const std::string& file, int line_number, int parent);
+
+  // Returns the revision to blame for |parent| of the selected commit (0 for
+  // the commit itself). HEAD for the unstaged and staged rows.
+  std::string GetRevision(int parent) const;
 
   // Cancels any in-progress blame search.
   void Cancel();
@@ -73,13 +77,7 @@ class BlameLookup {
   int scan_file_idx_ = -1;
   int scan_pos_ = -1;
   int scan_file_count_ = -1;
-  int scan_new_line_ = 0;
-  bool scan_in_hunk_ = false;
   bool wait_for_clear_ = false;
-
-  std::string GetRevision(const std::string& file,
-                          int line_number,
-                          bool is_old_side) const;
 };
 
 #endif  // GEL_UI_LOWER_PANEL_BLAME_LOOKUP_H

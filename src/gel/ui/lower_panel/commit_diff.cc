@@ -57,14 +57,14 @@ void CommitDiff::SetPrimarySelection(const std::string& text) {
 
 void CommitDiff::OnShowLineOrigin(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) {
-  delegate_.OnShowLineOrigin(file, line_number, is_old_side);
+                                  int parent) {
+  delegate_.OnShowLineOrigin(file, line_number, parent);
 }
 
 void CommitDiff::OnRunGitGuiBlame(const std::string& file,
                                   int line_number,
-                                  bool is_old_side) {
-  delegate_.OnRunGitGuiBlame(file, line_number, is_old_side);
+                                  int parent) {
+  delegate_.OnRunGitGuiBlame(file, line_number, parent);
 }
 
 void CommitDiff::OnBlameSearchCancel() {

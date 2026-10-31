@@ -163,10 +163,10 @@ class MainWindow final : public CommitHistory::Delegate,
   void SetPrimarySelection(const std::string& text) final;
   void OnShowLineOrigin(const std::string& file,
                         int line_number,
-                        bool is_old_side) final;
+                        int parent) final;
   void OnRunGitGuiBlame(const std::string& file,
                         int line_number,
-                        bool is_old_side) final;
+                        int parent) final;
   bool IsUnstagedSelected() const final;
   bool IsStagedSelected() const final;
   void OnBlameSearchCancel() final;

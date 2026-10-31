@@ -921,105 +921,57 @@ void DiffContent::OnContextMenu(int line_index) {
     }
   }
 
-  bool can_show_origin = false;
-  int ctx_file_idx = -1;
+  std::optional<LineOrigin> origin;
   if (line_index >= 0 && line_index < line_count) {
     auto files = git_diff_.GetFileList();
-    ctx_file_idx = FindFileForLine(files, line_index);
-    if (ctx_file_idx >= 0 &&
-        files[ctx_file_idx].status != FileStatus::kCommit) {
-      const std::string& text = content[line_index];
-      char first = text.empty() ? '\0' : text[0];
-      can_show_origin = (first == ' ' || first == '+' || first == '-');
-      if (first == '+' &&
-          (delegate_.IsUnstagedSelected() || delegate_.IsStagedSelected()))
-        can_show_origin = false;
-    }
+    int file_idx = FindFileForLine(files, line_index);
+    if (file_idx >= 0 && files[file_idx].status != FileStatus::kCommit)
+      origin = ComputeLineOrigin(file_idx, line_index);
   }
   if (ImGui::MenuItem("Show origin of this line", nullptr, false,
-                      can_show_origin)) {
-    std::string file;
-    int line_number = 0;
-    bool is_old = false;
-    ComputeLineOrigin(ctx_file_idx, file, line_number, is_old, line_index);
-    delegate_.OnShowLineOrigin(file, line_number, is_old);
-  }
+                      origin.has_value()))
+    delegate_.OnShowLineOrigin(origin->file, origin->line, origin->parent);
   if (ImGui::MenuItem("Run git gui blame on this line", nullptr, false,
-                      can_show_origin)) {
-    std::string file;
-    int line_number = 0;
-    bool is_old = false;
-    ComputeLineOrigin(ctx_file_idx, file, line_number, is_old, line_index);
-    delegate_.OnRunGitGuiBlame(file, line_number, is_old);
-  }
+                      origin.has_value()))
+    delegate_.OnRunGitGuiBlame(origin->file, origin->line, origin->parent);
 }
 
 void DiffContent::OnSearchInput(char* buf, size_t buf_size) {
   InputTextContextMenu(buf, buf_size);
 }
 
-void DiffContent::ComputeLineOrigin(int file_idx,
-                                    std::string& out_file,
-                                    int& out_line,
-                                    bool& out_is_old,
-                                    int target_line) {
-  auto files = git_diff_.GetFileList();
-  auto content = git_diff_.GetDiffContent();
-  auto& file = files[file_idx];
-  int old_line = 0, new_line = 0;
-  bool in_hunk = false;
-  bool combined = false;
+std::optional<DiffContent::LineOrigin> DiffContent::ComputeLineOrigin(
+    int file_idx,
+    int line_index) const {
+  int columns = GetLineNumberColumns(line_index);
+  if (columns == 0)
+    return std::nullopt;
+  const FileEntry& file = git_diff_.GetFileList()[file_idx];
+  // A renamed file has its old path in the first parent.
+  auto parent_path = [&](int parent) {
+    return parent == 1 && !file.old_path.empty() ? file.old_path : file.path;
+  };
 
-  for (int j = static_cast<int>(file.start_line);
-       j <= target_line && j < static_cast<int>(content.size()); j++) {
-    const std::string& text = content[j];
-
-    if (text.starts_with("@@")) {
-      combined = text.size() > 2 && text[2] == '@';
-      size_t dash = text.find('-', 3);
-      if (dash != std::string::npos)
-        old_line = std::atoi(text.c_str() + dash + 1);
-      size_t plus = text.find('+', 3);
-      if (plus != std::string::npos)
-        new_line = std::atoi(text.c_str() + plus + 1);
-      in_hunk = true;
-      continue;
-    }
-
-    if (!in_hunk)
-      continue;
-
-    char first = text.empty() ? '\0' : text[0];
-
-    if (j == target_line) {
-      if (first == '+') {
-        out_file = file.path;
-        out_line = new_line;
-      } else {
-        // Context (' ') and removed ('-') lines exist in the old revision.
-        // Use old_line so the line number matches the revision being blamed.
-        out_file = (first == '-' && !file.old_path.empty()) ? file.old_path
-                                                            : file.path;
-        out_line = old_line;
-        out_is_old = true;
-      }
-      break;
-    }
-
-    // In combined diffs (@@@ headers), lines have two prefix characters.
-    // A ' -' line (parent 2 removed, not in parent 1 or result) must not
-    // increment old_line or new_line despite first being ' '.
-    if (combined && first == ' ' && text.size() >= 2 && text[1] == '-') {
-      // Line from parent 2 only, not in parent 1 or result: skip.
-    } else if (first == ' ') {
-      old_line++;
-      new_line++;
-    } else if (first == '+') {
-      new_line++;
-    } else if (first == '-') {
-      old_line++;
-    }
+  if (delegate_.IsUnstagedSelected() || delegate_.IsStagedSelected()) {
+    // Only lines that are in HEAD can be blamed, by their line number there.
+    int line = GetLineNumber(line_index, 0, columns);
+    if (line == 0)
+      return std::nullopt;
+    return LineOrigin{parent_path(1), line, 1};
   }
+
+  // A line in the result is blamed from the commit itself. Blame follows it
+  // into whichever parent it came from, or stops at the commit if the commit
+  // introduced it (e.g. while resolving a merge conflict).
+  if (int line = GetLineNumber(line_index, columns - 1, columns); line > 0)
+    return LineOrigin{file.path, line, 0};
+
+  // A line not in the result is blamed from the first parent containing it.
+  for (int column = 0; column < columns - 1; column++) {
+    if (int line = GetLineNumber(line_index, column, columns); line > 0)
+      return LineOrigin{parent_path(column + 1), line, column + 1};
+  }
+  return std::nullopt;
 }
 
 int DiffContent::GetLineNumberColumns(int line_index) const {
