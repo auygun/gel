@@ -4,6 +4,8 @@
 
 #include "gel/ui/git_cmd_runner.h"
 
+#include <algorithm>
+
 #include "gel/git_repo.h"
 
 void GitCmdRunner::PrependTopLevel(std::vector<std::string>& args) {
@@ -35,7 +37,7 @@ GitTask GitCmdRunner::ClassifyCommand(const std::string& cmd_name) {
 }
 
 bool GitCmdRunner::Run(std::vector<std::string> args, bool local_only) {
-  if (cmd_.busy())
+  if (cmd_.running())
     return false;
 
   local_only_ = local_only;
@@ -79,17 +81,25 @@ void GitCmdRunner::Spawn(std::vector<std::string> args, bool silent) {
   entry.cmd->Run(std::move(args));
 }
 
+void GitCmdRunner::AppendOutput() {
+  if (cmd_.DidClear())
+    output_lines_appended_ = 0;
+  auto output = cmd_.GetOutput();
+  for (; output_lines_appended_ < output.size(); ++output_lines_appended_) {
+    if (!task_output_.empty())
+      task_output_ += '\n';
+    task_output_ += output[output_lines_appended_];
+  }
+}
+
 void GitCmdRunner::Update() {
   {
-    GitCmd::Result result;
-    if (cmd_.Update(result)) {
+    bool finished = cmd_.Update();
+    // Track output for all commands.
+    AppendOutput();
+    if (finished) {
+      const GitCmd::Result& result = cmd_.GetResult();
       bool resolved_externally = false;
-      // Track output for all commands.
-      if (!result.output.empty()) {
-        if (!task_output_.empty())
-          task_output_ += '\n';
-        task_output_ += result.output;
-      }
       if (!result.error.empty()) {
         if (!task_output_.empty())
           task_output_ += '\n';
@@ -105,7 +115,9 @@ void GitCmdRunner::Update() {
         // (Primary detection is the MERGE_MSG check in UpdateTaskState.)
         resolved_externally =
             !result.success && task_ == GitTask::kRevert &&
-            result.output.find("nothing to commit") != std::string::npos;
+            std::ranges::any_of(cmd_.GetOutput(), [](const std::string& line) {
+              return line.find("nothing to commit") != std::string::npos;
+            });
         if (resolved_externally)
           std::filesystem::remove(git_repo_.git_dir() / "REVERT_HEAD");
         GitTask prev_task = task_;
@@ -129,8 +141,13 @@ void GitCmdRunner::Update() {
       } else if (!result.success) {
         next_args_.clear();
         std::string error = result.error;
-        if (error.empty())
-          error = result.output;
+        if (error.empty()) {
+          for (auto& line : cmd_.GetOutput()) {
+            if (!error.empty())
+              error += '\n';
+            error += line;
+          }
+        }
         if (!error_callback_(error, cmd_.cmd_name(), false))
           show_console_ = true;
       }
@@ -150,8 +167,8 @@ void GitCmdRunner::Update() {
   }
 
   for (auto it = procs_.begin(); it != procs_.end();) {
-    GitCmd::Result result;
-    if (it->cmd->Update(result)) {
+    if (it->cmd->Update()) {
+      const GitCmd::Result& result = it->cmd->GetResult();
       if (!result.success && !it->silent)
         error_callback_(result.error, it->cmd->cmd_name(), true);
       it = procs_.erase(it);
@@ -167,7 +184,7 @@ void GitCmdRunner::Update() {
 }
 
 bool GitCmdRunner::IsBusy() const {
-  return cmd_.busy() || task_ != GitTask::kNone;
+  return cmd_.running() || task_ != GitTask::kNone;
 }
 
 void GitCmdRunner::Continue() {
@@ -252,7 +269,7 @@ void GitCmdRunner::UpdateTaskState() {
   else
     task_ = GitTask::kNone;
 
-  if (task_ != GitTask::kNone && !cmd_.busy())
+  if (task_ != GitTask::kNone && !cmd_.running())
     task_state_ = TaskState::kWaitingForUser;
   else if (task_ == GitTask::kNone)
     task_state_ = TaskState::kIdle;

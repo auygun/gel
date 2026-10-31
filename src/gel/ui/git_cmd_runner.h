@@ -83,7 +83,7 @@ class GitCmdRunner {
   bool IsBusy() const;
 
   // True if the serialized command slot is currently running.
-  bool IsCommandBusy() const { return cmd_.busy(); }
+  bool IsCommandBusy() const { return cmd_.running(); }
 
   // In-progress task queries.
   GitTask task() const { return task_; }
@@ -122,8 +122,11 @@ class GitCmdRunner {
   bool show_console_ = false;
   bool local_only_ = false;
   std::vector<std::string> next_args_;
+  // Number of output lines of the running command appended to task_output_.
+  size_t output_lines_appended_ = 0;
 
   void PrependTopLevel(std::vector<std::string>& args);
+  void AppendOutput();
   void RunFollowUp(const char* flag);
   static GitTask ClassifyCommand(const std::string& cmd_name);
 };

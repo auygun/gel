@@ -23,32 +23,32 @@ bool GitCmd::Run(std::vector<std::string> args) {
   is_abort_ = args.size() > offset + 1 && args[offset + 1] == "--abort";
   is_quit_ = args.size() > offset + 1 && args[offset + 1] == "--quit";
   run_timer_ = {};
-  return RunWithArgs(std::move(args));
+  if (!RunWithArgs(std::move(args)))
+    return false;
+  running_ = true;
+  awaiting_clear_ = true;
+  return true;
 }
 
-bool GitCmd::Update(Result& result) {
-  std::scoped_lock lock(result_lock_);
-  if (!has_result_)
+bool GitCmd::Update() {
+  did_clear_ = buffers_.Merge();
+  if (did_clear_)
+    awaiting_clear_ = false;
+  if (!running_ || awaiting_clear_ || buffers_.data<Result>().empty())
     return false;
-  result = std::move(result_);
-  has_result_ = false;
+  running_ = false;
   return true;
 }
 
 void GitCmd::OnStarted() {
-  output_.clear();
+  buffers_.Reset();
 }
 
 void GitCmd::OnOutput(std::string line) {
-  if (!output_.empty())
-    output_ += '\n';
-  output_ += std::move(line);
+  buffers_.Push(std::move(line));
 }
 
 void GitCmd::OnFinished(Exec::Status status, int exit_code, std::string err) {
-  std::scoped_lock lock(result_lock_);
-  result_.success = (status == Exec::Status::EXITED && exit_code == 0);
-  result_.output = std::move(output_);
-  result_.error = std::move(err);
-  has_result_ = true;
+  buffers_.Push<Result>(
+      {status == Exec::Status::EXITED && exit_code == 0, std::move(err)});
 }
