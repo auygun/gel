@@ -452,7 +452,12 @@ void DrawSortBySizeIcon() {
   }
 }
 
-void DrawCollapseAllIcon() {
+namespace {
+
+// Shared body for the collapse-all and expand-all icons: a horizontal line
+// with a chevron above and below it, pointing away from the line to expand
+// (unfold) or at it to collapse (fold).
+void DrawFoldIcon(bool expand) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();
   ImVec2 btn_max = ImGui::GetItemRectMax();
@@ -462,24 +467,62 @@ void DrawCollapseAllIcon() {
   float cx = (btn_min.x + btn_max.x) * 0.5f;
   float cy = (btn_min.y + btn_max.y) * 0.5f;
 
-  // Three horizontal lines at decreasing indent to suggest collapsing.
-  float half_w = size * 0.26f;
-  float step = size * 0.16f;
-  float indent = size * 0.12f;
-  dl->AddLine(ImVec2(cx - half_w, cy - step), ImVec2(cx + half_w, cy - step),
-              color, thickness);
-  dl->AddLine(ImVec2(cx - half_w + indent, cy), ImVec2(cx + half_w, cy), color,
+  float line_half_w = size * 0.32f;
+  dl->AddLine(ImVec2(cx - line_half_w, cy), ImVec2(cx + line_half_w, cy), color,
               thickness);
-  dl->AddLine(ImVec2(cx - half_w + indent, cy + step),
-              ImVec2(cx + half_w, cy + step), color, thickness);
 
-  // Upward arrow on the left indicating collapse.
-  float arrow_x = cx - half_w + indent * 0.5f;
-  float arrow_sz = size * 0.08f;
-  dl->AddTriangleFilled(ImVec2(arrow_x, cy - arrow_sz * 0.5f),
-                        ImVec2(arrow_x - arrow_sz, cy + arrow_sz * 0.5f),
-                        ImVec2(arrow_x + arrow_sz, cy + arrow_sz * 0.5f),
-                        color);
+  float half_w = size * 0.24f;
+  float height = size * 0.12f;
+  // Keeps the chevron tips clear of the line when they point at it.
+  float gap = size * 0.14f;
+  for (float dir : {-1.0f, 1.0f}) {
+    float near_y = cy + dir * gap;
+    float far_y = cy + dir * (gap + height);
+    float tip_y = expand ? far_y : near_y;
+    float base_y = expand ? near_y : far_y;
+    ImVec2 points[] = {ImVec2(cx - half_w, base_y), ImVec2(cx, tip_y),
+                       ImVec2(cx + half_w, base_y)};
+    dl->AddPolyline(points, 3, color, ImDrawFlags_None, thickness);
+  }
+}
+
+}  // namespace
+
+void DrawCollapseAllIcon() {
+  DrawFoldIcon(false);
+}
+
+void DrawExpandAllIcon() {
+  DrawFoldIcon(true);
+}
+
+void DrawFileTreeIcon() {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 btn_min = ImGui::GetItemRectMin();
+  ImVec2 btn_max = ImGui::GetItemRectMax();
+  float size = std::min(btn_max.x - btn_min.x, btn_max.y - btn_min.y);
+  float thickness = std::max(1.5f, size * 0.08f);
+  ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  float cx = (btn_min.x + btn_max.x) * 0.5f;
+  float cy = (btn_min.y + btn_max.y) * 0.5f;
+
+  float half_w = size * 0.28f;
+  float step = size * 0.2f;
+  float left = cx - half_w;
+  float right = cx + half_w;
+  float trunk_x = left + size * 0.06f;
+  float item_x = left + size * 0.22f;
+  float gap = size * 0.06f;
+
+  // Parent entry on top, with a trunk running down to two child entries.
+  dl->AddLine(ImVec2(left, cy - step), ImVec2(right, cy - step), color,
+              thickness);
+  dl->AddLine(ImVec2(trunk_x, cy - step), ImVec2(trunk_x, cy + step), color,
+              thickness);
+  for (float y : {cy, cy + step}) {
+    dl->AddLine(ImVec2(trunk_x, y), ImVec2(item_x - gap, y), color, thickness);
+    dl->AddLine(ImVec2(item_x, y), ImVec2(right, y), color, thickness);
+  }
 }
 
 void DrawFolderIcon() {

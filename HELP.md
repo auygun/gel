@@ -376,6 +376,16 @@ Click a file to scroll the diff to that file's section.
 Scrolling through the diff auto-selects the corresponding file. Long file
 paths show a tooltip on hover.
 
+The **File view** button in the [diff overlay](#diff-overlay-controls)
+switches between a flat list of paths and a directory tree. In the tree,
+entries keep the diff's order, and a directory that only contains another
+directory is shown on one row (e.g. `src/gel/ui`). Directories start
+collapsed. Click a directory to expand or collapse it, or use the **Expand
+all** and **Collapse all** buttons next to the File view button. Expanded and
+collapsed directories stay that way when switching commits, and after Expand
+all, directories in other commits start expanded too. When the selected file is inside a collapsed directory, the
+directory is highlighted instead. The choice of view is remembered.
+
 #### Multi-Selection
 
 When viewing unstaged or staged changes, multi-selection is available:
@@ -495,6 +505,10 @@ the X11 primary selection for middle-click paste (Ctrl+A does not update it).
 A floating overlay in the upper-right corner of the diff content area provides
 diff-specific controls:
 
+- **File view** -- Toggles the [file list](#file-list) between a flat list
+  (button off) and a directory tree (button on).
+- **Expand all / Collapse all** -- Shown in tree view. Expand or collapse all
+  directories of the file tree.
 - **Refresh** -- Refresh the diff only (without reloading the commit history).
 - **Merge diff mode** -- Shown for merge commits only. Toggles how the merge
   is diffed:

@@ -47,8 +47,13 @@ void DrawTreemapIcon();
 void DrawSortByNameIcon();
 void DrawSortBySizeIcon();
 
-// Collapse-all icon for tree views.
+// Collapse-all and expand-all icons for tree views.
 void DrawCollapseAllIcon();
+void DrawExpandAllIcon();
+
+// File tree icon (a trunk with indented branches) for the file list's
+// list/tree view toggle.
+void DrawFileTreeIcon();
 
 // Folder icons for the directory browser.
 void DrawFolderIcon();

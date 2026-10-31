@@ -128,7 +128,9 @@ void CommitDiff::RenderOverlayControls() {
 
   bool show_refresh = IsUnstagedSelected() || IsStagedSelected();
   bool show_merge_mode = IsMergeShown();
-  float total_width = (show_refresh ? frame_h + spacing : 0.0f) +
+  bool tree = settings_.file_list_tree;
+  float total_width = (tree ? 2 * (frame_h + spacing) : 0.0f) + frame_h +
+                      spacing + (show_refresh ? frame_h + spacing : 0.0f) +
                       (show_merge_mode ? frame_h + spacing : 0.0f) + frame_h +
                       spacing + ctx_input_w + ctx_btn_w;
   ImVec2 pad = ImGui::GetStyle().WindowPadding;
@@ -153,6 +155,30 @@ void CommitDiff::RenderOverlayControls() {
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     overlay_tooltip_suppressed_ = true;
   bool any_hovered = false;
+
+  // Left of the file view toggle, so that showing them doesn't move the
+  // toggle in the right-aligned overlay.
+  bool expand_all_requested = false;
+  bool collapse_all_requested = false;
+  if (tree) {
+    expand_all_requested =
+        ImGui::Button("##expand_all", ImVec2(frame_h, frame_h));
+    DrawExpandAllIcon();
+    ItemTooltip("Expand all", any_hovered, overlay_tooltip_suppressed_);
+    ImGui::SameLine();
+    collapse_all_requested =
+        ImGui::Button("##collapse_all", ImVec2(frame_h, frame_h));
+    DrawCollapseAllIcon();
+    ItemTooltip("Collapse all", any_hovered, overlay_tooltip_suppressed_);
+    ImGui::SameLine();
+  }
+
+  bool file_view_toggled =
+      ToggleButton("##file_tree_view", tree, ImVec2(frame_h, frame_h));
+  DrawFileTreeIcon();
+  ItemTooltip(tree ? "File view: tree" : "File view: list", any_hovered,
+              overlay_tooltip_suppressed_);
+  ImGui::SameLine();
 
   bool refresh_requested = false;
   if (show_refresh) {
@@ -238,6 +264,15 @@ void CommitDiff::RenderOverlayControls() {
   ImGui::PopStyleColor();
   ImGui::EndChild();
 
+  if (expand_all_requested)
+    file_list_.SetAllDirsOpen(true);
+  if (collapse_all_requested)
+    file_list_.SetAllDirsOpen(false);
+  if (file_view_toggled) {
+    settings_.file_list_tree = !settings_.file_list_tree;
+    settings_.Save();
+    file_list_.ScrollToSelected();
+  }
   if (refresh_requested)
     delegate_.OnDiffRefreshRequested();
   if (clear_filter_requested)

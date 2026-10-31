@@ -234,6 +234,8 @@ void PersistentSettings::Load() {
 
   if (j.contains("file_list_on_right") && j["file_list_on_right"].is_boolean())
     file_list_on_right = j["file_list_on_right"].get<bool>();
+  if (j.contains("file_list_tree") && j["file_list_tree"].is_boolean())
+    file_list_tree = j["file_list_tree"].get<bool>();
   if (j.contains("renderer")) {
     if (j["renderer"].is_string()) {
       auto str = j["renderer"].get<std::string>();
@@ -392,6 +394,7 @@ void PersistentSettings::Save() {
   j["file_list_width"] = file_list_width;
   j["size_tree_width"] = size_tree_width;
   j["file_list_on_right"] = file_list_on_right;
+  j["file_list_tree"] = file_list_tree;
   j["display_backend"] = GetDisplayBackendName(display_backend);
   j["client_side_decorations"] = client_side_decorations;
   j["search_case_sensitive"] = search_options.case_sensitive;
