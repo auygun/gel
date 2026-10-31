@@ -83,6 +83,45 @@ void FileList::RevertAll() {
   PrepareRevert();
 }
 
+std::vector<std::string> FileList::GetCommitParents(
+    const std::string& commit) const {
+  // Taken from the diff header rather than the log, whose parents are
+  // rewritten when a path filter is active.
+  std::vector<std::string> parents;
+  auto files = git_diff_.GetFileList();
+  auto content = git_diff_.GetDiffContent();
+  // The diff may still show the previously selected commit.
+  if (files.empty() || files[0].status != FileStatus::kCommit ||
+      content.empty() || content[0] != "commit " + commit)
+    return parents;
+  size_t end = files.size() > 1 ? files[1].start_line : content.size();
+  for (size_t i = 1; i < end && i < content.size(); i++) {
+    if (content[i].starts_with("Parent: "))
+      parents.push_back(content[i].substr(8));
+    else if (!parents.empty())
+      break;
+  }
+  return parents;
+}
+
+int FileList::ParentMenuItems(const std::vector<std::string>& parents) const {
+  auto commits = git_log_.GetCommits();
+  int picked = 0;
+  for (size_t i = 0; i < parents.size(); i++) {
+    const std::string& hash = parents[i];
+    std::string label =
+        "Parent " + std::to_string(i + 1) + "  " + hash.substr(0, 7);
+    // The subject is only known for parents in the loaded history.
+    auto it = std::find_if(commits.begin(), commits.end(),
+                           [&](const auto& c) { return c.commit == hash; });
+    if (it != commits.end() && !it->message.empty())
+      label += "  " + it->message[0];
+    if (ImGui::MenuItem(label.c_str()))
+      picked = static_cast<int>(i) + 1;
+  }
+  return picked;
+}
+
 int FileList::ConsumeClickedFile() {
   int f = clicked_file_;
   clicked_file_ = -1;
@@ -258,8 +297,15 @@ void FileList::Update(float width) {
           bool has_commit = ci >= 0 && ci < static_cast<int>(commits.size());
           bool can_diff = has_commit || is_unstaged || is_staged;
           bool multi_selected = is_multi && multi_selection_.Size > 1;
-          if (ImGui::MenuItem("External diff", nullptr, false,
-                              can_diff && !multi_selected)) {
+          // A merge commit is compared against a parent picked from a
+          // submenu, any other commit against its only parent.
+          std::vector<std::string> parents;
+          if (has_commit)
+            parents = GetCommitParents(commits[ci].commit);
+          bool is_merge = parents.size() > 1;
+
+          // |parent| is 1-based, 0 for a commit with no parents.
+          auto external_diff = [&](int parent) {
             std::vector<std::string> args = {"difftool", "--no-prompt"};
             if (settings_.diff_tool[0])
               args.push_back(std::string("--tool=") + settings_.diff_tool);
@@ -267,21 +313,17 @@ void FileList::Update(float width) {
               args.emplace_back("--cached");
             else if (!is_unstaged) {
               // SHA-1 of the empty tree, used as parent for root commits.
-              std::string parent =
-                  commits[ci].parents.empty()
-                      ? "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-                      : commits[ci].commit + "^";
-              args.push_back(parent);
+              args.push_back(
+                  parent > 0 ? commits[ci].commit + "^" + std::to_string(parent)
+                             : "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
               args.push_back(commits[ci].commit);
             }
             args.emplace_back("--");
             args.emplace_back(is_unstaged || is_staged ? entry.path
                                                        : ":/" + entry.path);
             runner_.Spawn(std::move(args));
-          }
-          if (IsImageFile(entry.path) &&
-              ImGui::MenuItem("Visual diff", nullptr, false,
-                              can_diff && !multi_selected)) {
+          };
+          auto visual_diff = [&](int parent) {
             std::string old_ref;
             std::string new_ref;
             bool new_from_worktree = false;
@@ -292,16 +334,45 @@ void FileList::Update(float width) {
               old_ref = "HEAD";
               new_ref = ":";
             } else {
-              old_ref = (entry.status == FileStatus::kAdded ||
-                         commits[ci].parents.empty())
+              // In a merge, a file added relative to the first parent can
+              // still exist in the others. A missing one shows as no image.
+              old_ref = (entry.status == FileStatus::kAdded && !is_merge) ||
+                                parent == 0
                             ? ""
-                            : commits[ci].commit + "^";
+                            : commits[ci].commit + "^" + std::to_string(parent);
               new_ref = entry.status == FileStatus::kDeleted
                             ? ""
                             : commits[ci].commit;
             }
             delegate_.OnShowImageDiff(old_ref, new_ref, entry.path,
                                       new_from_worktree);
+          };
+          int only_parent =
+              !parents.empty() || (has_commit && !commits[ci].parents.empty())
+                  ? 1
+                  : 0;
+
+          if (is_merge) {
+            if (ImGui::BeginMenu("External diff", !multi_selected)) {
+              if (int parent = ParentMenuItems(parents); parent > 0)
+                external_diff(parent);
+              ImGui::EndMenu();
+            }
+          } else if (ImGui::MenuItem("External diff", nullptr, false,
+                                     can_diff && !multi_selected)) {
+            external_diff(only_parent);
+          }
+          if (IsImageFile(entry.path)) {
+            if (is_merge) {
+              if (ImGui::BeginMenu("Visual diff", !multi_selected)) {
+                if (int parent = ParentMenuItems(parents); parent > 0)
+                  visual_diff(parent);
+                ImGui::EndMenu();
+              }
+            } else if (ImGui::MenuItem("Visual diff", nullptr, false,
+                                       can_diff && !multi_selected)) {
+              visual_diff(only_parent);
+            }
           }
           if (ImGui::MenuItem("Copy path")) {
             if (multi_selected) {

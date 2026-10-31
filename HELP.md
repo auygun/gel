@@ -390,14 +390,17 @@ When viewing unstaged or staged changes, multi-selection is available:
 Right-click a file entry to access:
 
 - **External diff** -- Runs `git difftool` to open the file in an external
-  diff tool, comparing the parent commit to the selected commit. Also works
-  for unstaged changes, staged changes, and root commits. The tool can be
-  configured in Settings. Disabled for multi-file selections.
+  diff tool, comparing the parent commit to the selected commit. For merge
+  commits, a submenu lists each parent (short hash and subject) to compare
+  against. Also works for unstaged changes, staged changes, and root
+  commits. The tool can be configured in Settings. Disabled for multi-file
+  selections.
 - **Visual diff** -- For image files, opens a non-modal side-by-side
   comparison showing the old and new versions of the image with dimensions.
   Multiple image diff windows can be open simultaneously. Shows "(no image)"
   for the missing side of added or deleted files. Also works for unstaged and
-  staged changes. Disabled for multi-file selections.
+  staged changes. For merge commits, a submenu picks the parent to compare
+  against. Disabled for multi-file selections.
 - **Copy path** -- Copies the file's relative path to the clipboard. When
   multiple files are selected, copies all paths joined by spaces.
 
@@ -463,7 +466,11 @@ Right-click in the diff viewer to access:
   file at the clicked line number.
 
 Both line-origin menu items are only available for lines that exist in the
-repository (not for added lines in unstaged/staged changes).
+repository (not for added lines in unstaged/staged changes). In a merge
+commit, lines present in the merge result are looked up from the merge
+itself, so blame follows them into the parent they came from, or stops at
+the merge if it introduced them. Lines dropped by the merge are looked up
+in the first parent that has them.
 
 A spinning indicator appears near the mouse cursor while background
 operations are running (blame lookups, git commands, commit search, or file
