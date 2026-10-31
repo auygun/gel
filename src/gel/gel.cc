@@ -5,6 +5,8 @@
 #include "gel/gel.h"
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <utility>
 
@@ -40,6 +42,15 @@ extern void KaliberMain(Platform* platform) {
   thread_pool.Initialize(3);
 
   auto gel = std::make_unique<Gel>(platform);
+#ifdef NDEBUG
+  // Release builds skip the graceful shutdown. Tearing down the git workers
+  // and their data can take a long time on huge repos, and the OS reclaims
+  // everything anyway. Settings have already been saved by Gel::Run().
+  // Keep the returned renderer alive so nothing gets torn down before exit.
+  [[maybe_unused]] auto result = gel->Run(command_line);
+  std::fflush(nullptr);
+  std::_Exit(0);
+#else
   auto [renderer, imgui_backend] = gel->Run(command_line);
   thread_pool.CancelTasks();
   platform->SetObserver(nullptr);
@@ -101,6 +112,7 @@ extern void KaliberMain(Platform* platform) {
   // is destroyed, even when we have nothing to render.
   while (thread_pool.GetPendingTaskCount() > 0)
     platform->Update(0);
+#endif
 }
 
 }  // namespace eng
