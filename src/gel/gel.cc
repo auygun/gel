@@ -26,8 +26,11 @@ using namespace eng;
 namespace eng {
 
 extern void KaliberMain(Platform* platform) {
-  const CommandLine command_line(platform->GetMainArgC(),
-                                 platform->GetMainArgV(), {'n'});
+  // git log short options that take a value. The second list takes an
+  // optional value that has to be attached (e.g. -U5).
+  const CommandLine command_line(
+      platform->GetMainArgC(), platform->GetMainArgV(),
+      {'n', 'S', 'G', 'O', 'I', 'L'}, {'M', 'C', 'B', 'U', 'X', 'l'});
   TaskRunner::CreateThreadLocalTaskRunner();
   ThreadPool thread_pool;
   // Auxiliary pool for deferred destruction and one-off background queries

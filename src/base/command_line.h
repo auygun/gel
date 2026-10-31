@@ -12,11 +12,16 @@
 class CommandLine {
  public:
   // Constructs a CommandLine from argv.
-  // `value_flags` lists short flag characters that accept a value (e.g. {'n', 'm'}).
-  // Flags not in this set are treated as boolean; characters after them are
+  // `value_flags` lists short flag characters that take a value, attached or
+  // as the next argument (e.g. -n1, -n 1).
+  // `attached_value_flags` lists short flag characters whose value is optional
+  // and must be attached (e.g. -U5); on their own they are boolean.
+  // Flags in neither set are treated as boolean; characters after them are
   // parsed as additional flags (combined form).
-  CommandLine(int argc, char** argv,
-              const std::vector<char>& value_flags = {});
+  CommandLine(int argc,
+              char** argv,
+              const std::vector<char>& value_flags = {},
+              const std::vector<char>& attached_value_flags = {});
 
   // The program name (argv[0]).
   const std::string& program() const { return program_; }
@@ -43,6 +48,7 @@ class CommandLine {
 
  private:
   std::string program_;
+  std::vector<char> attached_value_flags_;  // Sorted.
   std::map<char, std::string> short_switches_;
   std::map<std::string, std::string> long_switches_;
   std::vector<std::string> args_;

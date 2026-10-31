@@ -6,13 +6,17 @@
 
 #include <algorithm>
 
-CommandLine::CommandLine(int argc, char** argv,
-                         const std::vector<char>& value_flags) {
+CommandLine::CommandLine(int argc,
+                         char** argv,
+                         const std::vector<char>& value_flags,
+                         const std::vector<char>& attached_value_flags)
+    : attached_value_flags_(attached_value_flags) {
   if (argc > 0)
     program_ = argv[0];
 
   std::vector<char> value_flags_sorted(value_flags.begin(), value_flags.end());
   std::sort(value_flags_sorted.begin(), value_flags_sorted.end());
+  std::sort(attached_value_flags_.begin(), attached_value_flags_.end());
 
   bool stop_parsing = false;
 
@@ -39,30 +43,32 @@ CommandLine::CommandLine(int argc, char** argv,
       }
       long_switches_[name] = value;
     } else if (arg.starts_with("-") && arg.size() > 1) {
-        char flag = arg[1];
-        bool takes_value = std::binary_search(
-            value_flags_sorted.begin(), value_flags_sorted.end(), flag);
-        if (arg.size() == 2) {
-          if (takes_value) {
-            // Flag accepts a value: consume next arg if it doesn't look like a
-            // switch.
-            std::string value;
-            if (i + 1 < argc && argv[i + 1][0] != '-') {
-              value = argv[++i];
-            }
-            short_switches_[flag] = value;
-          } else {
-            // Boolean flag.
-            short_switches_[flag] = {};
+      char flag = arg[1];
+      bool takes_value = std::binary_search(value_flags_sorted.begin(),
+                                            value_flags_sorted.end(), flag);
+      bool takes_attached_value = std::binary_search(
+          attached_value_flags_.begin(), attached_value_flags_.end(), flag);
+      if (arg.size() == 2) {
+        if (takes_value) {
+          // Flag accepts a value: consume next arg if it doesn't look like a
+          // switch.
+          std::string value;
+          if (i + 1 < argc && argv[i + 1][0] != '-') {
+            value = argv[++i];
           }
-        } else if (takes_value) {
-          // Flag with attached value (e.g. -n1).
-          short_switches_[flag] = arg.substr(2);
+          short_switches_[flag] = value;
         } else {
-          // Combined boolean flags (e.g. -abc).
-          for (size_t j = 1; j < arg.size(); j++)
-            short_switches_[arg[j]] = {};
+          // Boolean flag.
+          short_switches_[flag] = {};
         }
+      } else if (takes_value || takes_attached_value) {
+        // Flag with attached value (e.g. -n1, -U5).
+        short_switches_[flag] = arg.substr(2);
+      } else {
+        // Combined boolean flags (e.g. -abc).
+        for (size_t j = 1; j < arg.size(); j++)
+          short_switches_[arg[j]] = {};
+      }
     } else {
       args_.push_back(arg);
     }
@@ -102,6 +108,11 @@ std::vector<std::string> CommandLine::BuildArgList(
     }
     if (excluded)
       continue;
+    if (std::binary_search(attached_value_flags_.begin(),
+                           attached_value_flags_.end(), flag)) {
+      result.push_back(std::string("-") + flag + value);
+      continue;
+    }
     result.push_back(std::string("-") + flag);
     if (!value.empty())
       result.push_back(value);

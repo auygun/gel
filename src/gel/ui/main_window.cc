@@ -153,10 +153,21 @@ void MainWindow::Initialize(const CommandLine& command_line) {
   // Skip gel-specific switches and any git log switches that would change the
   // output format and break GitLog's field parsing.
   auto extra_args = command_line.BuildArgList(
-      {'p', 'z'},
-      {"pretty", "format", "oneline", "color", "no-color", "raw", "patch",
-       "no-patch", "stat", "shortstat", "numstat", "name-only", "name-status",
-       "diff-merges", "graph", "abbrev-commit", "no-decorate"});
+      {'p', 'u', 'U', 'c', 'X', 'L', 'z'},
+      {// Commit format.
+       "pretty", "format", "oneline", "color", "no-color", "graph",
+       "abbrev-commit", "encoding", "line-prefix", "log-size", "show-signature",
+       "null", "NUL", "output",
+       // Conflicts with --parents.
+       "children",
+       // Diff output.
+       "patch", "no-patch", "unified", "raw", "binary", "patch-with-raw",
+       "patch-with-stat", "diff-merges", "cc", "dd", "remerge-diff",
+       // Diff summaries.
+       "stat", "stat-width", "stat-name-width", "stat-graph-width",
+       "stat-count", "shortstat", "numstat", "dirstat", "dirstat-by-file",
+       "cumulative", "compact-summary", "summary", "check", "name-only",
+       "name-status"});
   git_log_.SetExtraArgs(extra_args);
 
   // Forward args that git-diff-tree also accepts.
