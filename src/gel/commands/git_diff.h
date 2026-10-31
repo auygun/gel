@@ -33,9 +33,21 @@ struct SyntaxTransition {
   bool new_in_block_comment = false;
 };
 
+// Line numbers of a diff line, 0 on a side that does not contain it.
 struct DiffLineNumbers {
+  // Line number in the old side. In a combined diff (merge commit) this is the
+  // first parent.
   int old_line = 0;
   int new_line = 0;
+  // Combined diffs only: index into the parent line numbers of this line's
+  // entries for parents 2..N (at_count - 2 entries), or -1.
+  int extra_parents = -1;
+};
+
+// Line number of a combined diff line in one of the parents after the first,
+// 0 if that parent does not contain it.
+struct ParentLineNumber {
+  int line = 0;
 };
 
 // Hunk header entry. Sorted by start_line. Supports binary search:
@@ -128,6 +140,12 @@ class GitDiff final : public Git {
     return buffers_.data<DiffLineNumbers>();
   }
 
+  // Line numbers in parents 2..N of combined diff lines, indexed by
+  // DiffLineNumbers::extra_parents.
+  std::span<const ParentLineNumber> GetParentLineNumbers() const {
+    return buffers_.data<ParentLineNumber>();
+  }
+
   std::span<const HunkEntry> GetHunkEntries() const {
     return buffers_.data<HunkEntry>();
   }
@@ -138,13 +156,14 @@ class GitDiff final : public Git {
   std::vector<std::string> extra_args_;
   std::vector<std::string> path_filter_;
   // diff lines, file list, hunk entries, conflict transitions, syntax
-  // transitions, line numbers.
+  // transitions, line numbers, line numbers in parents 2..N of combined diffs.
   DoubleBuffer<std::string,
                FileEntry,
                HunkEntry,
                ConflictTransition,
                SyntaxTransition,
-               DiffLineNumbers>
+               DiffLineNumbers,
+               ParentLineNumber>
       buffers_;
   bool did_clear_ = false;
 
@@ -182,6 +201,16 @@ class GitDiff final : public Git {
   // Worker-side storage for precomputing line numbers.
   int current_old_line_ = 0;
   int current_new_line_ = 0;
+  // Line numbers in parents 2..N of the current combined diff hunk. Empty for
+  // a normal diff hunk.
+  std::vector<int> current_extra_parent_lines_;
+  // Number of ParentLineNumber entries pushed so far.
+  int parent_line_count_ = 0;
+  // Sides containing the content line being parsed. Entry i of
+  // line_in_extra_parents_ stands for parent i + 2.
+  bool line_in_old_ = false;
+  bool line_in_result_ = false;
+  std::vector<bool> line_in_extra_parents_;
   bool in_hunk_ = false;
   // '@' count of the current hunk header (2 = @@, 3+ = combined diff). Used
   // to gate conflict marker detection, which only applies to the two-prefix-

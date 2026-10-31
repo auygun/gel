@@ -212,6 +212,8 @@ void GitDiff::OnStarted() {
   worker_lang_ = Language::kNone;
   current_old_line_ = 0;
   current_new_line_ = 0;
+  current_extra_parent_lines_.clear();
+  parent_line_count_ = 0;
   in_hunk_ = false;
   current_hunk_at_count_ = 2;
 }
@@ -274,6 +276,7 @@ void GitDiff::OnOutput(std::string line) {
       new_in_block_comment_ = false;
       current_old_line_ = 0;
       current_new_line_ = 0;
+      current_extra_parent_lines_.clear();
       in_hunk_ = false;
       // Push the clean path header, then let the original Submodule line
       // fall through to be pushed as a secondary header line below it.
@@ -334,6 +337,7 @@ void GitDiff::OnOutput(std::string line) {
     line_count_++;
     current_old_line_ = 0;
     current_new_line_ = 0;
+    current_extra_parent_lines_.clear();
     in_hunk_ = false;
     buffers_.Push<DiffLineNumbers>({0, 0});
     return;
@@ -390,16 +394,25 @@ void GitDiff::OnOutput(std::string line) {
     old_in_block_comment_ = false;
     new_in_block_comment_ = false;
     in_hunk_ = true;
-    size_t dash = line.find('-', 3);
-    if (dash != std::string::npos)
-      current_old_line_ = std::max(std::atoi(line.c_str() + dash + 1) - 1, 0);
-    else
-      current_old_line_ = 0;
-    size_t plus = line.find('+', 3);
-    if (plus != std::string::npos)
-      current_new_line_ = std::max(std::atoi(line.c_str() + plus + 1) - 1, 0);
-    else
-      current_new_line_ = 0;
+    // Parse the "-start,count" range of each parent and the "+start,count"
+    // range of the result, up to the closing '@' run. A normal diff has one
+    // parent, a combined diff one per parent (at_count - 1).
+    current_old_line_ = 0;
+    current_new_line_ = 0;
+    current_extra_parent_lines_.clear();
+    int parent = 0;
+    for (size_t i = at_count; i < line.size() && line[i] != '@'; i++) {
+      if (line[i] != '-' && line[i] != '+')
+        continue;
+      int start = std::max(std::atoi(line.c_str() + i + 1) - 1, 0);
+      if (line[i] == '+')
+        current_new_line_ = start;
+      else if (parent++ == 0)
+        current_old_line_ = start;
+      else
+        current_extra_parent_lines_.push_back(start);
+    }
+    current_extra_parent_lines_.resize(at_count > 2 ? at_count - 2 : 0);
   } else if (!line.empty() &&
              (line[0] == ' ' || line[0] == '+' || line[0] == '-')) {
     std::string_view code(line.data() + 1, line.size() - 1);
@@ -423,13 +436,27 @@ void GitDiff::OnOutput(std::string line) {
                                        new_in_block_comment_});
     }
     if (in_hunk_) {
-      if (line[0] == ' ') {
+      // Each parent has its own prefix column. A '-' in column N means the
+      // line is in parent N but not in the result. Otherwise the line is in
+      // the result, and also in every parent whose column is ' ' ('+' means
+      // that parent lacks it).
+      size_t columns =
+          static_cast<size_t>(std::max(current_hunk_at_count_ - 1, 1));
+      auto column = [&](size_t i) { return i < line.size() ? line[i] : ' '; };
+      line_in_result_ = true;
+      for (size_t i = 0; i < columns; i++)
+        line_in_result_ &= column(i) != '-';
+      char in_parent = line_in_result_ ? ' ' : '-';
+      line_in_old_ = column(0) == in_parent;
+      if (line_in_old_)
         current_old_line_++;
+      if (line_in_result_)
         current_new_line_++;
-      } else if (line[0] == '+') {
-        current_new_line_++;
-      } else if (line[0] == '-') {
-        current_old_line_++;
+      line_in_extra_parents_.resize(current_extra_parent_lines_.size());
+      for (size_t i = 0; i < current_extra_parent_lines_.size(); i++) {
+        line_in_extra_parents_[i] = column(i + 1) == in_parent;
+        if (line_in_extra_parents_[i])
+          current_extra_parent_lines_[i]++;
       }
     }
   }
@@ -440,7 +467,19 @@ void GitDiff::OnOutput(std::string line) {
       !line.empty() && (line[0] == ' ' || line[0] == '+' || line[0] == '-');
   buffers_.Push<std::string>(std::move(line));
   if (in_hunk_ && is_content) {
-    buffers_.Push<DiffLineNumbers>({current_old_line_, current_new_line_});
+    int extra_parents = -1;
+    if (!current_extra_parent_lines_.empty()) {
+      extra_parents = parent_line_count_;
+      for (size_t i = 0; i < current_extra_parent_lines_.size(); i++) {
+        buffers_.Push<ParentLineNumber>(
+            {line_in_extra_parents_[i] ? current_extra_parent_lines_[i] : 0});
+      }
+      parent_line_count_ +=
+          static_cast<int>(current_extra_parent_lines_.size());
+    }
+    buffers_.Push<DiffLineNumbers>({line_in_old_ ? current_old_line_ : 0,
+                                    line_in_result_ ? current_new_line_ : 0,
+                                    extra_parents});
   } else {
     buffers_.Push<DiffLineNumbers>({0, 0});
   }
@@ -546,7 +585,13 @@ void GitDiff::AppendUntrackedFiles(const std::vector<std::string>& paths) {
     new_in_block_comment_ = false;
     current_old_line_ = 0;
     current_new_line_ = 0;
+    current_extra_parent_lines_.clear();
     in_hunk_ = true;
+    // The file content is shown as one added hunk. Record it so the lines are
+    // not attributed to the last hunk of the previous file, which can be a
+    // combined diff hunk of an unmerged file.
+    current_hunk_at_count_ = 2;
+    buffers_.Push<HunkEntry>({line_count_, 2});
 
     try {
       std::ifstream file(toplevel_ / path, std::ios::binary);

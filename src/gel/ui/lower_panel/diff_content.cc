@@ -347,8 +347,8 @@ std::optional<DiffContent::ScrollAnchor> DiffContent::MakeScrollAnchor() const {
     anchor.old_line = line_numbers[i].old_line;
     anchor.new_line = line_numbers[i].new_line;
     // Removed lines only exist on the old side, every other line on the new
-    // side. This matches how the two counters are advanced while parsing.
-    anchor.use_old = !content[i].empty() && content[i][0] == '-';
+    // side.
+    anchor.use_old = line_numbers[i].new_line == 0;
     anchor.lead = i - top;
   };
 
@@ -630,60 +630,55 @@ void DiffContent::DrawLineBackground(int line_index,
 }
 
 void DiffContent::RenderLine(int line_index, const std::string& line) {
-  // Render line numbers for content lines (added, removed, context).
-  // Non-content lines get blank space to align with content.
+  // Render line numbers for content lines (added, removed, context): one
+  // column per parent, then one for the result. Non-content lines get blank
+  // space to align with content.
   if (line_index >= 0 &&
       line_index < static_cast<int>(git_diff_.GetLineNumbers().size())) {
-    auto ln = git_diff_.GetLineNumbers()[line_index];
-    if (ln.old_line > max_old_line_)
-      max_old_line_ = ln.old_line;
-    if (ln.new_line > max_new_line_)
-      max_new_line_ = ln.new_line;
+    int columns = GetLineNumberColumns(line_index);
+    for (int column = 0; column < columns - 1; column++)
+      max_old_line_ =
+          std::max(max_old_line_, GetLineNumber(line_index, column, columns));
+    max_new_line_ = std::max(max_new_line_,
+                             GetLineNumber(line_index, columns - 1, columns));
     ImGui::PushStyleColor(ImGuiCol_Text, ResolveColor(ColorId::kTextDisabled));
-    if (settings_.show_line_numbers && ShouldShowLineNumbers(line_index)) {
+    if (settings_.show_line_numbers && columns > 0) {
       auto [old_digits, new_digits] = ComputeLineNumberDigits();
       ImVec2 char_size = ImGui::CalcTextSize("0");
       float old_cell = char_size.x * old_digits;
       float new_cell = char_size.x * new_digits;
       float sep_width = char_size.x;
-      float total_width = old_cell + sep_width + new_cell;
-      const auto& line_numbers = git_diff_.GetLineNumbers();
-      auto prev_it = line_index > 0
-                         ? std::next(line_numbers.begin(), line_index - 1)
-                         : line_numbers.end();
-      bool show_old = ln.old_line > 0 && (prev_it == line_numbers.end() ||
-                                          ln.old_line != prev_it->old_line);
-      bool show_new = ln.new_line > 0 && (prev_it == line_numbers.end() ||
-                                          ln.new_line != prev_it->new_line);
 
       // Reserve total line-number area width.
       ImVec2 area_start = ImGui::GetCursorScreenPos();
-      ImGui::Dummy(ImVec2(total_width, 0));
+      ImGui::Dummy(ImVec2(GetLineNumberAreaWidth(columns), 0));
       ImDrawList* dl = ImGui::GetWindowDrawList();
       float line_height = ImGui::GetTextLineHeight();
       ImU32 text_color = ImGui::GetColorU32(ImGuiCol_Text);
-
-      // Old number (centered within old_cell)
-      if (show_old) {
-        std::string num = std::to_string(ln.old_line);
-        float num_w = char_size.x * num.size();
-        float x = area_start.x + (old_cell - num_w) / 2.0f;
-        dl->AddText(ImVec2(x, area_start.y), text_color, num.c_str());
-      }
-
-      // Vertical separator centered in the gap between old_cell and new_cell.
-      float sep_x = area_start.x + old_cell + sep_width / 2.0f;
       ImU32 sep_color = ImGui::GetColorU32(ImGuiCol_Separator);
-      dl->AddLine(ImVec2(sep_x, area_start.y),
-                  ImVec2(sep_x, area_start.y + line_height), sep_color);
 
-      // New number (centered within new_cell)
-      if (show_new) {
-        std::string num = std::to_string(ln.new_line);
-        float num_w = char_size.x * num.size();
-        float x =
-            area_start.x + old_cell + sep_width + (new_cell - num_w) / 2.0f;
-        dl->AddText(ImVec2(x, area_start.y), text_color, num.c_str());
+      float x = area_start.x;
+      for (int column = 0; column < columns; column++) {
+        bool is_result = column == columns - 1;
+        float cell = is_result ? new_cell : old_cell;
+
+        // Number centered within its cell, blank if the side lacks the line.
+        if (int number = GetLineNumber(line_index, column, columns);
+            number > 0) {
+          std::string num = std::to_string(number);
+          float num_w = char_size.x * num.size();
+          dl->AddText(ImVec2(x + (cell - num_w) / 2.0f, area_start.y),
+                      text_color, num.c_str());
+        }
+        x += cell;
+        if (is_result)
+          break;
+
+        // Vertical separator centered in the gap before the next cell.
+        float sep_x = x + sep_width / 2.0f;
+        dl->AddLine(ImVec2(sep_x, area_start.y),
+                    ImVec2(sep_x, area_start.y + line_height), sep_color);
+        x += sep_width;
       }
     } else {
       ImGui::Dummy(ImVec2(0, 0));
@@ -865,14 +860,10 @@ float DiffContent::GetTextOffset(int line_index) const {
     return (badge.has_badge ? badge.width : 0.0f);
   }
 
-  if (!settings_.show_line_numbers || !ShouldShowLineNumbers(line_index))
+  if (!settings_.show_line_numbers)
     return 0.0f;
-
-  // Compute line number column width.
-  auto [old_digits, new_digits] = ComputeLineNumberDigits();
-  int total_chars = old_digits + 1 + new_digits;  // "old|new"
-  ImVec2 char_size = ImGui::CalcTextSize("0");
-  return char_size.x * total_chars;
+  int columns = GetLineNumberColumns(line_index);
+  return columns > 0 ? GetLineNumberAreaWidth(columns) : 0.0f;
 }
 
 void DiffContent::DrawLineHighlights(int line_index,
@@ -1025,19 +1016,43 @@ void DiffContent::ComputeLineOrigin(int file_idx,
   }
 }
 
-bool DiffContent::ShouldShowLineNumbers(int line_index) const {
+int DiffContent::GetLineNumberColumns(int line_index) const {
   auto content = git_diff_.GetDiffContent();
   const std::string& line = content[line_index];
   bool is_content = line_index >= commit_msg_end_ && !line.empty() &&
                     (line[0] == ' ' || line[0] == '+' || line[0] == '-');
   if (!is_content)
-    return false;
+    return 0;
 
-  // Line numbers are only shown for normal diff hunks (@@ headers with
-  // exactly 2 '@' characters). Combined-diff hunks (@@@) are skipped.
+  // A hunk header has one '@' per column: one per parent (a single one in a
+  // normal diff, one per merged branch in a combined diff), plus the result.
   auto hunks = git_diff_.GetHunkEntries();
   int hunk_idx = FindHunkForLine(hunks, line_index);
-  return hunk_idx >= 0 && hunks[hunk_idx].at_count == 2;
+  return hunk_idx >= 0 && hunks[hunk_idx].at_count >= 2
+             ? hunks[hunk_idx].at_count
+             : 0;
+}
+
+int DiffContent::GetLineNumber(int line_index, int column, int columns) const {
+  if (column < 0 || column >= columns)
+    return 0;
+  const DiffLineNumbers& ln = git_diff_.GetLineNumbers()[line_index];
+  if (column == columns - 1)
+    return ln.new_line;
+  if (column == 0)
+    return ln.old_line;
+  auto parent_lines = git_diff_.GetParentLineNumbers();
+  size_t index = static_cast<size_t>(ln.extra_parents) + column - 1;
+  return ln.extra_parents >= 0 && index < parent_lines.size()
+             ? parent_lines[index].line
+             : 0;
+}
+
+float DiffContent::GetLineNumberAreaWidth(int columns) const {
+  // "p1|...|pN|result", with a separator character between the cells.
+  auto [old_digits, new_digits] = ComputeLineNumberDigits();
+  int total_chars = (columns - 1) * (old_digits + 1) + new_digits;
+  return ImGui::CalcTextSize("0").x * total_chars;
 }
 
 std::pair<int, int> DiffContent::ComputeLineNumberDigits() const {

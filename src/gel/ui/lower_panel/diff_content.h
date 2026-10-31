@@ -120,12 +120,23 @@ class DiffContent : public TextViewer::Delegate {
                          bool& out_is_old,
                          int target_line);
 
-  bool ShouldShowLineNumbers(int line_index) const;
+  // Returns the number of line number columns of |line_index|: one per parent
+  // followed by one for the result (2 for a normal diff hunk, more for a
+  // combined diff hunk), or 0 if the line has no line numbers.
+  int GetLineNumberColumns(int line_index) const;
+
+  // Returns the line number of |line_index| in |column| out of |columns|, or
+  // 0 if that side does not contain the line.
+  int GetLineNumber(int line_index, int column, int columns) const;
+
+  // Returns the width of the line number area for |columns| columns.
+  float GetLineNumberAreaWidth(int columns) const;
 
   // Scrolls to |line| without touching a pending scroll anchor.
   void ScrollToLineInternal(int line);
 
-  // Returns {old_digits, new_digits} for line number columns.
+  // Returns {old_digits, new_digits} for line number columns. Old digits apply
+  // to every parent column of a combined diff.
   std::pair<int, int> ComputeLineNumberDigits() const;
 
   // Finds the first '+' or '-' sign character at the start of |line|,
@@ -202,7 +213,7 @@ class DiffContent : public TextViewer::Delegate {
   // matched), false while waiting for more diff output.
   bool TryRestoreScrollAnchor(ScrollAnchor& anchor);
 
-  // Max line numbers for dynamic column width.
+  // Max line numbers for dynamic column width. The old one covers all parents.
   int max_old_line_ = 0;
   int max_new_line_ = 0;
 

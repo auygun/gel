@@ -416,7 +416,8 @@ Additional items appear for unstaged and staged changes:
 Features:
 
 - Line numbers displayed alongside diff content (toggleable in Settings).
-  Line numbers are hidden for combined diffs.
+  Combined diffs of merge commits show one column per parent followed by
+  the merge result.
 - Color-coded additions (green) and deletions (red).
 - Optional syntax highlighting for diff content (configurable in Settings).
 - File header lines (diff --git ...) have a distinct background color.
