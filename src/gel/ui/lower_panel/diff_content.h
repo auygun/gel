@@ -138,6 +138,10 @@ class DiffContent : public TextViewer::Delegate {
   // 0 if that side does not contain the line.
   int GetLineNumber(int line_index, int column, int columns) const;
 
+  // Returns the line number of |line_index| on |side| (0 for the result, N
+  // for the Nth parent), or 0 if that side does not contain the line.
+  int GetSideLineNumber(int line_index, int side) const;
+
   // Returns the width of the line number area for |columns| columns.
   float GetLineNumberAreaWidth(int columns) const;
 
@@ -186,11 +190,11 @@ class DiffContent : public TextViewer::Delegate {
     // Anchored file, by index with the path as the identity check.
     int file_index = -1;
     std::string file;
-    // Source line numbers of the anchored line, 0 if it has none, and which
-    // of the two sides identifies it.
-    int old_line = 0;
-    int new_line = 0;
-    bool use_old = false;
+    // Source line number of the anchored line on |side|, 0 if it has none.
+    // Side 0 is the result, side N the Nth parent: lines missing from the
+    // result are identified by the first parent containing them.
+    int line = 0;
+    int side = 0;
     // Distance from the top line to the numbered line the anchor was taken
     // from, negative when that line is above the top line.
     int lead = 0;

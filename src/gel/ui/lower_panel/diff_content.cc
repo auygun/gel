@@ -340,17 +340,23 @@ std::optional<DiffContent::ScrollAnchor> DiffContent::MakeScrollAnchor() const {
 
   // Anchor on a source line number, since those survive a context change.
   // File and hunk headers carry none, so fall back to the nearest numbered
-  // line of the same file and remember the distance to it.
-  auto numbered = [&](int i) {
-    return line_numbers[i].old_line > 0 || line_numbers[i].new_line > 0;
-  };
+  // line of the same file and remember the distance to it. A line is
+  // identified by its result line number, or if the result lacks it, by its
+  // number in the first parent containing it.
   auto take = [&](int i) {
-    anchor.old_line = line_numbers[i].old_line;
-    anchor.new_line = line_numbers[i].new_line;
-    // Removed lines only exist on the old side, every other line on the new
-    // side.
-    anchor.use_old = line_numbers[i].new_line == 0;
-    anchor.lead = i - top;
+    // A hunk has at most one column per parent plus the result.
+    auto hunks = git_diff_.GetHunkEntries();
+    int hunk_idx = FindHunkForLine(hunks, i);
+    int sides = hunk_idx >= 0 ? hunks[hunk_idx].at_count : 0;
+    for (int side = 0; side < sides; side++) {
+      if (int line = GetSideLineNumber(i, side); line > 0) {
+        anchor.line = line;
+        anchor.side = side;
+        anchor.lead = i - top;
+        return true;
+      }
+    }
+    return false;
   };
 
   int limit = std::min(file_end, static_cast<int>(line_numbers.size()));
@@ -358,18 +364,13 @@ std::optional<DiffContent::ScrollAnchor> DiffContent::MakeScrollAnchor() const {
   for (int i = top; i < limit; i++) {
     if (i > file_start && IsMainFileHeader(content[i]))
       break;
-    if (numbered(i)) {
-      take(i);
+    if (take(i)) {
       found = true;
       break;
     }
   }
-  for (int i = std::min(top, limit) - 1; i >= file_start && !found; i--) {
-    if (numbered(i)) {
-      take(i);
-      found = true;
-    }
-  }
+  for (int i = std::min(top, limit) - 1; i >= file_start && !found; i--)
+    found = take(i);
 
   return anchor;
 }
@@ -438,7 +439,7 @@ bool DiffContent::TryRestoreScrollAnchor(ScrollAnchor& anchor) {
     return std::clamp(line, file_start, std::max(file_start, limit - 1));
   };
 
-  int want = anchor.use_old ? anchor.old_line : anchor.new_line;
+  int want = anchor.line;
   if (want <= 0) {
     // No line number to match: the anchor sits in a section without any, such
     // as the commit message or a submodule entry. Those keep their size across
@@ -460,9 +461,7 @@ bool DiffContent::TryRestoreScrollAnchor(ScrollAnchor& anchor) {
       at_section_end = true;
       break;
     }
-    int line =
-        anchor.use_old ? line_numbers[i].old_line : line_numbers[i].new_line;
-    if (line >= want)
+    if (GetSideLineNumber(i, anchor.side) >= want)
       return scroll_to(clamp_to_file(i - anchor.lead));
   }
   anchor.scan_pos = i;
@@ -1004,6 +1003,15 @@ int DiffContent::GetLineNumber(int line_index, int column, int columns) const {
   return ln.extra_parents >= 0 && index < parent_lines.size()
              ? parent_lines[index].line
              : 0;
+}
+
+int DiffContent::GetSideLineNumber(int line_index, int side) const {
+  auto hunks = git_diff_.GetHunkEntries();
+  int hunk_idx = FindHunkForLine(hunks, line_index);
+  int columns = hunk_idx >= 0 ? hunks[hunk_idx].at_count : 0;
+  if (side < 0 || side >= columns)
+    return 0;
+  return GetLineNumber(line_index, side == 0 ? columns - 1 : side - 1, columns);
 }
 
 float DiffContent::GetLineNumberAreaWidth(int columns) const {
