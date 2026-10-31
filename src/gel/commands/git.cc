@@ -5,6 +5,7 @@
 #include "gel/commands/git.h"
 
 #include <algorithm>
+#include <utility>
 
 #include "third_party/kaliber/base/log.h"
 
@@ -127,7 +128,8 @@ void Git::WorkerMain() {
           current_stdin_ = std::move(stdin_data);
           stdin_offset_ = 0;
           stdin_open_ = !current_stdin_.empty();
-          carryover_.clear();
+          out_carryover_.clear();
+          err_carryover_.clear();
           OnStarted();
           DLOG(0) << "Started - pid: " << curent_proc_.pid();
         }
@@ -186,36 +188,59 @@ bool Git::Poll(Exec& proc) {
     }
   }
 
-  // Extract output and clear the buffer to prevent unbounded memory growth.
-  std::string chunk;
-  chunk.swap(proc.GetOut());
+  // Extract output and clear the buffers to prevent unbounded memory growth.
+  std::string out_chunk;
+  out_chunk.swap(proc.GetOut());
+  std::string err_chunk;
+  err_chunk.swap(proc.GetErr());
 
-  if (proc.pid() == curent_proc_.pid() && !chunk.empty()) {
-    if (!carryover_.empty()) {
-      chunk.insert(0, carryover_);
-      carryover_.clear();
-    }
-
-    size_t start = 0;
-    for (;;) {
-      auto nl = chunk.find('\n', start);
-      if (nl == std::string::npos) {
-        if (more && start < chunk.size())
-          carryover_ = chunk.substr(start);
-        break;
-      }
-      OnOutput(chunk.substr(start, nl - start));
-      start = nl + 1;
-    }
+  if (proc.pid() == curent_proc_.pid()) {
+    SplitLines(out_chunk, out_carryover_, more,
+               [this](std::string line) { OnOutput(std::move(line)); });
+    SplitLines(err_chunk, err_carryover_, more,
+               [this](std::string line) { OnError(std::move(line)); });
   }
 
   if (!more && proc.pid() == curent_proc_.pid()) {
     DLOG(0) << "Finished -  pid: " << curent_proc_.pid()
             << ", status: " << static_cast<int>(curent_proc_.GetStatus())
-            << ", result: " << curent_proc_.GetResult()
-            << ", err: " << curent_proc_.GetErr();
-    OnFinished(proc.GetStatus(), proc.GetResult(), std::move(proc.GetErr()));
+            << ", result: " << curent_proc_.GetResult();
+    OnFinished(proc.GetStatus(), proc.GetResult());
   }
 
   return more;
+}
+
+template <typename OnLine>
+void Git::SplitLines(std::string& chunk,
+                     std::string& carryover,
+                     bool more,
+                     OnLine on_line) {
+  if (chunk.empty()) {
+    // Flush an incomplete last line once the process has finished.
+    if (!more && !carryover.empty())
+      on_line(std::exchange(carryover, {}));
+    return;
+  }
+
+  if (!carryover.empty()) {
+    chunk.insert(0, carryover);
+    carryover.clear();
+  }
+
+  size_t start = 0;
+  for (;;) {
+    auto nl = chunk.find('\n', start);
+    if (nl == std::string::npos) {
+      if (start < chunk.size()) {
+        if (more)
+          carryover = chunk.substr(start);
+        else
+          on_line(chunk.substr(start));
+      }
+      break;
+    }
+    on_line(chunk.substr(start, nl - start));
+    start = nl + 1;
+  }
 }

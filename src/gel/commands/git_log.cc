@@ -71,6 +71,7 @@ void GitLog::FlushPendingCommit() {
 
 void GitLog::OnStarted() {
   pending_commit_.reset();
+  err_.clear();
   commit_history_.Reset();
   {
     std::scoped_lock lock(error_lock_);
@@ -149,17 +150,22 @@ bool GitLog::GetInfoMessage(std::string& message) {
   return true;
 }
 
-void GitLog::OnFinished(Exec::Status status, int result, std::string err) {
+void GitLog::OnError(std::string line) {
+  err_ += line;
+  err_ += '\n';
+}
+
+void GitLog::OnFinished(Exec::Status status, int result) {
   FlushPendingCommit();
   if (status == Exec::Status::KILLED)
     return;
   if (status != Exec::Status::EXITED || result != 0) {
     std::scoped_lock lock(error_lock_);
-    if (err.find("does not have any commits") != std::string::npos) {
-      info_message_ = std::move(err);
+    if (err_.find("does not have any commits") != std::string::npos) {
+      info_message_ = std::move(err_);
       has_info_message_ = true;
     } else {
-      error_ = std::move(err);
+      error_ = std::move(err_);
       has_error_ = true;
     }
   }

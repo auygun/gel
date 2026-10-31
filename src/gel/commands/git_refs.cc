@@ -63,9 +63,7 @@ void GitRefs::OnOutput(std::string line) {
   buffers_.Push(std::move(ref));
 }
 
-void GitRefs::OnFinished(Exec::Status status,
-                         int result_code,
-                         std::string err) {
+void GitRefs::OnFinished(Exec::Status status, int result_code) {
   if (status == Exec::Status::EXITED && result_code == 0)
     buffers_.Push<RunFinished>({});
 }

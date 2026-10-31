@@ -56,7 +56,7 @@ void GitBlame::OnOutput(std::string line) {
     parse_file_ = line.substr(9);
 }
 
-void GitBlame::OnFinished(Exec::Status status, int exit_code, std::string) {
+void GitBlame::OnFinished(Exec::Status status, int exit_code) {
   std::scoped_lock lock(result_lock_);
   result_.success = (status == Exec::Status::EXITED && exit_code == 0 &&
                      !parse_hash_.empty());

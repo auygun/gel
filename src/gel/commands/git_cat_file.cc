@@ -49,9 +49,7 @@ void GitCatFile::OnOutput(std::string line) {
   sizes_.push_back(sz);
 }
 
-void GitCatFile::OnFinished(Exec::Status status,
-                            int result_code,
-                            std::string err) {
+void GitCatFile::OnFinished(Exec::Status status, int result_code) {
   if (status != Exec::Status::EXITED || result_code != 0) {
     sizes_.clear();
     return;

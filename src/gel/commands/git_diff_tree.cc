@@ -52,9 +52,7 @@ void GitDiffTree::OnOutput(std::string line) {
   entries_.push_back({std::move(file_path), std::move(new_hash), deleted});
 }
 
-void GitDiffTree::OnFinished(Exec::Status status,
-                             int result_code,
-                             std::string err) {
+void GitDiffTree::OnFinished(Exec::Status status, int result_code) {
   if (status != Exec::Status::EXITED || result_code != 0) {
     entries_.clear();
     return;

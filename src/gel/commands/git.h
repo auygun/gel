@@ -76,17 +76,28 @@ class Git {
   size_t stdin_offset_ = 0;
   bool stdin_open_ = false;
 
-  // Incomplete line carried over between Poll cycles.
-  std::string carryover_;
+  // Incomplete stdout and stderr lines carried over between Poll cycles.
+  std::string out_carryover_;
+  std::string err_carryover_;
 
   void WorkerMain();
 
   bool Poll(Exec& proc);
 
+  // Splits |chunk| into lines, prepending |carryover| and keeping an
+  // incomplete last line in it while |more| output is expected. Calls
+  // |on_line| for each complete line.
+  template <typename OnLine>
+  static void SplitLines(std::string& chunk,
+                         std::string& carryover,
+                         bool more,
+                         OnLine on_line);
+
   // Called from the worker thread.
   virtual void OnStarted() = 0;
   virtual void OnOutput(std::string line) = 0;
-  virtual void OnFinished(Exec::Status, int result, std::string err) = 0;
+  virtual void OnError(std::string line) = 0;
+  virtual void OnFinished(Exec::Status, int result) = 0;
   virtual void OnKilled() = 0;
 };
 

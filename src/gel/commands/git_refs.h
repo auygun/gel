@@ -59,7 +59,8 @@ class GitRefs final : public Git {
 
   void OnStarted() final;
   void OnOutput(std::string line) final;
-  void OnFinished(Exec::Status status, int result, std::string err) final;
+  void OnError(std::string) final {}
+  void OnFinished(Exec::Status status, int result) final;
   void OnKilled() final {}
 };
 

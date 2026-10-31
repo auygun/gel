@@ -70,6 +70,7 @@ class GitLog final : public Git {
   bool did_clear_ = false;
   std::optional<CommitInfo> pending_commit_;
   std::vector<std::string> fields_;  // Reusable parse buffer.
+  std::string err_;                  // Worker thread: stderr of the run.
 
   std::mutex error_lock_;
   bool has_error_ = false;
@@ -79,7 +80,8 @@ class GitLog final : public Git {
 
   void OnStarted() final;
   void OnOutput(std::string line) final;
-  void OnFinished(Exec::Status, int result, std::string err) final;
+  void OnError(std::string line) final;
+  void OnFinished(Exec::Status, int result) final;
   void OnKilled() final;
 };
 

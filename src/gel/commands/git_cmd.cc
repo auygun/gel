@@ -45,10 +45,13 @@ void GitCmd::OnStarted() {
 }
 
 void GitCmd::OnOutput(std::string line) {
-  buffers_.Push(std::move(line));
+  buffers_.Push<Line>({std::move(line), false});
 }
 
-void GitCmd::OnFinished(Exec::Status status, int exit_code, std::string err) {
-  buffers_.Push<Result>(
-      {status == Exec::Status::EXITED && exit_code == 0, std::move(err)});
+void GitCmd::OnError(std::string line) {
+  buffers_.Push<Line>({std::move(line), true});
+}
+
+void GitCmd::OnFinished(Exec::Status status, int exit_code) {
+  buffers_.Push<Result>({status == Exec::Status::EXITED && exit_code == 0});
 }

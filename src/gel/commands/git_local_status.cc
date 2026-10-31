@@ -61,9 +61,7 @@ void GitLocalStatus::OnOutput(std::string line) {
   }
 }
 
-void GitLocalStatus::OnFinished(Exec::Status status,
-                                int exit_code,
-                                std::string err) {
+void GitLocalStatus::OnFinished(Exec::Status status, int exit_code) {
   std::scoped_lock lock(result_lock_);
   has_result_ = true;
 }

@@ -505,7 +505,7 @@ void GitDiff::OnKilled() {
   last_line_empty_ = false;
 }
 
-void GitDiff::OnFinished(Exec::Status status, int result, std::string err) {
+void GitDiff::OnFinished(Exec::Status status, int result) {
   FlushPendingEntry();
   if (line_count_ == 0 && !commit_hash_.empty()) {
     // diff-tree produces no output for empty commits (--allow-empty) or when

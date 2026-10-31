@@ -17,9 +17,14 @@
 // the main thread.
 class GitCmd final : public Git {
  public:
+  // A line of output, from stdout or stderr.
+  struct Line {
+    std::string text;
+    bool is_error = false;
+  };
+
   struct Result {
     bool success = false;
-    std::string error;
   };
 
   explicit GitCmd(std::function<void(bool)> busy_callback);
@@ -40,10 +45,9 @@ class GitCmd final : public Git {
   // command.
   bool DidClear() const { return did_clear_; }
 
-  // Main thread: stdout lines of the current or last command.
-  std::span<const std::string> GetOutput() const {
-    return buffers_.data<std::string>();
-  }
+  // Main thread: stdout and stderr lines of the current or last command, in
+  // the order they were read.
+  std::span<const Line> GetOutput() const { return buffers_.data<Line>(); }
 
   // Main thread: outcome of the last command. Only valid after Update()
   // returned true.
@@ -71,7 +75,7 @@ class GitCmd final : public Git {
   bool is_quit_ = false;
   base::ElapsedTimer run_timer_;
   // Output lines and the result (pushed once when the command finishes).
-  DoubleBuffer<std::string, Result> buffers_;
+  DoubleBuffer<Line, Result> buffers_;
   bool did_clear_ = false;
   bool running_ = false;
   // Set by Run() until the worker's Reset() has been merged, so that the
@@ -80,7 +84,8 @@ class GitCmd final : public Git {
 
   void OnStarted() final;
   void OnOutput(std::string line) final;
-  void OnFinished(Exec::Status status, int result, std::string err) final;
+  void OnError(std::string line) final;
+  void OnFinished(Exec::Status status, int result) final;
   void OnKilled() final {}
 };
 

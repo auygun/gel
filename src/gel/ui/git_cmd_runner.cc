@@ -8,6 +8,23 @@
 
 #include "gel/git_repo.h"
 
+namespace {
+
+// Joins the lines of |output| from stderr (|is_error|) or stdout.
+std::string JoinLines(std::span<const GitCmd::Line> output, bool is_error) {
+  std::string text;
+  for (auto& line : output) {
+    if (line.is_error != is_error)
+      continue;
+    if (!text.empty())
+      text += '\n';
+    text += line.text;
+  }
+  return text;
+}
+
+}  // namespace
+
 void GitCmdRunner::PrependTopLevel(std::vector<std::string>& args) {
   auto& toplevel = git_repo_.toplevel();
   if (!toplevel.empty())
@@ -88,7 +105,7 @@ void GitCmdRunner::AppendOutput() {
   for (; output_lines_appended_ < output.size(); ++output_lines_appended_) {
     if (!task_output_.empty())
       task_output_ += '\n';
-    task_output_ += output[output_lines_appended_];
+    task_output_ += output[output_lines_appended_].text;
   }
 }
 
@@ -100,11 +117,6 @@ void GitCmdRunner::Update() {
     if (finished) {
       const GitCmd::Result& result = cmd_.GetResult();
       bool resolved_externally = false;
-      if (!result.error.empty()) {
-        if (!task_output_.empty())
-          task_output_ += '\n';
-        task_output_ += result.error;
-      }
 
       if (task_ != GitTask::kNone &&
           ClassifyCommand(cmd_.cmd_name()) != GitTask::kNone) {
@@ -115,8 +127,9 @@ void GitCmdRunner::Update() {
         // (Primary detection is the MERGE_MSG check in UpdateTaskState.)
         resolved_externally =
             !result.success && task_ == GitTask::kRevert &&
-            std::ranges::any_of(cmd_.GetOutput(), [](const std::string& line) {
-              return line.find("nothing to commit") != std::string::npos;
+            std::ranges::any_of(cmd_.GetOutput(), [](const GitCmd::Line& line) {
+              return !line.is_error &&
+                     line.text.find("nothing to commit") != std::string::npos;
             });
         if (resolved_externally)
           std::filesystem::remove(git_repo_.git_dir() / "REVERT_HEAD");
@@ -140,14 +153,9 @@ void GitCmdRunner::Update() {
         }
       } else if (!result.success) {
         next_args_.clear();
-        std::string error = result.error;
-        if (error.empty()) {
-          for (auto& line : cmd_.GetOutput()) {
-            if (!error.empty())
-              error += '\n';
-            error += line;
-          }
-        }
+        std::string error = JoinLines(cmd_.GetOutput(), true);
+        if (error.empty())
+          error = JoinLines(cmd_.GetOutput(), false);
         if (!error_callback_(error, cmd_.cmd_name(), false))
           show_console_ = true;
       }
@@ -170,7 +178,8 @@ void GitCmdRunner::Update() {
     if (it->cmd->Update()) {
       const GitCmd::Result& result = it->cmd->GetResult();
       if (!result.success && !it->silent)
-        error_callback_(result.error, it->cmd->cmd_name(), true);
+        error_callback_(JoinLines(it->cmd->GetOutput(), true),
+                        it->cmd->cmd_name(), true);
       it = procs_.erase(it);
     } else if (it->cmd->detached()) {
       it = procs_.erase(it);

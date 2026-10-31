@@ -47,7 +47,8 @@ class GitPeelTags final : public Git {
 
   void OnStarted() final;
   void OnOutput(std::string line) final;
-  void OnFinished(Exec::Status, int, std::string) final {}
+  void OnError(std::string) final {}
+  void OnFinished(Exec::Status, int) final {}
   void OnKilled() final {}
 };
 
