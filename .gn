@@ -1,3 +1,8 @@
 # The location of the build configuration file.
 buildconfig = "//src/third_party/kaliber/build/BUILDCONFIG.gn"
 script_executable = "python3"
+
+# gn gen writes out/<dir>/compile_commands.json (for clang-tidy, clangd and
+# IntelliSense) covering gel and everything it depends on, and keeps it current
+# as sources change.
+export_compile_commands = [ "//src/gel:gel" ]

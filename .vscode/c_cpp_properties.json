@@ -2,6 +2,7 @@
   "configurations": [
     {
       "name": "Linux",
+      "compileCommands": "${workspaceFolder}/out/debug/compile_commands.json",
       "includePath": [
         "${workspaceFolder}/**"
       ],
@@ -11,6 +12,7 @@
     },
     {
       "name": "Mac",
+      "compileCommands": "${workspaceFolder}/out/debug/compile_commands.json",
       "includePath": [
         "${workspaceFolder}/**"
       ],
@@ -24,6 +26,7 @@
     },
     {
       "name": "Win32",
+      "compileCommands": "${workspaceFolder}/out/debug/compile_commands.json",
       "includePath": [
         "${workspaceFolder}/**"
       ],

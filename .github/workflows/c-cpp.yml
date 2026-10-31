@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# A new push to the same branch or PR cancels the superseded run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -14,19 +19,20 @@ jobs:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
         mode: [ release, debug ]
     runs-on: ${{ matrix.os }}
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Update submodules
-      run: |
-        git submodule sync --recursive
-        git submodule update --init --recursive
+    - uses: actions/checkout@v7
+      with:
+        submodules: recursive
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y generate-ninja libwayland-dev libgl-dev libfontconfig-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev
+        sudo apt-get install -y generate-ninja libwayland-dev libgl-dev libfontconfig-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev ccache
 
     - name: Install GN and Ninja (Windows)
       if: runner.os == 'Windows'
@@ -48,6 +54,18 @@ jobs:
         unzip -o /tmp/gn.zip -d "$RUNNER_TEMP/tools"
         unzip -o /tmp/ninja.zip -d "$RUNNER_TEMP/tools"
         echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+        brew install ccache
+
+    # The build picks up ccache automatically when it is on PATH (see
+    # BUILDCONFIG.gn). Not used on Windows/MSVC. Restore and save are separate
+    # steps so the cache is saved even when the build fails.
+    - name: Restore ccache
+      if: runner.os != 'Windows'
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ env.CCACHE_DIR }}
+        key: ccache-${{ matrix.os }}-${{ matrix.mode }}-${{ github.sha }}
+        restore-keys: ccache-${{ matrix.os }}-${{ matrix.mode }}-
 
     - name: gn
       if: runner.os != 'Windows'
@@ -59,7 +77,17 @@ jobs:
         fi
     - name: ninja
       if: runner.os != 'Windows'
-      run: ninja -C out/${{ matrix.mode }}
+      run: |
+        ccache -z
+        ninja -C out/${{ matrix.mode }}
+        ccache -s
+
+    - name: Save ccache
+      if: always() && runner.os != 'Windows'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ env.CCACHE_DIR }}
+        key: ccache-${{ matrix.os }}-${{ matrix.mode }}-${{ github.sha }}
 
     # The MSVC environment (cl.exe, link.exe, ...) is set up with the
     # Visual Studio DevShell module and the build runs in the same step,

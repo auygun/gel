@@ -4,20 +4,13 @@ declare_args() {
   is_clang = false
 
   # Note that this uses the 'cc' and 'c++' links that should map to GCC on linux
-  # systems and clang on macs.
+  # systems and clang on macs. is_clang is set automatically on macs.
   ar = "ar"
   cc = "cc"
   cxx = "c++"
 
   # Useful for tools like 'ccache' and 'icecc' to speed up compilation.
   compile_preprocess = ""
-}
-
-if (is_clang) {
-  cc = "clang"
-  cxx = "clang++"
-} else if (cc == "clang" && cxx == "clang++") {
-  is_clang = true
 }
 
 if (compile_preprocess == "" &&
@@ -36,6 +29,14 @@ if (current_os == "") {
 is_linux = current_os == "linux"
 is_mac = current_os == "mac"
 is_win = current_os == "win"
+
+if (is_clang) {
+  cc = "clang"
+  cxx = "clang++"
+} else if (is_mac || (cc == "clang" && cxx == "clang++")) {
+  # The default cc/c++ on macOS is Apple clang.
+  is_clang = true
+}
 
 if (target_cpu == "") {
   target_cpu = host_cpu
@@ -60,7 +61,7 @@ if (is_debug) {
 }
 
 set_defaults("executable") {
-  configs = [ "//src/third_party/kaliber/build:executable" ] + _default_config
+  configs = _default_config
   if (is_win && !is_debug) {
     configs += [ "//src/third_party/kaliber/build:win_gui" ]
   }
@@ -69,7 +70,8 @@ set_defaults("static_library") {
   configs = _default_config
 }
 set_defaults("shared_library") {
-  configs = [ "//src/third_party/kaliber/build:shared_library" ] + _default_config
+  configs =
+      [ "//src/third_party/kaliber/build:shared_library" ] + _default_config
 }
 set_defaults("source_set") {
   configs = _default_config

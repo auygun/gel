@@ -21,8 +21,8 @@
           "text": "-enable-pretty-printing",
           "ignoreFailures": true
         }
-      ]
-      "preLaunchTask": "Build project",
+      ],
+      "preLaunchTask": "Build project"
     },
     {
       "name": "Debug Gel - Windows",
@@ -34,7 +34,7 @@
       "cwd": "${workspaceFolder}\\out\\debug",
       "environment": [],
       "externalConsole": false,
-      "preLaunchTask": "Build project",
+      "preLaunchTask": "Build project"
     }
  ]
 }

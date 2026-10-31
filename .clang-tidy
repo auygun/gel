@@ -1,8 +1,8 @@
 ---
 # Clang-Tidy configuration for Gel
 #
-# Run: clang-tidy -p compile_commands.json src/gel/**/*.cc
-# Generate compile_commands.json: ninja -C out/release -t compdb > compile_commands.json
+# Run: clang-tidy -p out/release src/gel/**/*.cc
+# gn gen writes out/release/compile_commands.json (export_compile_commands in .gn).
 
 Checks: >
   -*,

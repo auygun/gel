@@ -85,9 +85,9 @@ class SettingsModal {
   int new_ext_lang_index_ = 1;
   bool had_nav_focus_ = false;
   bool had_sub_popup_ = false;
+#if defined(OS_LINUX)
   bool desktop_entry_installed_ = false;
   bool bash_completion_installed_ = false;
-#if defined(OS_LINUX)
   void InstallBashCompletion();
   void UninstallBashCompletion();
 #endif

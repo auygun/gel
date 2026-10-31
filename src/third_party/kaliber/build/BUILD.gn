@@ -48,17 +48,24 @@ config("default") {
         "pthread",  # Use the POSIX thread library.
       ]
     } else if (is_mac) {
+      if (target_cpu == "arm64") {
+        _mac_target = "arm64-apple-macos12"
+      } else if (target_cpu == "x64") {
+        _mac_target = "x86_64-apple-macos12"
+      } else {
+        assert(false, "Unsupported macOS target_cpu: $target_cpu")
+      }
       asmflags = [
         "-target",
-        "arm64-apple-macos12",
+        _mac_target,
       ]
       cflags += [
         "-target",
-        "arm64-apple-macos12",
+        _mac_target,
       ]
       ldflags = [
         "-target",
-        "arm64-apple-macos12",
+        _mac_target,
       ]
     }
   }
@@ -77,7 +84,7 @@ config("debug") {
       "/RTC1",  # Enable fast run-time checks.
       "/Od",  # Disable optimizations.
       "/fp:precise",  # Floating points are predictable.
-      "/MDd",  # Link with multithread debug DLL run-time libraries.
+      "/MTd",  # Link the debug run-time libraries statically.
       "/Z7",  # Produce obj files that contain full symbolic debugging
               # information.
     ]
@@ -91,9 +98,11 @@ config("debug") {
     ]
 
     if (is_linux) {
-      defines += [
-        "_GLIBCXX_DEBUG=1",  # Enable asserts in stl headers.
-      ]
+      # Enable cheap precondition checks in libstdc++ (bounds checks etc.).
+      # _GLIBCXX_DEBUG would also verify sorted ranges on every
+      # lower_bound/upper_bound/binary_search call, making them O(n), which is
+      # too slow on huge repositories.
+      defines += [ "_GLIBCXX_ASSERTIONS" ]
     }
   }
 }
@@ -108,7 +117,10 @@ config("release") {
       "/O2",  # Optimize for maximum speed.
       "/Oi",  # Enable intrinsics.
       "/fp:fast",  # Floating points are fast.
-      "/MD",  # Link with multithread release DLL run-time libraries.
+
+      # Link the run-time libraries statically so gel.exe runs without the
+      # Visual C++ Redistributable installed.
+      "/MT",
 
       # "/arch:AVX2",   # Minimum CPU architecture.
     ]
@@ -128,7 +140,7 @@ config("release") {
     ]
 
     if (is_mac) {
-      ldflags = [ "-dead-strip" ]
+      ldflags = [ "-Wl,-dead_strip" ]  # Remove unreferenced code and data.
     } else {
       # Place both data and functions in it's their own sections.
       # Linker optimization that allows for smaller binaries.
@@ -136,7 +148,19 @@ config("release") {
         "-fdata-sections",
         "-ffunction-sections",
       ]
-      ldflags = [ "-Wl,--gc-sections" ]
+      ldflags = [
+        "-Wl,--gc-sections",
+        "-s",  # Strip symbols.
+      ]
+    }
+
+    if (is_linux) {
+      # Link libstdc++ and libgcc statically so the binary runs on distros
+      # with an older libstdc++ than the build machine's. glibc stays dynamic.
+      ldflags += [
+        "-static-libgcc",
+        "-static-libstdc++",
+      ]
     }
   }
 }
@@ -155,12 +179,6 @@ config("warnings") {
       "/wd4702",  # unreachable code
       "/wd4722",  # destructor never returns
     ]
-  } else if (is_mac) {
-    cflags = [
-      "-Wno-deprecated-declarations",
-      "-Wno-inconsistent-missing-override",
-      "-Wno-pointer-sign",
-    ]
   } else {
     cflags = [
       # Enable as much warnings as possible.
@@ -175,16 +193,14 @@ config("warnings") {
       "-Wno-unused-parameter",
       "-Wno-sign-compare",
     ]
-  }
-}
 
-config("executable") {
-  if (is_linux) {
-    ldflags = [
-      "-Wl,-rpath,\$ORIGIN",  # Add directory to runtime library search path.
-    ]
-  } else if (is_mac) {
-    ldflags = [ "-Wl,-rpath,@loader_path/." ]
+    if (is_mac) {
+      cflags += [
+        "-Wno-deprecated-declarations",
+        "-Wno-inconsistent-missing-override",
+        "-Wno-pointer-sign",
+      ]
+    }
   }
 }
 

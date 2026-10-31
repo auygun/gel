@@ -3,6 +3,9 @@ name: Release
 on:
   push:
     tags: [ "v*" ]
+  # Manual runs build and upload the binaries without creating a release,
+  # e.g. to check the Linux build before tagging.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,7 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # The oldest supported runner: the binary needs a glibc at least as
+          # new as the build machine's (2.35 on 22.04).
+          - os: ubuntu-22.04
             artifact: gel-linux
           - os: windows-latest
             artifact: gel-windows
@@ -22,17 +27,23 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Update submodules
-      run: |
-        git submodule sync --recursive
-        git submodule update --init --recursive
+    - uses: actions/checkout@v7
+      with:
+        submodules: recursive
 
+    # 22.04 ships GCC 12 at most, without std::format, so GCC 13 comes from
+    # the toolchain PPA. libstdc++ is linked statically, so this doesn't raise
+    # the runtime requirements. The apt gn is from 2022, so use the prebuilt.
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
+        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
         sudo apt-get update
-        sudo apt-get install -y generate-ninja libwayland-dev libgl-dev libfontconfig-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev
+        sudo apt-get install -y g++-13 ninja-build libwayland-dev libgl-dev libfontconfig-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev
+        mkdir -p "$RUNNER_TEMP/tools"
+        curl -fL -o /tmp/gn.zip "https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest"
+        unzip -o /tmp/gn.zip -d "$RUNNER_TEMP/tools"
+        echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
     - name: Install GN and Ninja (Windows)
       if: runner.os == 'Windows'
@@ -55,8 +66,25 @@ jobs:
         unzip -o /tmp/ninja.zip -d "$RUNNER_TEMP/tools"
         echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
-    - name: Build
-      if: runner.os != 'Windows'
+    - name: Build (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        gn gen --args='cc="gcc-13" cxx="g++-13"' out/release
+        ninja -C out/release
+
+    # Fail if libstdc++ ended up linked dynamically, and log the minimum glibc
+    # version the binary needs.
+    - name: Check binary (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        if objdump -T out/release/gel | grep -q GLIBCXX_; then
+          echo "gel depends on the system libstdc++"
+          exit 1
+        fi
+        echo "Requires glibc $(objdump -T out/release/gel | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
+
+    - name: Build (macOS)
+      if: runner.os == 'macOS'
       run: |
         gn gen out/release
         ninja -C out/release
@@ -104,21 +132,22 @@ jobs:
         New-Item -ItemType Directory -Force dist | Out-Null
         Copy-Item out/release/gel.exe dist/gel-windows-x64.exe
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.artifact }}
         path: dist
 
   release:
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
     # gh release create --generate-notes runs git locally to build the
     # notes, so the repo must be checked out with full history.
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         path: dist
 

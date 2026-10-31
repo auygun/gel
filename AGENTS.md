@@ -32,11 +32,9 @@ There is no test suite. Verify changes by building and running the application.
 # clang-format (Chromium style, C++20) — always run before committing
 clang-format -i <files>
 
-# clang-tidy (requires compile_commands.json in project root)
-# Generate compile_commands.json:
-ninja -C out/release -t compdb > compile_commands.json
-# Run on specific files:
-clang-tidy -p compile_commands.json <files>
+# clang-tidy (`gn gen` writes out/<dir>/compile_commands.json; see
+# export_compile_commands in .gn)
+clang-tidy -p out/release <files>
 ```
 
 ## Code Style
