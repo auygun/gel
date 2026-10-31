@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -61,13 +62,16 @@ bool IsConflictMarker(const std::string& line) {
          IsConflictEnd(line);
 }
 
-struct UrlSpan {
+enum class LinkType { kUrl, kCommit };
+
+struct LinkSpan {
   int start;
   int end;
+  LinkType type;
 };
 
-std::vector<UrlSpan> FindUrls(const std::string& line) {
-  std::vector<UrlSpan> urls;
+std::vector<LinkSpan> FindUrls(const std::string& line) {
+  std::vector<LinkSpan> urls;
   size_t pos = 0;
   while (pos < line.size()) {
     size_t http_pos = line.find("http://", pos);
@@ -121,20 +125,83 @@ std::vector<UrlSpan> FindUrls(const std::string& line) {
     }
 
     if (end > min_end) {
-      urls.push_back({static_cast<int>(found), static_cast<int>(end)});
+      urls.push_back(
+          {static_cast<int>(found), static_cast<int>(end), LinkType::kUrl});
     }
     pos = end;
   }
   return urls;
 }
 
-std::string FindUrlAtOffset(const std::string& line, int offset) {
-  auto urls = FindUrls(line);
-  for (auto& u : urls) {
-    if (offset >= u.start && offset < u.end)
-      return line.substr(u.start, u.end - u.start);
+bool IsWordChar(char c) {
+  return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+}
+
+// Finds whole words that look like abbreviated or full commit hashes: 7 to 64
+// lowercase hex digits (SHA-1 or SHA-256). A word must mix digits and letters
+// so that plain numbers (dates, issue numbers) and English words made of a-f
+// letters ("defaced") are not mistaken for hashes. Words inside |skip| spans
+// (URLs) are ignored.
+std::vector<LinkSpan> FindCommitHashes(const std::string& line,
+                                       std::span<const LinkSpan> skip) {
+  constexpr size_t kMinHashLength = 7;
+  constexpr size_t kMaxHashLength = 64;
+  std::vector<LinkSpan> hashes;
+  size_t i = 0;
+  while (i < line.size()) {
+    if (!IsWordChar(line[i])) {
+      i++;
+      continue;
+    }
+    size_t end = i;
+    bool all_hex = true, has_digit = false, has_letter = false;
+    for (; end < line.size() && IsWordChar(line[end]); end++) {
+      char c = line[end];
+      if (c >= '0' && c <= '9')
+        has_digit = true;
+      else if (c >= 'a' && c <= 'f')
+        has_letter = true;
+      else
+        all_hex = false;
+    }
+    size_t length = end - i;
+    if (all_hex && has_digit && has_letter && length >= kMinHashLength &&
+        length <= kMaxHashLength &&
+        std::none_of(skip.begin(), skip.end(), [&](const LinkSpan& s) {
+          return static_cast<int>(i)<s.end&& static_cast<int>(end)> s.start;
+        })) {
+      hashes.push_back(
+          {static_cast<int>(i), static_cast<int>(end), LinkType::kCommit});
+    }
+    i = end;
   }
-  return {};
+  return hashes;
+}
+
+// Returns the links in a commit header line, sorted by position: URLs and
+// commit hashes in commit message lines, and the hash in "Parent: " lines.
+std::vector<LinkSpan> FindLinks(const std::string& line) {
+  if (line.starts_with("Parent: "))
+    return {{8, static_cast<int>(line.size()), LinkType::kCommit}};
+  if (!line.starts_with("    "))
+    return {};
+  auto links = FindUrls(line);
+  auto hashes = FindCommitHashes(line, links);
+  if (!hashes.empty()) {
+    links.insert(links.end(), hashes.begin(), hashes.end());
+    std::sort(
+        links.begin(), links.end(),
+        [](const LinkSpan& a, const LinkSpan& b) { return a.start < b.start; });
+  }
+  return links;
+}
+
+std::optional<LinkSpan> FindLinkAtOffset(const std::string& line, int offset) {
+  for (auto& link : FindLinks(line)) {
+    if (offset >= link.start && offset < link.end)
+      return link;
+  }
+  return std::nullopt;
 }
 
 void OpenUrl(const std::string& url) {
@@ -581,20 +648,15 @@ bool DiffContent::OnCtrlClick(int line_index, int char_offset) {
   if (line_index < 0 || line_index >= static_cast<int>(content.size()))
     return false;
   const std::string& line = content[line_index];
-  if (line.starts_with("    ")) {
-    std::string url = FindUrlAtOffset(line, char_offset);
-    if (!url.empty()) {
-      OpenUrl(url);
-      return true;
-    }
+  auto link = FindLinkAtOffset(line, char_offset);
+  if (!link)
     return false;
-  }
-  // Check for "Parent: <hash>" line.
-  if (line.starts_with("Parent: ") && char_offset >= 8) {
-    delegate_.OnNavigateToCommit(line.substr(8));
-    return true;
-  }
-  return false;
+  std::string target = line.substr(link->start, link->end - link->start);
+  if (link->type == LinkType::kUrl)
+    OpenUrl(target);
+  else
+    delegate_.OnNavigateToCommit(target);
+  return true;
 }
 
 void DiffContent::DrawLineBackground(int line_index,
@@ -752,29 +814,29 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
     }
   }
 
-  // Render commit message lines with URL link styling.
-  if (line_index < commit_msg_end_ && line.starts_with("    ")) {
-    auto urls = FindUrls(line);
-    if (!urls.empty()) {
+  // Render commit header lines with link styling for URLs and commit hashes.
+  if (line_index < commit_msg_end_) {
+    auto links = FindLinks(line);
+    if (!links.empty()) {
       ImVec4 link_color = ImGui::GetStyleColorVec4(ImGuiCol_NavHighlight);
       ImU32 link_color_u32 = ImGui::ColorConvertFloat4ToU32(link_color);
       ImDrawList* dl = ImGui::GetWindowDrawList();
       int prev_end = 0;
       bool first = true;
-      for (auto& url : urls) {
-        if (url.start > prev_end) {
+      for (auto& link : links) {
+        if (link.start > prev_end) {
           if (!first)
             ImGui::SameLine(0, 0);
           ImGui::TextUnformatted(line.c_str() + prev_end,
-                                 line.c_str() + url.start);
+                                 line.c_str() + link.start);
           first = false;
         }
         if (!first)
           ImGui::SameLine(0, 0);
         ImGui::PushStyleColor(ImGuiCol_Text, link_color);
         ImVec2 pos_before = ImGui::GetCursorScreenPos();
-        ImGui::TextUnformatted(line.c_str() + url.start,
-                               line.c_str() + url.end);
+        ImGui::TextUnformatted(line.c_str() + link.start,
+                               line.c_str() + link.end);
         ImGui::PopStyleColor();
         ImVec2 pos_after = ImGui::GetItemRectMax();
         float underline_y = pos_after.y - 1.0f;
@@ -786,7 +848,7 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
           ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
         first = false;
-        prev_end = url.end;
+        prev_end = link.end;
       }
       if (prev_end < static_cast<int>(line.size())) {
         if (!first)
@@ -796,29 +858,6 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
       }
       return;
     }
-  }
-
-  // Render "Parent: <hash>" with clickable hash.
-  if (line_index < commit_msg_end_ && line.starts_with("Parent: ")) {
-    ImVec4 link_color = ImGui::GetStyleColorVec4(ImGuiCol_NavHighlight);
-    ImU32 link_color_u32 = ImGui::ColorConvertFloat4ToU32(link_color);
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImGui::TextUnformatted(line.c_str(), line.c_str() + 8);
-    ImGui::SameLine(0, 0);
-    std::string hash = line.substr(8);
-    ImVec2 pos_before = ImGui::GetCursorScreenPos();
-    ImGui::PushStyleColor(ImGuiCol_Text, link_color);
-    ImGui::TextUnformatted(hash.c_str());
-    ImGui::PopStyleColor();
-    ImVec2 pos_after = ImGui::GetItemRectMax();
-    float underline_y = pos_after.y - 1.0f;
-    dl->AddLine(ImVec2(pos_before.x, underline_y),
-                ImVec2(pos_after.x, underline_y), link_color_u32);
-    ImVec2 mouse = ImGui::GetMousePos();
-    if (mouse.x >= pos_before.x && mouse.x <= pos_after.x &&
-        mouse.y >= pos_before.y && mouse.y <= pos_after.y)
-      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    return;
   }
 
   // Render main file header with status badge and clean path.
@@ -935,9 +974,11 @@ void DiffContent::OnContextMenu(int line_index) {
 
   // URL context menu items for commit message lines.
   if (line_index >= 0 && line_index < line_count &&
-      line_index < commit_msg_end_ && content[line_index].starts_with("    ")) {
-    std::string url = FindUrlAtOffset(content[line_index], ctx_menu_char_);
-    if (!url.empty()) {
+      line_index < commit_msg_end_) {
+    auto link = FindLinkAtOffset(content[line_index], ctx_menu_char_);
+    if (link && link->type == LinkType::kUrl) {
+      std::string url =
+          content[line_index].substr(link->start, link->end - link->start);
       if (ImGui::MenuItem("Open link in browser"))
         OpenUrl(url);
       if (ImGui::MenuItem("Copy link URL"))
