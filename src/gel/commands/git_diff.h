@@ -25,13 +25,13 @@ struct ConflictTransition {
   int zone = 0;
 };
 
-// Block comment state transition. Sorted by line index.
-// Old side = '-' and ' ' lines, new side = '+' and ' ' lines.
-// Both states reset at hunk boundaries (@@) and file boundaries.
+// Multi-line syntax state transition (block comments, multi-line strings).
+// Sorted by line index. Old side = '-' and ' ' lines, new side = '+' and ' '
+// lines. Both states reset at hunk boundaries (@@) and file boundaries.
 struct SyntaxTransition {
   int line = 0;
-  bool old_in_block_comment = false;
-  bool new_in_block_comment = false;
+  SyntaxState old_state;
+  SyntaxState new_state;
 };
 
 // Line numbers of a diff line, 0 on a side that does not contain it.
@@ -204,8 +204,8 @@ class GitDiff final : public Git {
   std::vector<std::string> path_filter_worker_;
   size_t line_count_ = 0;
   bool last_line_empty_ = false;
-  bool old_in_block_comment_ = false;
-  bool new_in_block_comment_ = false;
+  SyntaxState old_syntax_state_;
+  SyntaxState new_syntax_state_;
   Language worker_lang_ = Language::kNone;
   std::vector<std::pair<std::string, std::string>> ext_mappings_worker_;
 

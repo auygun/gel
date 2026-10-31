@@ -236,38 +236,135 @@ const std::string_view kJsonKeywords[] = {
 
 struct Emitter {
   ColoredLine result;
+  // Only track the syntax state, without building the colored line.
+  bool scan_only = false;
 
   void Emit(std::string_view text, ColorId color) {
-    if (!text.empty())
+    if (!scan_only && !text.empty())
       result.segments.push_back({std::string(text), color});
   }
 };
 
-void TokenizeCLike(std::string_view code,
-                   Emitter& em,
-                   const std::string_view* keywords,
-                   size_t keyword_count,
-                   const std::string_view* types,
-                   size_t type_count,
-                   bool in_block_comment = false) {
+bool IsRawStringPrefix(std::string_view word) {
+  return word == "R" || word == "u8R" || word == "uR" || word == "UR" ||
+         word == "LR";
+}
+
+// Parses the delimiter of a C++ raw string whose opening quote is at |quote|.
+// Returns false if the text is not a valid raw string opening.
+bool ParseRawStringDelimiter(std::string_view code,
+                             size_t quote,
+                             std::string_view* delimiter) {
+  size_t start = quote + 1;
+  for (size_t i = start;
+       i < code.size() && i - start <= SyntaxState::kMaxDelimiterSize; i++) {
+    char c = code[i];
+    if (c == '(') {
+      *delimiter = code.substr(start, i - start);
+      return true;
+    }
+    if (c == ' ' || c == ')' || c == '\\' || c == '\t' || c == '"')
+      return false;
+  }
+  return false;
+}
+
+// Returns the position after the |)delimiter"| that closes a raw string, or
+// npos if it is not in |code| at or after |from|.
+size_t FindRawStringEnd(std::string_view code,
+                        size_t from,
+                        std::string_view delimiter) {
+  for (size_t p = code.find(')', from); p != std::string_view::npos;
+       p = code.find(')', p + 1)) {
+    size_t quote = p + 1 + delimiter.size();
+    if (quote < code.size() && code[quote] == '"' &&
+        code.substr(p + 1, delimiter.size()) == delimiter)
+      return quote + 1;
+  }
+  return std::string_view::npos;
+}
+
+SyntaxState RawStringState(std::string_view delimiter) {
+  SyntaxState state;
+  state.kind = SyntaxState::Kind::kRawString;
+  state.delimiter_size = static_cast<uint8_t>(delimiter.size());
+  std::copy(delimiter.begin(), delimiter.end(), state.delimiter);
+  return state;
+}
+
+// Returns the position after the three |quote| characters that close a Python
+// triple-quoted string, or npos if they are not in |code| at or after |from|.
+size_t FindTripleQuoteEnd(std::string_view code, size_t from, char quote) {
+  size_t i = from;
+  while (i < code.size()) {
+    if (code[i] == '\\') {
+      i += 2;
+    } else if (code[i] == quote && i + 2 < code.size() &&
+               code[i + 1] == quote && code[i + 2] == quote) {
+      return i + 3;
+    } else {
+      i++;
+    }
+  }
+  return std::string_view::npos;
+}
+
+// Returns the start of a comment that follows a preprocessor directive
+// starting at |from|, or the end of |code|.
+size_t FindCommentAfterDirective(std::string_view code, size_t from) {
+  size_t i = from;
+  while (i < code.size()) {
+    if (code[i] == '"') {
+      i++;
+      while (i < code.size() && code[i] != '"') {
+        if (code[i] == '\\')
+          i++;
+        i++;
+      }
+      i++;
+    } else if (code[i] == '/' && i + 1 < code.size() &&
+               (code[i + 1] == '/' || code[i + 1] == '*')) {
+      return i;
+    } else {
+      i++;
+    }
+  }
+  return code.size();
+}
+
+SyntaxState TokenizeCLike(std::string_view code,
+                          Emitter& em,
+                          const std::string_view* keywords,
+                          size_t keyword_count,
+                          const std::string_view* types,
+                          size_t type_count,
+                          SyntaxState state) {
   size_t i = 0;
   size_t len = code.size();
 
-  if (in_block_comment) {
+  if (state.kind == SyntaxState::Kind::kBlockComment) {
     size_t end = code.find("*/");
     if (end == std::string_view::npos) {
       em.Emit(code, ColorId::kSyntaxComment);
-      return;
+      return state;
     }
     em.Emit(code.substr(0, end + 2), ColorId::kSyntaxComment);
     i = end + 2;
+  } else if (state.kind == SyntaxState::Kind::kRawString) {
+    size_t end = FindRawStringEnd(code, 0, state.GetDelimiter());
+    if (end == std::string_view::npos) {
+      em.Emit(code, ColorId::kSyntaxString);
+      return state;
+    }
+    em.Emit(code.substr(0, end), ColorId::kSyntaxString);
+    i = end;
   }
 
   while (i < len) {
     // Line comments.
     if (i + 1 < len && code[i] == '/' && code[i + 1] == '/') {
       em.Emit(code.substr(i), ColorId::kSyntaxComment);
-      return;
+      return {};
     }
 
     // Block comments.
@@ -275,7 +372,7 @@ void TokenizeCLike(std::string_view code,
       size_t end = code.find("*/", i + 2);
       if (end == std::string_view::npos) {
         em.Emit(code.substr(i), ColorId::kSyntaxComment);
-        return;
+        return {SyntaxState::Kind::kBlockComment};
       }
       em.Emit(code.substr(i, end + 2 - i), ColorId::kSyntaxComment);
       i = end + 2;
@@ -293,41 +390,17 @@ void TokenizeCLike(std::string_view code,
         }
       }
       if (at_start) {
-        em.Emit(code.substr(i), ColorId::kSyntaxPreprocessor);
-        return;
+        // A trailing comment may start a multi-line block comment.
+        size_t end = FindCommentAfterDirective(code, i);
+        em.Emit(code.substr(i, end - i), ColorId::kSyntaxPreprocessor);
+        i = end;
+        continue;
       }
     }
 
     // Strings.
     if (code[i] == '"' || code[i] == '\'') {
       char quote = code[i];
-      // Handle raw strings R"(...)" in C++.
-      if (quote == '"' && i > 0 && code[i - 1] == 'R') {
-        // Already emitted the 'R', find closing.
-        size_t end = i + 1;
-        // Find delimiter in R"delim(...)delim"
-        size_t paren = code.find('(', end);
-        if (paren != std::string_view::npos) {
-          std::string close_delim =
-              ")" + std::string(code.substr(end, paren - end)) + "\"";
-          size_t close_pos = code.find(close_delim, paren + 1);
-          if (close_pos != std::string_view::npos) {
-            end = close_pos + close_delim.size();
-          } else {
-            end = len;
-          }
-        } else {
-          // Malformed, just find the closing quote.
-          end = code.find(quote, end);
-          if (end == std::string_view::npos)
-            end = len;
-          else
-            end++;
-        }
-        em.Emit(code.substr(i, end - i), ColorId::kSyntaxString);
-        i = end;
-        continue;
-      }
       size_t end = i + 1;
       while (end < len && code[end] != quote) {
         if (code[end] == '\\' && end + 1 < len)
@@ -388,6 +461,20 @@ void TokenizeCLike(std::string_view code,
       while (i < len && IsWordChar(code[i]))
         i++;
       std::string_view word = code.substr(start, i - start);
+      // C++ raw strings: R"delim(...)delim", which can span multiple lines.
+      std::string_view delimiter;
+      if (i < len && code[i] == '"' && IsRawStringPrefix(word) &&
+          ParseRawStringDelimiter(code, i, &delimiter)) {
+        size_t end =
+            FindRawStringEnd(code, i + delimiter.size() + 2, delimiter);
+        if (end == std::string_view::npos) {
+          em.Emit(code.substr(start), ColorId::kSyntaxString);
+          return RawStringState(delimiter);
+        }
+        em.Emit(code.substr(start, end - start), ColorId::kSyntaxString);
+        i = end;
+        continue;
+      }
       if (MatchKeyword(word, keywords, keyword_count)) {
         em.Emit(word, ColorId::kSyntaxKeyword);
       } else if (MatchKeyword(word, types, type_count)) {
@@ -403,31 +490,47 @@ void TokenizeCLike(std::string_view code,
             ColorId::kDefault);
     i += base::Utf8SequenceLength(code, i);
   }
+  return {};
 }
 
-void TokenizePython(std::string_view code, Emitter& em) {
+SyntaxState TokenizePython(std::string_view code,
+                           Emitter& em,
+                           SyntaxState state) {
   size_t i = 0;
   size_t len = code.size();
+
+  if (state.kind == SyntaxState::Kind::kTripleDoubleQuote ||
+      state.kind == SyntaxState::Kind::kTripleSingleQuote) {
+    char q = state.kind == SyntaxState::Kind::kTripleDoubleQuote ? '"' : '\'';
+    size_t end = FindTripleQuoteEnd(code, 0, q);
+    if (end == std::string_view::npos) {
+      em.Emit(code, ColorId::kSyntaxString);
+      return state;
+    }
+    em.Emit(code.substr(0, end), ColorId::kSyntaxString);
+    i = end;
+  }
 
   while (i < len) {
     // Comments.
     if (code[i] == '#') {
       em.Emit(code.substr(i), ColorId::kSyntaxComment);
-      return;
+      return {};
     }
 
-    // Triple-quoted strings.
+    // Triple-quoted strings, which can span multiple lines.
     if (i + 2 < len &&
         ((code[i] == '"' && code[i + 1] == '"' && code[i + 2] == '"') ||
          (code[i] == '\'' && code[i + 1] == '\'' && code[i + 2] == '\''))) {
       char q = code[i];
-      size_t end = code.find(std::string(3, q), i + 3);
+      size_t end = FindTripleQuoteEnd(code, i + 3, q);
       if (end == std::string_view::npos) {
         em.Emit(code.substr(i), ColorId::kSyntaxString);
-        return;
+        return {q == '"' ? SyntaxState::Kind::kTripleDoubleQuote
+                         : SyntaxState::Kind::kTripleSingleQuote};
       }
-      em.Emit(code.substr(i, end + 3 - i), ColorId::kSyntaxString);
-      i = end + 3;
+      em.Emit(code.substr(i, end - i), ColorId::kSyntaxString);
+      i = end;
       continue;
     }
 
@@ -527,6 +630,7 @@ void TokenizePython(std::string_view code, Emitter& em) {
             ColorId::kDefault);
     i += base::Utf8SequenceLength(code, i);
   }
+  return {};
 }
 
 void TokenizeShell(std::string_view code, Emitter& em) {
@@ -644,17 +748,17 @@ void TokenizeRuby(std::string_view code, Emitter& em) {
   }
 }
 
-void TokenizeHtml(std::string_view code,
-                  Emitter& em,
-                  bool in_block_comment = false) {
+SyntaxState TokenizeHtml(std::string_view code,
+                         Emitter& em,
+                         SyntaxState state) {
   size_t i = 0;
   size_t len = code.size();
 
-  if (in_block_comment) {
+  if (state.kind == SyntaxState::Kind::kBlockComment) {
     size_t end = code.find("-->");
     if (end == std::string_view::npos) {
       em.Emit(code, ColorId::kSyntaxComment);
-      return;
+      return state;
     }
     em.Emit(code.substr(0, end + 3), ColorId::kSyntaxComment);
     i = end + 3;
@@ -667,7 +771,7 @@ void TokenizeHtml(std::string_view code,
       size_t end = code.find("-->", i + 4);
       if (end == std::string_view::npos) {
         em.Emit(code.substr(i), ColorId::kSyntaxComment);
-        return;
+        return {SyntaxState::Kind::kBlockComment};
       }
       em.Emit(code.substr(i, end + 3 - i), ColorId::kSyntaxComment);
       i = end + 3;
@@ -736,6 +840,7 @@ void TokenizeHtml(std::string_view code,
             ColorId::kDefault);
     i += base::Utf8SequenceLength(code, i);
   }
+  return {};
 }
 
 void TokenizeJson(std::string_view code, Emitter& em) {
@@ -846,6 +951,41 @@ void TokenizeGn(std::string_view code, Emitter& em) {
   }
 }
 
+// Tokenizes |code| starting in |state|. Returns the state at the end of it.
+SyntaxState Tokenize(std::string_view code,
+                     Language lang,
+                     SyntaxState state,
+                     Emitter& em) {
+  switch (lang) {
+    case Language::kCLike:
+      return TokenizeCLike(code, em, kCLikeKeywords, std::size(kCLikeKeywords),
+                           kCLikeTypes, std::size(kCLikeTypes), state);
+    case Language::kPython:
+      return TokenizePython(code, em, state);
+    case Language::kShell:
+      TokenizeShell(code, em);
+      break;
+    case Language::kRuby:
+      TokenizeRuby(code, em);
+      break;
+    case Language::kHtml:
+      return TokenizeHtml(code, em, state);
+    case Language::kJson:
+      TokenizeJson(code, em);
+      break;
+    case Language::kGn:
+      TokenizeGn(code, em);
+      break;
+    case Language::kShader:
+      return TokenizeCLike(code, em, kShaderKeywords,
+                           std::size(kShaderKeywords), kShaderTypes,
+                           std::size(kShaderTypes), state);
+    case Language::kNone:
+      break;
+  }
+  return {};
+}
+
 }  // namespace
 
 const char* GetLanguageName(Language lang) {
@@ -946,9 +1086,21 @@ Language DetectLanguage(
   return Language::kNone;
 }
 
+SyntaxState ScanSyntaxState(std::string_view code,
+                            Language lang,
+                            SyntaxState state) {
+  // Only these languages have constructs that span multiple lines.
+  if (lang != Language::kCLike && lang != Language::kShader &&
+      lang != Language::kPython && lang != Language::kHtml)
+    return {};
+  Emitter em;
+  em.scan_only = true;
+  return Tokenize(code, lang, state, em);
+}
+
 ColoredLine HighlightSyntax(const std::string& line,
                             Language lang,
-                            bool in_block_comment,
+                            SyntaxState state,
                             size_t prefix_width) {
   if (lang == Language::kNone || line.empty())
     return {};
@@ -977,36 +1129,6 @@ ColoredLine HighlightSyntax(const std::string& line,
     code = line;
   }
 
-  switch (lang) {
-    case Language::kCLike:
-      TokenizeCLike(code, em, kCLikeKeywords, std::size(kCLikeKeywords),
-                    kCLikeTypes, std::size(kCLikeTypes), in_block_comment);
-      break;
-    case Language::kPython:
-      TokenizePython(code, em);
-      break;
-    case Language::kShell:
-      TokenizeShell(code, em);
-      break;
-    case Language::kRuby:
-      TokenizeRuby(code, em);
-      break;
-    case Language::kHtml:
-      TokenizeHtml(code, em, in_block_comment);
-      break;
-    case Language::kJson:
-      TokenizeJson(code, em);
-      break;
-    case Language::kGn:
-      TokenizeGn(code, em);
-      break;
-    case Language::kShader:
-      TokenizeCLike(code, em, kShaderKeywords, std::size(kShaderKeywords),
-                    kShaderTypes, std::size(kShaderTypes), in_block_comment);
-      break;
-    case Language::kNone:
-      break;
-  }
-
+  Tokenize(code, lang, state, em);
   return em.result;
 }

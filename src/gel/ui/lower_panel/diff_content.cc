@@ -787,7 +787,7 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
               : Language::kNone;
     }
     if (current_lang_ != Language::kNone) {
-      bool in_block_comment = false;
+      SyntaxState syntax_state;
       auto stx = git_diff_.GetSyntaxTransitions();
       if (!stx.empty()) {
         auto it = std::upper_bound(
@@ -800,13 +800,11 @@ void DiffContent::RenderLine(int line_index, const std::string& line) {
           bool is_old_side = std::string_view(line)
                                  .substr(0, GetDiffPrefixWidth(line_index))
                                  .find('-') != std::string_view::npos;
-          in_block_comment =
-              is_old_side ? it->old_in_block_comment : it->new_in_block_comment;
+          syntax_state = is_old_side ? it->old_state : it->new_state;
         }
       }
-      ColoredLine highlighted =
-          HighlightSyntax(line, current_lang_, in_block_comment,
-                          GetDiffPrefixWidth(line_index));
+      ColoredLine highlighted = HighlightSyntax(
+          line, current_lang_, syntax_state, GetDiffPrefixWidth(line_index));
       if (!highlighted.segments.empty()) {
         RenderColoredLine(highlighted);
         return;

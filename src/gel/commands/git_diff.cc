@@ -13,70 +13,6 @@
 
 using namespace base;
 
-namespace {
-
-bool ScanBlockComment(std::string_view code, Language lang, bool in_comment) {
-  if (lang == Language::kCLike || lang == Language::kShader) {
-    size_t i = 0;
-    while (i < code.size()) {
-      if (in_comment) {
-        size_t end = code.find("*/", i);
-        if (end == std::string_view::npos)
-          return true;
-        in_comment = false;
-        i = end + 2;
-      } else {
-        if (code[i] == '/' && i + 1 < code.size()) {
-          if (code[i + 1] == '/')
-            return false;
-          if (code[i + 1] == '*') {
-            in_comment = true;
-            i += 2;
-            continue;
-          }
-        }
-        if (code[i] == '"' || code[i] == '\'') {
-          char q = code[i++];
-          while (i < code.size() && code[i] != q) {
-            if (code[i] == '\\' && i + 1 < code.size())
-              i++;
-            i++;
-          }
-          if (i < code.size())
-            i++;
-          continue;
-        }
-        i++;
-      }
-    }
-    return in_comment;
-  }
-  if (lang == Language::kHtml) {
-    size_t i = 0;
-    while (i < code.size()) {
-      if (in_comment) {
-        size_t end = code.find("-->", i);
-        if (end == std::string_view::npos)
-          return true;
-        in_comment = false;
-        i = end + 3;
-      } else {
-        if (i + 3 < code.size() && code[i] == '<' && code[i + 1] == '!' &&
-            code[i + 2] == '-' && code[i + 3] == '-') {
-          in_comment = true;
-          i += 4;
-          continue;
-        }
-        i++;
-      }
-    }
-    return in_comment;
-  }
-  return false;
-}
-
-}  // namespace
-
 GitDiff::GitDiff(std::function<void(bool)> busy_callback)
     : Git(std::move(busy_callback)) {}
 
@@ -212,8 +148,8 @@ void GitDiff::OnStarted() {
   has_pending_entry_ = false;
   line_count_ = 0;
   last_line_empty_ = false;
-  old_in_block_comment_ = false;
-  new_in_block_comment_ = false;
+  old_syntax_state_ = {};
+  new_syntax_state_ = {};
   worker_lang_ = Language::kNone;
   current_old_line_ = 0;
   current_new_line_ = 0;
@@ -277,8 +213,8 @@ void GitDiff::OnOutput(std::string line) {
       // The submodule log lines that follow are not a hunk of the previous
       // file, so drop that file's syntax and line-number state.
       worker_lang_ = Language::kNone;
-      old_in_block_comment_ = false;
-      new_in_block_comment_ = false;
+      old_syntax_state_ = {};
+      new_syntax_state_ = {};
       current_old_line_ = 0;
       current_new_line_ = 0;
       current_extra_parent_lines_.clear();
@@ -336,8 +272,8 @@ void GitDiff::OnOutput(std::string line) {
 
     buffers_.Push<std::string>(line);
     worker_lang_ = DetectLanguage(pending_entry_.path, ext_mappings_worker_);
-    old_in_block_comment_ = false;
-    new_in_block_comment_ = false;
+    old_syntax_state_ = {};
+    new_syntax_state_ = {};
     last_line_empty_ = line.empty();
     line_count_++;
     current_old_line_ = 0;
@@ -392,12 +328,13 @@ void GitDiff::OnOutput(std::string line) {
       at_count++;
     current_hunk_at_count_ = at_count;
     buffers_.Push<HunkEntry>({line_count_, at_count});
-    if (old_in_block_comment_ || new_in_block_comment_) {
+    if (old_syntax_state_ != SyntaxState{} ||
+        new_syntax_state_ != SyntaxState{}) {
       buffers_.Push<SyntaxTransition>(
-          {static_cast<int>(line_count_) + 1, false, false});
+          {static_cast<int>(line_count_) + 1, {}, {}});
     }
-    old_in_block_comment_ = false;
-    new_in_block_comment_ = false;
+    old_syntax_state_ = {};
+    new_syntax_state_ = {};
     in_hunk_ = true;
     // Parse the "-start,count" range of each parent and the "+start,count"
     // range of the result, up to the closing '@' run. A normal diff has one
@@ -432,24 +369,19 @@ void GitDiff::OnOutput(std::string line) {
     // '+' that it is new in the result relative to some parent (new side).
     bool removed = prefix.find('-') != std::string_view::npos;
     bool added = !removed && prefix.find('+') != std::string_view::npos;
-    bool old_was = old_in_block_comment_;
-    bool new_was = new_in_block_comment_;
-    if (removed) {
-      old_in_block_comment_ =
-          ScanBlockComment(code, worker_lang_, old_in_block_comment_);
-    } else if (added) {
-      new_in_block_comment_ =
-          ScanBlockComment(code, worker_lang_, new_in_block_comment_);
-    } else {
-      old_in_block_comment_ =
-          ScanBlockComment(code, worker_lang_, old_in_block_comment_);
-      new_in_block_comment_ =
-          ScanBlockComment(code, worker_lang_, new_in_block_comment_);
+    SyntaxState old_was = old_syntax_state_;
+    SyntaxState new_was = new_syntax_state_;
+    if (worker_lang_ != Language::kNone) {
+      if (!added)
+        old_syntax_state_ =
+            ScanSyntaxState(code, worker_lang_, old_syntax_state_);
+      if (!removed)
+        new_syntax_state_ =
+            ScanSyntaxState(code, worker_lang_, new_syntax_state_);
     }
-    if (old_in_block_comment_ != old_was || new_in_block_comment_ != new_was) {
+    if (old_syntax_state_ != old_was || new_syntax_state_ != new_was) {
       buffers_.Push<SyntaxTransition>({static_cast<int>(line_count_) + 1,
-                                       old_in_block_comment_,
-                                       new_in_block_comment_});
+                                       old_syntax_state_, new_syntax_state_});
     }
     if (in_hunk_) {
       // A '-' in column N means the line is in parent N but not in the
@@ -592,8 +524,8 @@ void GitDiff::AppendUntrackedFiles(const std::vector<std::string>& paths) {
     buffers_.Push<DiffLineNumbers>({0, 0});
 
     worker_lang_ = DetectLanguage(path, ext_mappings_worker_);
-    old_in_block_comment_ = false;
-    new_in_block_comment_ = false;
+    old_syntax_state_ = {};
+    new_syntax_state_ = {};
     current_old_line_ = 0;
     current_new_line_ = 0;
     current_extra_parent_lines_.clear();
@@ -629,12 +561,14 @@ void GitDiff::AppendUntrackedFiles(const std::vector<std::string>& paths) {
       while (std::getline(file, line)) {
         if (!line.empty() && line.back() == '\r')
           line.pop_back();
-        bool was = new_in_block_comment_;
-        new_in_block_comment_ =
-            ScanBlockComment(line, worker_lang_, new_in_block_comment_);
-        if (new_in_block_comment_ != was)
-          buffers_.Push<SyntaxTransition>({static_cast<int>(line_count_) + 1,
-                                           false, new_in_block_comment_});
+        if (worker_lang_ != Language::kNone) {
+          SyntaxState was = new_syntax_state_;
+          new_syntax_state_ =
+              ScanSyntaxState(line, worker_lang_, new_syntax_state_);
+          if (new_syntax_state_ != was)
+            buffers_.Push<SyntaxTransition>(
+                {static_cast<int>(line_count_) + 1, {}, new_syntax_state_});
+        }
         line_count_++;
         std::string diff_line = "+" + line;
         buffers_.Push<std::string>(diff_line);
