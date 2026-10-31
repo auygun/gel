@@ -9,6 +9,7 @@
 #include <functional>
 #include <list>
 #include <mutex>
+#include <optional>
 #include <semaphore>
 #include <string>
 #include <thread>
@@ -76,27 +77,39 @@ class Git {
   size_t stdin_offset_ = 0;
   bool stdin_open_ = false;
 
-  // Incomplete stdout and stderr lines carried over between Poll cycles.
-  std::string out_carryover_;
-  std::string err_carryover_;
+  // Line splitting state of one output stream, kept between Poll cycles.
+  struct LineSplitter {
+    // Incomplete line.
+    std::string carryover;
+    // Last progress line if the previous chunk ended with '\r'. It becomes a
+    // regular line if the next chunk starts with '\n'.
+    std::optional<std::string> cr_line;
+  };
+  LineSplitter out_splitter_;
+  LineSplitter err_splitter_;
 
   void WorkerMain();
 
   bool Poll(Exec& proc);
 
-  // Splits |chunk| into lines, prepending |carryover| and keeping an
-  // incomplete last line in it while |more| output is expected. Calls
-  // |on_line| for each complete line.
+  // Splits |chunk| into lines, prepending the splitter's carryover and keeping
+  // an incomplete last line in it while |more| output is expected. Calls
+  // |on_line(line, is_progress)| for each complete line. If |split_on_cr| is
+  // set, a lone '\r' terminates a progress line.
   template <typename OnLine>
-  static void SplitLines(std::string& chunk,
-                         std::string& carryover,
+  static void SplitLines(LineSplitter& splitter,
+                         std::string& chunk,
                          bool more,
+                         bool split_on_cr,
                          OnLine on_line);
 
   // Called from the worker thread.
   virtual void OnStarted() = 0;
   virtual void OnOutput(std::string line) = 0;
   virtual void OnError(std::string line) = 0;
+  // Called for a stderr line terminated by a lone '\r' (e.g. "Rebasing
+  // (1/3)\r"), which the next line is meant to overwrite.
+  virtual void OnProgress(std::string line) {}
   virtual void OnFinished(Exec::Status, int result) = 0;
   virtual void OnKilled() = 0;
 };

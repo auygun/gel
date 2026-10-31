@@ -24,7 +24,7 @@ class GitConsoleWindow : public TextViewer::Delegate {
   bool IsOpen() const { return open_; }
 
  private:
-  enum class LineType { kDefault, kCommand, kInfo };
+  enum class LineType { kDefault, kCommand, kInfo, kProgress };
 
   // TextViewer::Delegate implementation.
   void RenderLine(int line_index, const std::string& line) override;

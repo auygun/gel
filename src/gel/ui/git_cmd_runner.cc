@@ -10,11 +10,12 @@
 
 namespace {
 
-// Joins the lines of |output| from stderr (|is_error|) or stdout.
+// Joins the lines of |output| from stderr (|is_error|) or stdout, skipping
+// progress lines.
 std::string JoinLines(std::span<const GitCmd::Line> output, bool is_error) {
   std::string text;
   for (auto& line : output) {
-    if (line.is_error != is_error)
+    if (line.is_error != is_error || line.is_progress)
       continue;
     if (!text.empty())
       text += '\n';
@@ -103,9 +104,12 @@ void GitCmdRunner::AppendOutput() {
     output_lines_appended_ = 0;
   auto output = cmd_.GetOutput();
   for (; output_lines_appended_ < output.size(); ++output_lines_appended_) {
+    auto& line = output[output_lines_appended_];
     if (!task_output_.empty())
       task_output_ += '\n';
-    task_output_ += output[output_lines_appended_].text;
+    if (line.is_progress)
+      task_output_ += kProgressLinePrefix;
+    task_output_ += line.text;
   }
 }
 

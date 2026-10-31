@@ -52,6 +52,10 @@ void GitCmd::OnError(std::string line) {
   buffers_.Push<Line>({std::move(line), true});
 }
 
+void GitCmd::OnProgress(std::string line) {
+  buffers_.Push<Line>({std::move(line), true, true});
+}
+
 void GitCmd::OnFinished(Exec::Status status, int exit_code) {
   buffers_.Push<Result>({status == Exec::Status::EXITED && exit_code == 0});
 }

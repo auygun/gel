@@ -128,8 +128,10 @@ void Git::WorkerMain() {
           current_stdin_ = std::move(stdin_data);
           stdin_offset_ = 0;
           stdin_open_ = !current_stdin_.empty();
-          out_carryover_.clear();
-          err_carryover_.clear();
+          out_splitter_.carryover.clear();
+          out_splitter_.cr_line.reset();
+          err_splitter_.carryover.clear();
+          err_splitter_.cr_line.reset();
           OnStarted();
           DLOG(0) << "Started - pid: " << curent_proc_.pid();
         }
@@ -195,10 +197,15 @@ bool Git::Poll(Exec& proc) {
   err_chunk.swap(proc.GetErr());
 
   if (proc.pid() == curent_proc_.pid()) {
-    SplitLines(out_chunk, out_carryover_, more,
-               [this](std::string line) { OnOutput(std::move(line)); });
-    SplitLines(err_chunk, err_carryover_, more,
-               [this](std::string line) { OnError(std::move(line)); });
+    SplitLines(out_splitter_, out_chunk, more, false,
+               [this](std::string line, bool) { OnOutput(std::move(line)); });
+    SplitLines(err_splitter_, err_chunk, more, true,
+               [this](std::string line, bool is_progress) {
+                 if (is_progress)
+                   OnProgress(std::move(line));
+                 else
+                   OnError(std::move(line));
+               });
   }
 
   if (!more && proc.pid() == curent_proc_.pid()) {
@@ -212,35 +219,57 @@ bool Git::Poll(Exec& proc) {
 }
 
 template <typename OnLine>
-void Git::SplitLines(std::string& chunk,
-                     std::string& carryover,
+void Git::SplitLines(LineSplitter& splitter,
+                     std::string& chunk,
                      bool more,
+                     bool split_on_cr,
                      OnLine on_line) {
   if (chunk.empty()) {
     // Flush an incomplete last line once the process has finished.
-    if (!more && !carryover.empty())
-      on_line(std::exchange(carryover, {}));
+    if (!more && !splitter.carryover.empty())
+      on_line(std::exchange(splitter.carryover, {}), false);
     return;
   }
 
-  if (!carryover.empty()) {
-    chunk.insert(0, carryover);
-    carryover.clear();
+  size_t start = 0;
+  if (splitter.cr_line) {
+    // The previous chunk ended with a '\r' that was taken as the end of a
+    // progress line. If a '\n' follows, it was a "\r\n" line ending: send
+    // the line again as a regular line, which replaces the progress line.
+    // Nothing was carried over since the previous chunk ended at the '\r'.
+    if (chunk[0] == '\n') {
+      on_line(std::move(*splitter.cr_line), false);
+      start = 1;
+    }
+    splitter.cr_line.reset();
+  } else if (!splitter.carryover.empty()) {
+    chunk.insert(0, splitter.carryover);
+    splitter.carryover.clear();
   }
 
-  size_t start = 0;
+  const char* delimiters = split_on_cr ? "\r\n" : "\n";
   for (;;) {
-    auto nl = chunk.find('\n', start);
-    if (nl == std::string::npos) {
+    auto end = chunk.find_first_of(delimiters, start);
+    if (end == std::string::npos) {
       if (start < chunk.size()) {
         if (more)
-          carryover = chunk.substr(start);
+          splitter.carryover = chunk.substr(start);
         else
-          on_line(chunk.substr(start));
+          on_line(chunk.substr(start), false);
       }
       break;
     }
-    on_line(chunk.substr(start, nl - start));
-    start = nl + 1;
+    std::string line = chunk.substr(start, end - start);
+    start = end + 1;
+    if (chunk[end] == '\n') {
+      on_line(std::move(line), false);
+    } else if (start < chunk.size() && chunk[start] == '\n') {
+      on_line(std::move(line), false);  // "\r\n" line ending.
+      ++start;
+    } else if (!line.empty()) {
+      if (start == chunk.size() && more)
+        splitter.cr_line = line;
+      on_line(std::move(line), true);
+    }
   }
 }

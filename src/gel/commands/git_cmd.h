@@ -21,6 +21,8 @@ class GitCmd final : public Git {
   struct Line {
     std::string text;
     bool is_error = false;
+    // Progress line from stderr, meant to be overwritten by the next line.
+    bool is_progress = false;
   };
 
   struct Result {
@@ -85,6 +87,7 @@ class GitCmd final : public Git {
   void OnStarted() final;
   void OnOutput(std::string line) final;
   void OnError(std::string line) final;
+  void OnProgress(std::string line) final;
   void OnFinished(Exec::Status status, int result) final;
   void OnKilled() final {}
 };

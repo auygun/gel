@@ -22,6 +22,11 @@ enum class TaskState { kIdle, kCmdRunning, kWaitingForUser };
 // distinct color.
 constexpr char kInfoLinePrefix = '\x01';
 
+// Prefix byte for progress lines in task output (e.g. "Rebasing (1/3)"),
+// which git terminates with '\r' to overwrite them with the next line. The
+// console replaces a progress line with the next output line.
+constexpr char kProgressLinePrefix = '\x02';
+
 // Returns a human-readable name for the given task.
 inline const char* GetTaskName(GitTask task) {
   switch (task) {

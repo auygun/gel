@@ -47,6 +47,14 @@ void GitConsoleWindow::RenderLine(int line_index, const std::string& line) {
 }
 
 void GitConsoleWindow::AppendLine(std::string text, LineType type) {
+  // Output after a progress line overwrites it, like in a terminal. Command
+  // and info lines are added below, keeping the last progress of a command.
+  if (!lines_.empty() && line_types_.back() == LineType::kProgress &&
+      (type == LineType::kDefault || type == LineType::kProgress)) {
+    lines_.back() = std::move(text);
+    line_types_.back() = type;
+    return;
+  }
   lines_.push_back(std::move(text));
   line_types_.push_back(type);
 }
@@ -81,11 +89,13 @@ void GitConsoleWindow::RebuildLines() {
 
     bool is_cmd = (eol - p >= 2 && p[0] == '$' && p[1] == ' ');
     bool is_info = (!is_cmd && p[0] == kInfoLinePrefix);
+    bool is_progress = (!is_cmd && p[0] == kProgressLinePrefix);
 
-    const char* text_start = is_info ? p + 1 : p;
-    AppendLine({text_start, eol}, is_cmd    ? LineType::kCommand
-                                  : is_info ? LineType::kInfo
-                                            : LineType::kDefault);
+    const char* text_start = (is_info || is_progress) ? p + 1 : p;
+    AppendLine({text_start, eol}, is_cmd        ? LineType::kCommand
+                                  : is_info     ? LineType::kInfo
+                                  : is_progress ? LineType::kProgress
+                                                : LineType::kDefault);
 
     p = *eol ? eol + 1 : eol;
   }
