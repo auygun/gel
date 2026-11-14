@@ -33,8 +33,9 @@ enum class RefreshScope {
   kFull,
   // Only the working tree or index (add, restore, clean).
   kLocal,
-  // Only refs that HEAD doesn't point to, e.g. moving a tag or a branch
-  // that isn't checked out.
+  // Only refs, without changing the commit HEAD points to, e.g. creating,
+  // deleting or renaming a tag or branch, or moving one that isn't checked
+  // out.
   kRefs,
 };
 

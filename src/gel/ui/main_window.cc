@@ -45,6 +45,8 @@ MainWindow::MainWindow(Platform& platform,
               // (e.g. "gel --all" or "gel <branch>") the moved ref may
               // change which commits are listed, so refresh fully instead.
               ref_decorations_.Run();
+              // Rebuilds the toolbar's local branch list.
+              toolbar_.UpdateHeadStatus();
             } else {
               Refresh();
             }
@@ -59,7 +61,7 @@ MainWindow::MainWindow(Platform& platform,
               popup_modal_.ShowConfirmation(
                   "Tag already exists", std::move(msg),
                   [this, n = std::move(tag_name), c = std::move(tag_commit)]() {
-                    runner_.Run({"tag", "-d", n});
+                    runner_.Run({"tag", "-d", n}, RefreshScope::kRefs);
                     runner_.RunNext({"tag", n, c});
                   });
               return true;

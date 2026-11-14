@@ -79,7 +79,7 @@ bool CommitContextMenu::RenderCommitMenu(const std::string& commit,
       if (tag_create_input_[0] != '\0') {
         pending_tag_name_ = tag_create_input_;
         pending_tag_commit_ = commit;
-        runner_.Run({"tag", tag_create_input_, commit});
+        runner_.Run({"tag", tag_create_input_, commit}, RefreshScope::kRefs);
         tag_create_input_[0] = '\0';
         ImGui::CloseCurrentPopup();
       }
@@ -88,7 +88,7 @@ bool CommitContextMenu::RenderCommitMenu(const std::string& commit,
     if (ImGui::Button("Create/Move tag") && tag_create_input_[0] != '\0') {
       pending_tag_name_ = tag_create_input_;
       pending_tag_commit_ = commit;
-      runner_.Run({"tag", tag_create_input_, commit});
+      runner_.Run({"tag", tag_create_input_, commit}, RefreshScope::kRefs);
       tag_create_input_[0] = '\0';
       ImGui::CloseCurrentPopup();
     }
@@ -98,14 +98,16 @@ bool CommitContextMenu::RenderCommitMenu(const std::string& commit,
                                  sizeof(branch_create_input_),
                                  ImGuiInputTextFlags_EnterReturnsTrue)) {
       if (branch_create_input_[0] != '\0') {
-        runner_.Run({"branch", branch_create_input_, commit});
+        runner_.Run({"branch", branch_create_input_, commit},
+                    RefreshScope::kRefs);
         branch_create_input_[0] = '\0';
         ImGui::CloseCurrentPopup();
       }
     }
     ImGui::SameLine();
     if (ImGui::Button("Create branch") && branch_create_input_[0] != '\0') {
-      runner_.Run({"branch", branch_create_input_, commit});
+      runner_.Run({"branch", branch_create_input_, commit},
+                  RefreshScope::kRefs);
       branch_create_input_[0] = '\0';
       ImGui::CloseCurrentPopup();
     }
@@ -173,7 +175,7 @@ void RenderTagMenuItems(
     if (create_buf[0] != '\0') {
       pending_tag_name = create_buf;
       pending_tag_commit = commit;
-      runner.Run({"tag", create_buf, commit});
+      runner.Run({"tag", create_buf, commit}, RefreshScope::kRefs);
       create_buf[0] = '\0';
       ImGui::CloseCurrentPopup();
     }
@@ -182,7 +184,7 @@ void RenderTagMenuItems(
   if (ImGui::Button("Create/Move tag") && create_buf[0] != '\0') {
     pending_tag_name = create_buf;
     pending_tag_commit = commit;
-    runner.Run({"tag", create_buf, commit});
+    runner.Run({"tag", create_buf, commit}, RefreshScope::kRefs);
     create_buf[0] = '\0';
     ImGui::CloseCurrentPopup();
   }
@@ -197,7 +199,7 @@ void RenderTagMenuItems(
   }
   ImGui::Separator();
   if (ImGui::MenuItem("Delete tag", nullptr, false, !busy))
-    runner.Run({"tag", "-d", tag_name});
+    runner.Run({"tag", "-d", tag_name}, RefreshScope::kRefs);
 }
 
 void CommitContextMenu::RenderTagMenu(int index,
@@ -310,14 +312,15 @@ void RenderBranchMenuItems(
                                rename_buf_size,
                                ImGuiInputTextFlags_EnterReturnsTrue)) {
     if (rename_buf[0] != '\0') {
-      runner.Run({"branch", "-m", branch_name, rename_buf});
+      runner.Run({"branch", "-m", branch_name, rename_buf},
+                 RefreshScope::kRefs);
       rename_buf[0] = '\0';
       ImGui::CloseCurrentPopup();
     }
   }
   ImGui::SameLine();
   if (ImGui::Button("Rename") && rename_buf[0] != '\0') {
-    runner.Run({"branch", "-m", branch_name, rename_buf});
+    runner.Run({"branch", "-m", branch_name, rename_buf}, RefreshScope::kRefs);
     rename_buf[0] = '\0';
     ImGui::CloseCurrentPopup();
   }
@@ -328,14 +331,14 @@ void RenderBranchMenuItems(
                                create_buf_size,
                                ImGuiInputTextFlags_EnterReturnsTrue)) {
     if (create_buf[0] != '\0') {
-      runner.Run({"branch", create_buf, branch_name});
+      runner.Run({"branch", create_buf, branch_name}, RefreshScope::kRefs);
       create_buf[0] = '\0';
       ImGui::CloseCurrentPopup();
     }
   }
   ImGui::SameLine();
   if (ImGui::Button("Create branch") && create_buf[0] != '\0') {
-    runner.Run({"branch", create_buf, branch_name});
+    runner.Run({"branch", create_buf, branch_name}, RefreshScope::kRefs);
     create_buf[0] = '\0';
     ImGui::CloseCurrentPopup();
   }
@@ -353,7 +356,7 @@ void RenderBranchMenuItems(
   ImGui::Separator();
   if (ImGui::MenuItem("Delete branch", nullptr, false,
                       !busy && !is_head && !is_remote))
-    runner.Run({"branch", "-D", branch_name});
+    runner.Run({"branch", "-D", branch_name}, RefreshScope::kRefs);
 }
 
 void CommitContextMenu::RenderBranchMenu(int index,
