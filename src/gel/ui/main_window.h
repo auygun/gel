@@ -155,6 +155,9 @@ class MainWindow final : public CommitHistory::Delegate,
                         bool reselected,
                         bool from_history) final;
   void OnRevertAllRequested() final;
+  void OnConfirmationRequested(std::string_view title,
+                               std::string message,
+                               std::function<void()> on_confirm) final;
 
   // CommitDiff::Delegate implementation
   int GetSelectedCommitIndex() const final;

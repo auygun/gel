@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string_view>
 
 #include "base/utf8.h"
 #include "gel/commands/git_log.h"
@@ -21,11 +22,6 @@
 
 namespace {
 
-// Renders stash, tag and branch labels as individually bordered rectangles.
-// The stash label comes first, then tags with a left-pointing arrow shape, then
-// branches as rounded rectangles. The active branch (matching |head_branch|) is
-// drawn bold. When tags are collapsed and |tooltip_args| is provided, shows a
-// tooltip with the full tag list on hover.
 struct TagTooltipArgs {
   bool& any_hovered;
   bool tooltip_suppressed;
@@ -39,12 +35,61 @@ struct ContextMenuArgs {
 };
 enum class LabelKind { kTag, kBranch, kStash };
 
-void RenderBranchLabels(const std::vector<std::string>& tags,
-                        const std::vector<RefDecorations::BranchInfo>& branches,
-                        bool is_stash,
-                        const std::string& head_branch,
-                        TagTooltipArgs* tooltip_args = nullptr,
-                        ContextMenuArgs* ctx_args = nullptr) {
+// Drag and drop payload type for moving a tag or branch label to another
+// commit.
+constexpr char kRefDragPayloadType[] = "GEL_REF";
+
+struct RefDragPayload {
+  LabelKind kind = LabelKind::kTag;
+  std::string name;
+  // The commit the ref pointed to when the drag started.
+  std::string commit;
+};
+
+// Serialized as: kind byte, name, '\0', commit.
+std::string EncodeRefDragPayload(LabelKind kind,
+                                 const std::string& name,
+                                 const std::string& commit) {
+  std::string data(1, static_cast<char>(kind));
+  data += name;
+  data += '\0';
+  data += commit;
+  return data;
+}
+
+bool DecodeRefDragPayload(const ImGuiPayload* payload, RefDragPayload& out) {
+  if (!payload || !payload->IsDataType(kRefDragPayloadType) ||
+      payload->DataSize < 1)
+    return false;
+  std::string_view data(static_cast<const char*>(payload->Data),
+                        payload->DataSize);
+  size_t sep = data.find('\0', 1);
+  if (sep == std::string_view::npos)
+    return false;
+  out.kind = static_cast<LabelKind>(data[0]);
+  out.name = data.substr(1, sep - 1);
+  out.commit = data.substr(sep + 1);
+  return true;
+}
+
+// Renders stash, tag and branch labels as individually bordered rectangles.
+// The stash label comes first, then tags with a left-pointing arrow shape, then
+// branches as rounded rectangles. The active branch (matching |head_branch|) is
+// drawn bold. When tags are collapsed and |tooltip_args| is provided, shows a
+// tooltip with the full tag list on hover. When |ctx_args| is provided, labels
+// get context menus, and tags and local branches can be dragged onto another
+// commit to move them.
+struct LabelInteraction {
+  bool clicked = false;
+  bool hovered = false;
+};
+LabelInteraction RenderBranchLabels(
+    const std::vector<std::string>& tags,
+    const std::vector<RefDecorations::BranchInfo>& branches,
+    bool is_stash,
+    const std::string& head_branch,
+    TagTooltipArgs* tooltip_args = nullptr,
+    ContextMenuArgs* ctx_args = nullptr) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   float font_size = ImGui::GetFontSize();
   float pad_x = font_size * 0.3f;
@@ -52,7 +97,12 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
   float rounding = font_size * 0.2f;
   float spacing = font_size * 0.3f;
 
-  auto render_label = [&](const std::string& name, LabelKind kind) {
+  LabelInteraction result;
+
+  // |ref_name| is the full name of the ref the label stands for, or null when
+  // the label can't be dragged.
+  auto render_label = [&](const std::string& name, LabelKind kind,
+                          const std::string* ref_name = nullptr) {
     bool is_tag = kind == LabelKind::kTag;
     bool is_head = kind == LabelKind::kBranch && (name == head_branch);
 
@@ -98,6 +148,34 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
       ImGui::TextUnformatted(name.c_str());
     }
 
+    if (ctx_args && ref_name) {
+      // Interactive item covering the label without affecting the layout.
+      // Submitted after the row's selectable, so it takes over hover and
+      // clicks from it; a click is reported back so the row still gets
+      // selected.
+      ImRect bb(ImVec2(cursor_screen.x, rect_min.y), rect_max);
+      ImGui::PushID(static_cast<int>(kind));
+      ImGuiID id = ImGui::GetID(ref_name->c_str());
+      ImGui::PopID();
+      if (ImGui::ItemAdd(bb, id)) {
+        bool hovered = false;
+        bool held = false;
+        if (ImGui::ButtonBehavior(bb, id, &hovered, &held))
+          result.clicked = true;
+        result.hovered |= hovered;
+        // The preview tooltip is drawn by CommitHistory::Update() so it stays
+        // visible when the source row scrolls out of view.
+        if (ImGui::BeginDragDropSource(
+                ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+          std::string data =
+              EncodeRefDragPayload(kind, *ref_name, ctx_args->commit);
+          ImGui::SetDragDropPayload(kRefDragPayloadType, data.data(),
+                                    data.size(), ImGuiCond_Once);
+          ImGui::EndDragDropSource();
+        }
+      }
+    }
+
     ImGui::SameLine(0, 0);
     ImGui::SetCursorScreenPos(ImVec2(rect_max.x + spacing, cursor_screen.y));
   };
@@ -115,7 +193,7 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
       } else {
         std::string truncated =
             tags[0].substr(0, base::Utf8SafePrefixLength(tags[0], 13)) + "..";
-        render_label(truncated, LabelKind::kTag);
+        render_label(truncated, LabelKind::kTag, &tags[0]);
       }
       if (ctx_args)
         ctx_args->menu.RenderCollapsedTagMenu(tags, ctx_args->commit,
@@ -137,7 +215,7 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
     } else {
       int tag_idx = 0;
       for (const auto& name : tags) {
-        render_label(name, LabelKind::kTag);
+        render_label(name, LabelKind::kTag, &name);
         if (ctx_args)
           ctx_args->menu.RenderTagMenu(tag_idx++, name, ctx_args->commit,
                                        ctx_args->window_padding,
@@ -147,7 +225,9 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
   }
   int branch_idx = 0;
   for (const auto& bi : branches) {
-    render_label(bi.name, LabelKind::kBranch);
+    // Remote-tracking branches can't be moved with "git branch -f".
+    render_label(bi.name, LabelKind::kBranch,
+                 bi.is_remote ? nullptr : &bi.name);
     if (ctx_args)
       ctx_args->menu.RenderBranchMenu(branch_idx++, bi.name, bi.is_remote,
                                       head_branch, ctx_args->window_padding,
@@ -157,6 +237,7 @@ void RenderBranchLabels(const std::vector<std::string>& tags,
   // Extra space between the last label and the commit message.
   ImVec2 cur = ImGui::GetCursorScreenPos();
   ImGui::SetCursorScreenPos(ImVec2(cur.x + spacing, cur.y));
+  return result;
 }
 
 }  // namespace
@@ -337,6 +418,27 @@ bool CommitHistory::RestoreSelection(int history_index) {
   restoring_selection_ = false;
   history_index_ = history_index;
   return true;
+}
+
+void CommitHistory::MoveRef(bool is_tag,
+                            const std::string& name,
+                            const std::string& commit) {
+  if (is_tag) {
+    runner_.Run({"tag", "-f", name, commit});
+  } else if (name == ref_decorations_.head_branch()) {
+    // "git branch -f" refuses to move the checked-out branch. Reset it
+    // instead, keeping local changes; git aborts if they would be lost.
+    // This changes the working tree, so confirm first.
+    std::string msg = "'" + name + "' is the checked-out branch.\n";
+    msg += "Moving it runs: git reset --keep " + commit.substr(0, 10) + "\n\n";
+    msg += "Uncommitted changes are kept; git aborts if they would be ";
+    msg += "overwritten.";
+    delegate_.OnConfirmationRequested(
+        "Move checked-out branch?", std::move(msg),
+        [this, commit] { runner_.Run({"reset", "--keep", commit}); });
+  } else {
+    runner_.Run({"branch", "-f", name, commit});
+  }
 }
 
 void CommitHistory::ResetScrollPos() {
@@ -689,6 +791,20 @@ void CommitHistory::Update(const std::string& search_term) {
               SelectCommit(row, false, true);
             }
 
+            // Drop target for tag and branch labels dragged from another
+            // commit.
+            if (ImGui::BeginDragDropTarget()) {
+              RefDragPayload ref;
+              if (DecodeRefDragPayload(ImGui::GetDragDropPayload(), ref) &&
+                  ref.commit != commit_history[ci].commit &&
+                  !runner_.IsBusy() &&
+                  ImGui::AcceptDragDropPayload(kRefDragPayloadType)) {
+                MoveRef(ref.kind == LabelKind::kTag, ref.name,
+                        commit_history[ci].commit);
+              }
+              ImGui::EndDragDropTarget();
+            }
+
             // Right-click context menu for commit rows.
             if (context_menu_.RenderCommitMenu(
                     commit_history[ci].commit,
@@ -721,6 +837,7 @@ void CommitHistory::Update(const std::string& search_term) {
                                      default_window_padding,
                                      default_item_spacing};
             bool has_labels = decoration != nullptr;
+            LabelInteraction labels;
             if (flagged) {
               ImGui::SetCursorPos(ImVec2(cursor.x + text_offset + 1, cursor.y));
               if (has_labels) {
@@ -729,19 +846,22 @@ void CommitHistory::Update(const std::string& search_term) {
               }
               ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
               ImGui::SetCursorPos(ImVec2(cursor.x + text_offset, cursor.y));
-              if (has_labels) {
-                RenderBranchLabels(decoration->tags, decoration->branches,
-                                   decoration->is_stash, head_branch,
-                                   &tooltip_args, &ctx_args);
-              }
-              ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
-            } else {
-              if (has_labels) {
-                RenderBranchLabels(decoration->tags, decoration->branches,
-                                   decoration->is_stash, head_branch,
-                                   &tooltip_args, &ctx_args);
-              }
-              ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
+            }
+            if (has_labels) {
+              labels = RenderBranchLabels(
+                  decoration->tags, decoration->branches, decoration->is_stash,
+                  head_branch, &tooltip_args, &ctx_args);
+            }
+            ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
+            if (labels.clicked)
+              SelectCommit(row, false, true);
+            // A hovered label takes the hover from the row's selectable, so
+            // draw the row's hover highlight in its place.
+            if (labels.hovered && selected_row_ != row &&
+                !ImGui::IsDragDropActive()) {
+              ImGui::TableSetBgColor(
+                  ImGuiTableBgTarget_RowBg1,
+                  ImGui::GetColorU32(ImGuiCol_HeaderHovered));
             }
 
             // Data columns.  Use total_columns captured before BeginTable
@@ -800,6 +920,18 @@ void CommitHistory::Update(const std::string& search_term) {
 
           ImGui::PopID();
         }
+      }
+
+      // Preview tooltip for a dragged tag or branch label.
+      RefDragPayload dragged_ref;
+      if (DecodeRefDragPayload(ImGui::GetDragDropPayload(), dragged_ref)) {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            default_window_padding);
+        ImGui::SetTooltip(
+            "Move %s %s",
+            dragged_ref.kind == LabelKind::kTag ? "tag" : "branch",
+            dragged_ref.name.c_str());
+        ImGui::PopStyleVar();
       }
 
       bool is_loading = commit_history.empty() && git_log_.busy();

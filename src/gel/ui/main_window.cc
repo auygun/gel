@@ -561,6 +561,13 @@ void MainWindow::OnRevertAllRequested() {
   commit_diff_.RevertAll();
 }
 
+void MainWindow::OnConfirmationRequested(std::string_view title,
+                                         std::string message,
+                                         std::function<void()> on_confirm) {
+  popup_modal_.ShowConfirmation(title, std::move(message),
+                                std::move(on_confirm));
+}
+
 // -- CommitDiff::Delegate -----------------------------------------------------
 
 int MainWindow::GetSelectedCommitIndex() const {

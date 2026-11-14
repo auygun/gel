@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "gel/ui/upper_panel/commit_context_menu.h"
@@ -32,6 +33,10 @@ class CommitHistory {
                                   bool reselected,
                                   bool from_history) = 0;
     virtual void OnRevertAllRequested() = 0;
+    // Asks the user to confirm |message| before running |on_confirm|.
+    virtual void OnConfirmationRequested(std::string_view title,
+                                         std::string message,
+                                         std::function<void()> on_confirm) = 0;
   };
 
   CommitHistory(Delegate& delegate,
@@ -132,6 +137,9 @@ class CommitHistory {
   std::vector<HistoryEntry> selection_history_;
   int history_index_ = -1;
   bool restoring_selection_ = false;
+
+  // Force-moves a tag or branch to |commit|.
+  void MoveRef(bool is_tag, const std::string& name, const std::string& commit);
 
   HistoryEntry CurrentHistoryEntry() const;
   void RecordSelection(bool skip = false);

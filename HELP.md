@@ -268,6 +268,12 @@ branch labels, when the history includes it (e.g. `gel --all`). The label has
 no context menu. Older stash entries are left undecorated by git and appear
 as ordinary commits.
 
+Drag a tag or local branch label and drop it on another commit to move it
+there (`git tag -f` / `git branch -f`). Dropping the checked-out branch asks
+for confirmation, then moves it with `git reset --keep`, which keeps local
+changes and refuses if they would be overwritten. Remote branches and the collapsed "N tags" label can't
+be dragged.
+
 #### Tag Context Menu
 
 Right-click a tag label to access:
