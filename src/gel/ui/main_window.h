@@ -64,7 +64,7 @@ class MainWindow final : public CommitHistory::Delegate,
   UpdateResult Update(float delta_time,
                       eng::Renderer& renderer,
                       ImTextureID icon_texture,
-                      int active_bg_tasks);
+                      int mouse_busy_tasks);
 
   // Queues a modal popup to be shown on the next frame.
   void ShowPopup(std::string_view title,

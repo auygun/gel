@@ -42,6 +42,11 @@ class Git {
   // Returns true after the process has been detached.
   bool detached() const { return detached_.load(std::memory_order_relaxed); }
 
+  // Whether the running command is listed by BusyTracker for the toolbar's
+  // busy spinner (the default), or only reported through the busy callback,
+  // which drives the mouse spinner. Set before the first Run.
+  void set_show_in_toolbar(bool show) { show_in_toolbar_ = show; }
+
  protected:
   // Starts a new git process with the given arguments. Any currently running
   // process is killed and superseded. If |stdin_data| is non-empty, the
@@ -63,8 +68,10 @@ class Git {
   std::list<Exec> new_procs_;
   std::string pending_stdin_;  // Guarded by lock_.
   int pending_run_id_ = 0;     // Guarded by lock_.
+  std::string pending_label_;  // Guarded by lock_.
   std::mutex lock_;
   int run_id_ = 0;  // Worker thread.
+  bool show_in_toolbar_ = true;
 
   Exec curent_proc_;
 

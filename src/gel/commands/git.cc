@@ -7,9 +7,48 @@
 #include <algorithm>
 #include <utility>
 
+#include "gel/commands/busy_tracker.h"
 #include "third_party/kaliber/base/log.h"
 
 using namespace base;
+
+namespace {
+
+// A short form of |args| ("git", subcommand, arguments) for the busy
+// spinner's tooltip. Format strings and the repository path are noise there,
+// object names are abbreviated, and the result is capped in length.
+std::string CommandLabel(const std::vector<std::string>& args) {
+  constexpr size_t kMaxLength = 80;
+  std::string label;
+  for (size_t i = 0; i < args.size(); ++i) {
+    const std::string& arg = args[i];
+    if (arg == "-C" && i + 1 < args.size()) {
+      ++i;  // Skip the directory too.
+      continue;
+    }
+    if (arg.starts_with("--pretty") || arg.starts_with("--format") ||
+        arg.starts_with("--date=")) {
+      continue;
+    }
+    std::string word = arg;
+    bool is_hash =
+        word.size() == 40 &&
+        word.find_first_not_of("0123456789abcdef") == std::string::npos;
+    if (is_hash)
+      word.resize(7);
+    if (!label.empty())
+      label += ' ';
+    label += word;
+    if (label.size() > kMaxLength) {
+      label.resize(kMaxLength - 3);
+      label += "...";
+      break;
+    }
+  }
+  return label;
+}
+
+}  // namespace
 
 Git::Git(std::function<void(bool)> busy_callback)
     : busy_callback_(std::move(busy_callback)),
@@ -41,6 +80,7 @@ bool Git::RunWithArgs(std::vector<std::string> args,
     new_procs_.push_front(std::move(proc));
     pending_stdin_ = std::move(stdin_data);
     pending_run_id_ = run_id;
+    pending_label_ = CommandLabel(args);
     detach_requested_ = false;
   }
   semaphore_.release();
@@ -74,7 +114,10 @@ void Git::WorkerMain() {
 
     semaphore_.acquire();
     busy_.store(true, std::memory_order_relaxed);
-    busy_callback_(true);
+    // Toolbar commands are tracked per command below, as processes start and
+    // end. The rest report busy for the whole cycle.
+    if (!show_in_toolbar_)
+      busy_callback_(true);
 
     do {
       if (quit_.load(std::memory_order_relaxed))
@@ -83,12 +126,14 @@ void Git::WorkerMain() {
       // Pick up new processes queued by the main thread.
       std::list<Exec> procs;
       std::string stdin_data;
+      std::string label;
       int run_id = 0;
       bool detach = false;
       {
         std::scoped_lock scoped_lock(lock_);
         procs.swap(new_procs_);
         stdin_data = std::move(pending_stdin_);
+        label = std::move(pending_label_);
         run_id = pending_run_id_;
         detach = detach_requested_;
         detach_requested_ = false;
@@ -138,8 +183,13 @@ void Git::WorkerMain() {
           out_splitter_.cr_line.reset();
           err_splitter_.carryover.clear();
           err_splitter_.cr_line.reset();
+          if (show_in_toolbar_)
+            BusyTracker::Get().Set(this, std::move(label));
           OnStarted();
           DLOG(0) << "Started - pid: " << curent_proc_.pid();
+        } else if (show_in_toolbar_) {
+          // Killed or detached with nothing new to run.
+          BusyTracker::Get().Clear(this);
         }
       }
 
@@ -148,6 +198,8 @@ void Git::WorkerMain() {
           !Poll(curent_proc_)) {
         DLOG(0) << "Terminated - pid: " << curent_proc_.pid();
         curent_proc_ = {};
+        if (show_in_toolbar_)
+          BusyTracker::Get().Clear(this);
       }
 
       // Poll killed processes and remove them once terminated.
@@ -171,7 +223,10 @@ void Git::WorkerMain() {
     } while (curent_proc_.GetStatus() != Exec::Status::UNINITIALIZED ||
              !death_row_.empty());
     busy_.store(false, std::memory_order_relaxed);
-    busy_callback_(false);
+    if (show_in_toolbar_)
+      BusyTracker::Get().Clear(this);  // Also when quitting mid-command.
+    else
+      busy_callback_(false);
   }
 }
 

@@ -9,6 +9,7 @@
 #include <fstream>
 
 #include "base/utf8.h"
+#include "gel/commands/busy_tracker.h"
 #include "gel/git_repo.h"
 #include "gel/ui/git_cmd_runner.h"
 #include "gel/ui/style.h"
@@ -346,12 +347,19 @@ void Toolbar::Update(float search_progress) {
     constexpr float kDotSize = 12.0f;
     float badge_w = kDotSize;
 
+    // Busy spinner in front of the dot while git commands run in the
+    // background. Its tooltip lists them.
+    bool git_busy = BusyTracker::Get().busy();
+    float spinner_gap = ImGui::GetStyle().ItemSpacing.x;
+    // The spinner and the gap after it.
+    float spinner_w = git_busy ? frame_h + spinner_gap : 0.0f;
+
     if (has_task || !display_head.empty()) {
       float right_edge =
           ImGui::GetWindowContentRegionMax().x - csd_buttons_width;
       float available =
           right_edge - widgets_end - ImGui::GetStyle().ItemSpacing.x;
-      float status_w = badge_w + ImGui::GetStyle().ItemSpacing.x;
+      float status_w = spinner_w + badge_w + ImGui::GetStyle().ItemSpacing.x;
 
       // Truncate the branch name with ellipsis when the combined text
       // would overlap the toolbar widgets. Hide everything when the
@@ -386,6 +394,18 @@ void Toolbar::Update(float search_progress) {
       if (text_width > 0) {
         ImGui::SameLine();
         ImGui::SetCursorPosX(right_edge - text_width);
+        if (show_badge && git_busy) {
+          ImGui::InvisibleButton("##git_busy", ImVec2(frame_h, frame_h));
+          DrawBusySpinner(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+          std::string commands = "Running in the background:";
+          for (const auto& command : BusyTracker::Get().Commands()) {
+            commands += '\n';
+            commands += command;
+          }
+          ItemTooltip(commands.c_str(), any_toolbar_hovered,
+                      tooltip_suppressed_);
+          ImGui::SameLine(0, spinner_gap);
+        }
         if (show_badge) {
           ImVec2 badge_min = ImGui::GetCursorScreenPos();
           ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));

@@ -44,7 +44,10 @@ class Gel final : public eng::PlatformObserver {
   MainWindow main_window_;
 
   bool keep_drawing_ = false;
-  std::atomic<int> active_bg_tasks_{0};
+  // Work the user is waiting on, shown by the mouse spinner: stepping to a
+  // search match and external tools starting. Background git commands are
+  // tracked by BusyTracker and shown in the toolbar instead.
+  std::atomic<int> mouse_busy_tasks_{0};
 
   std::optional<eng::RendererType> pending_renderer_;
   std::optional<PendingFont> pending_font_;

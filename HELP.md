@@ -147,6 +147,9 @@ The toolbar spans the top of the window and contains the following controls
 - **Panel toggle** -- Switch lower panel between diff and size view (F6)
 - **Settings** -- Opens the settings modal (Ctrl+,)
 - **Help** -- Opens this help window (F1)
+- **Busy spinner** -- Turns to the left of the status dot while git commands
+  run in the background; hover it to see which. See
+  [Status Indicators](#status-indicators)
 - **Status dot** -- Small dot to the left of the branch name: yellow while a
   git task is in progress, gray otherwise. Click to open the console
   (F7). See [Status Indicators](#status-indicators)
@@ -230,6 +233,15 @@ shows the task in progress (e.g. "Cherry-pick in progress (F7)") or
 "Console (F7)" when idle.
 
 Click the dot or press **F7** to open the [console](#console).
+
+While git commands run in the background (loading the history, labels, local
+changes, a diff, commit sizes, a blame lookup, the change-based commit search,
+or an operation such as a cherry-pick), a spinner turns to the left of the
+dot. Hover it to see the commands that are running.
+
+A spinner next to the mouse cursor means Gel is busy with something you are
+waiting on: jumping to the next or previous commit search match, or starting
+an external tool such as the diff tool or `git gui`.
 
 ## Commit History (Upper Panel)
 
@@ -522,9 +534,8 @@ itself, so blame follows them into the parent they came from, or stops at
 the merge if it introduced them. Lines dropped by the merge are looked up
 in the first parent that has them.
 
-A spinning indicator appears near the mouse cursor while background
-operations are running (blame lookups, git commands, commit search, or file
-size fetching).
+Git commands running in the background, including blame lookups, are shown by
+the spinner in the toolbar (see [Status Indicators](#status-indicators)).
 
 #### Text Selection
 

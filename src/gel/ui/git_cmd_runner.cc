@@ -96,6 +96,10 @@ void GitCmdRunner::Spawn(std::vector<std::string> args, bool silent) {
   PrependTopLevel(args);
   auto& entry = procs_.emplace_back(
       SpawnedProc{std::make_unique<GitCmd>(busy_callback_), silent});
+  // External tools (difftool, git gui) run in their own windows. They show
+  // the mouse spinner until they fail or are detached, rather than being
+  // listed with the background commands.
+  entry.cmd->set_show_in_toolbar(false);
   entry.cmd->Run(std::move(args));
 }
 

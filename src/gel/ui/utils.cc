@@ -100,15 +100,35 @@ bool ToggleButton(const char* id, bool on, const ImVec2& size) {
   return clicked;
 }
 
+namespace {
+
+// A rotating three-quarter arc.
+void DrawSpinnerArc(ImDrawList* dl,
+                    ImVec2 center,
+                    float radius,
+                    float thickness,
+                    ImU32 color) {
+  float t = static_cast<float>(ImGui::GetTime()) * 6.0f;
+  dl->PathArcTo(center, radius, t, t + IM_PI * 1.5f, 12);
+  dl->PathStroke(color, 0, thickness);
+}
+
+}  // namespace
+
 void DrawMouseSpinner() {
   float scale = ImGui::GetStyle()._MainScale;
   ImVec2 mouse = ImGui::GetMousePos();
-  float radius = 7.0f * scale;
   ImVec2 center(mouse.x + 22.0f * scale, mouse.y + 22.0f * scale);
-  float t = static_cast<float>(ImGui::GetTime()) * 6.0f;
-  ImDrawList* fg = ImGui::GetForegroundDrawList();
-  fg->PathArcTo(center, radius, t, t + IM_PI * 1.5f, 12);
-  fg->PathStroke(IM_COL32(200, 200, 200, 200), 0, 2.5f * scale);
+  DrawSpinnerArc(ImGui::GetForegroundDrawList(), center, 7.0f * scale,
+                 2.5f * scale, IM_COL32(200, 200, 200, 200));
+}
+
+void DrawBusySpinner(ImVec2 min, ImVec2 max) {
+  float size = std::min(max.x - min.x, max.y - min.y);
+  ImVec2 center((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
+  DrawSpinnerArc(ImGui::GetWindowDrawList(), center, size * 0.3f,
+                 std::max(1.5f, size * 0.1f),
+                 ImGui::GetColorU32(ImGuiCol_Text));
 }
 
 void InputTextContextMenu(char* buf, size_t buf_size) {

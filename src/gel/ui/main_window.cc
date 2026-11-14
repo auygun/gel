@@ -332,7 +332,7 @@ void MainWindow::MergeWorkerData() {
 MainWindow::UpdateResult MainWindow::Update(float delta_time,
                                             Renderer& renderer,
                                             ImTextureID icon_texture,
-                                            int active_bg_tasks) {
+                                            int mouse_busy_tasks) {
   renderer_ = &renderer;
   MergeWorkerData();
   HandleCSDResize();
@@ -430,7 +430,7 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
     ImGui::PopStyleColor();
   ImGui::End();
 
-  if (active_bg_tasks > 0)
+  if (mouse_busy_tasks > 0)
     DrawMouseSpinner();
 
 #if 0

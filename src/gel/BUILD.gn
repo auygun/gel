@@ -74,6 +74,8 @@ config("gen_data_include") {
 
 executable("gel") {
   sources = [
+    "commands/busy_tracker.cc",
+    "commands/busy_tracker.h",
     "commands/git.cc",
     "commands/git.h",
     "commands/git_blame.cc",

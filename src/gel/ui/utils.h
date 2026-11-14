@@ -30,7 +30,12 @@ void ItemTooltip(const char* text, bool& any_hovered, bool tooltip_suppressed);
 // after the call, as with ImGui::Button(). Returns true when clicked.
 bool ToggleButton(const char* id, bool on, const ImVec2& size);
 
-// Draws an animated spinner arc near the mouse cursor.
+// Draws an animated spinner arc near the mouse cursor, for work the user is
+// waiting on.
 void DrawMouseSpinner();
+
+// Draws the same spinner centered in the rect [min, max], for the toolbar's
+// background git commands indicator.
+void DrawBusySpinner(ImVec2 min, ImVec2 max);
 
 #endif  // GEL_UI_UTILS_H

@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "gel/commands/busy_tracker.h"
 #include "gel/dejavu_sans_mono.h"
 #include "icon_data.h"
 #include "third_party/glfw/glfw/include/GLFW/glfw3.h"
@@ -310,9 +311,10 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
         (g.HoverItemDelayTimer < g.Style.HoverDelayNormal ||
          g.HoverItemUnlockedStationaryId != g.HoverItemDelayIdPreviousFrame);
     if (std::exchange(keep_drawing_, false) ||
-        active_bg_tasks_.load(std::memory_order_relaxed) > 0 ||
-        platform_->NewEventReceived() || platform_->IsAnyMouseButtonDown() ||
-        platform_->IsAnyKeyDown() || cursor_blinking || tooltip_delay_active) {
+        mouse_busy_tasks_.load(std::memory_order_relaxed) > 0 ||
+        BusyTracker::Get().busy() || platform_->NewEventReceived() ||
+        platform_->IsAnyMouseButtonDown() || platform_->IsAnyKeyDown() ||
+        cursor_blinking || tooltip_delay_active) {
       redraw_frames = 3;
     }
     if (redraw_frames <= 0)
@@ -358,7 +360,7 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
 
     auto ur = main_window_.Update(
         frame_delta, *renderer_, (ImTextureID)(intptr_t)icon_texture_,
-        active_bg_tasks_.load(std::memory_order_relaxed));
+        mouse_busy_tasks_.load(std::memory_order_relaxed));
     if (ur.pending_renderer)
       pending_renderer_ = ur.pending_renderer;
     if (ur.pending_font)
@@ -391,9 +393,9 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
 
 void Gel::OnBusyChanged(bool busy) {
   if (busy)
-    active_bg_tasks_.fetch_add(1, std::memory_order_relaxed);
+    mouse_busy_tasks_.fetch_add(1, std::memory_order_relaxed);
   else
-    active_bg_tasks_.fetch_sub(1, std::memory_order_relaxed);
+    mouse_busy_tasks_.fetch_sub(1, std::memory_order_relaxed);
 }
 
 void Gel::OnWindowCreated() {
