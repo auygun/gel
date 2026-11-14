@@ -8,6 +8,7 @@
 #include <cstddef>
 
 struct ColoredLine;
+struct ImDrawList;
 struct ImVec2;
 
 // Renders a ColoredLine with per-segment colors resolved via ResolveColor.
@@ -37,5 +38,18 @@ void DrawMouseSpinner();
 // Draws the same spinner centered in the rect [min, max], for the toolbar's
 // background git commands indicator.
 void DrawBusySpinner(ImVec2 min, ImVec2 max);
+
+// Fills the part of the rounded rect [min, max] left of min.x + |fill_w|, for
+// progress bars inside rounded frames. A plain rect with only its own left
+// corners rounded leaks past the rounded outline: ImGui shrinks the corner
+// radius of a fill narrower than two radii, and the fill's square right edge
+// sticks out of the right corners near the end. Clipping the rounded outline
+// itself keeps the fill inside at any width.
+void DrawRoundedFill(ImDrawList* dl,
+                     ImVec2 min,
+                     ImVec2 max,
+                     float rounding,
+                     float fill_w,
+                     unsigned int color);
 
 #endif  // GEL_UI_UTILS_H

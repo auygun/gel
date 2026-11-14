@@ -5,6 +5,7 @@
 #include "gel/ui/utils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <string>
 
@@ -129,6 +130,62 @@ void DrawBusySpinner(ImVec2 min, ImVec2 max) {
   DrawSpinnerArc(ImGui::GetWindowDrawList(), center, size * 0.3f,
                  std::max(1.5f, size * 0.1f),
                  ImGui::GetColorU32(ImGuiCol_Text));
+}
+
+void DrawRoundedFill(ImDrawList* dl,
+                     ImVec2 min,
+                     ImVec2 max,
+                     float rounding,
+                     float fill_w,
+                     unsigned int color) {
+  if (fill_w <= 0.0f)
+    return;
+  float w = max.x - min.x;
+  float h = max.y - min.y;
+  float r = std::min(rounding, std::min(w, h) * 0.5f);
+  if (fill_w >= w) {
+    dl->AddRectFilled(min, max, color, r);
+    return;
+  }
+  if (r <= 0.0f) {
+    dl->AddRectFilled(min, ImVec2(min.x + fill_w, max.y), color);
+    return;
+  }
+
+  // The rounded outline, clockwise from the top-left arc.
+  ImVector<ImVec2> outline;
+  constexpr int kSegments = 8;
+  auto arc = [&](ImVec2 center, float from, float to) {
+    for (int i = 0; i <= kSegments; ++i) {
+      float a = from + (to - from) * i / kSegments;
+      outline.push_back(
+          ImVec2(center.x + r * std::cos(a), center.y + r * std::sin(a)));
+    }
+  };
+  constexpr float kPi = 3.14159265358979f;
+  arc(ImVec2(min.x + r, min.y + r), kPi, kPi * 1.5f);         // Top left.
+  arc(ImVec2(max.x - r, min.y + r), kPi * 1.5f, kPi * 2.0f);  // Top right.
+  arc(ImVec2(max.x - r, max.y - r), 0.0f, kPi * 0.5f);        // Bottom right.
+  arc(ImVec2(min.x + r, max.y - r), kPi * 0.5f, kPi);         // Bottom left.
+
+  // Clip it to x <= clip_x (Sutherland-Hodgman against one edge). The
+  // outline is convex, so the result is too.
+  float clip_x = min.x + fill_w;
+  ImVector<ImVec2> clipped;
+  for (int i = 0; i < outline.Size; ++i) {
+    ImVec2 a = outline[i];
+    ImVec2 b = outline[(i + 1) % outline.Size];
+    bool a_in = a.x <= clip_x;
+    bool b_in = b.x <= clip_x;
+    if (a_in)
+      clipped.push_back(a);
+    if (a_in != b_in) {
+      float t = (clip_x - a.x) / (b.x - a.x);
+      clipped.push_back(ImVec2(clip_x, a.y + (b.y - a.y) * t));
+    }
+  }
+  if (clipped.Size >= 3)
+    dl->AddConvexPolyFilled(clipped.Data, clipped.Size, color);
 }
 
 void InputTextContextMenu(char* buf, size_t buf_size) {

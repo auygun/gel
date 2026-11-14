@@ -113,15 +113,34 @@ SearchBar::Result SearchBar::Update(const Options& opts,
     ImVec2 rect_max(input_pos.x + width, input_pos.y + frame_h);
     dl->AddRectFilled(input_pos, rect_max, ImGui::GetColorU32(ImGuiCol_FrameBg),
                       rounding);
-    float fill = std::clamp(opts.progress, 0.0f, 1.0f);
-    float fill_w = width * fill;
-    if (fill_w > 0.0f) {
-      dl->AddRectFilled(input_pos,
-                        ImVec2(input_pos.x + fill_w, input_pos.y + frame_h),
-                        ImGui::GetColorU32(ImGuiCol_PlotHistogram), rounding,
-                        fill >= 1.0f ? ImDrawFlags_RoundCornersAll
-                                     : ImDrawFlags_RoundCornersLeft);
+    // Keep the fill inside the frame border, which ImGui draws over the field
+    // afterwards (layouts with FrameBorderSize > 0). Under it, the border
+    // would cut through the fill and leave slivers outside it.
+    //
+    // RenderFrame() strokes two rounded rects along the frame inset by half a
+    // pixel, keeping the full rounding: the border (ImGuiCol_Border) and,
+    // offset by (1, 1), its shadow (ImGuiCol_BorderShadow). Either may be the
+    // visible one (the light style's border is transparent and its shadow
+    // opaque), so the fill stays inside both, half a pixel clear of the inner
+    // edge of each stroke for its anti-aliasing. That means one more pixel in
+    // at the top and left, where the shadow lies further in.
+    float border = ImGui::GetStyle().FrameBorderSize;
+    ImVec2 fill_min = input_pos;
+    ImVec2 fill_max = rect_max;
+    float fill_rounding = rounding;
+    if (border > 0.0f) {
+      float inset = 0.5f + border * 0.5f + 0.5f;
+      fill_min = ImVec2(input_pos.x + inset + 1.0f, input_pos.y + inset + 1.0f);
+      fill_max = ImVec2(rect_max.x - inset, rect_max.y - inset);
+      // Corner arcs centred where the strokes' arcs are (0.5 + rounding in
+      // from the edge they follow), using the inner, shadow side's offset so
+      // they stay clear of both strokes at every corner.
+      fill_rounding = std::max(0.0f, 0.5f + rounding - inset);
     }
+    float fill_w =
+        (fill_max.x - fill_min.x) * std::clamp(opts.progress, 0.0f, 1.0f);
+    DrawRoundedFill(dl, fill_min, fill_max, fill_rounding, fill_w,
+                    ImGui::GetColorU32(ImGuiCol_PlotHistogram));
     dl->ChannelsMerge();
   }
 
