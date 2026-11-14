@@ -49,6 +49,9 @@ class Toolbar {
     virtual bool IsWindowFocused() const = 0;
     virtual void OnBranchSwitchRequested(const std::string& branch) = 0;
     virtual void OnConsoleWindowRequested() = 0;
+    // Asks for another frame, for a transient message with nothing else
+    // keeping the window redrawing.
+    virtual void OnKeepDrawingRequested() = 0;
   };
 
   Toolbar(Delegate& delegate,
@@ -99,6 +102,10 @@ class Toolbar {
 
   std::string search_term_;
   CommitSearchMode search_mode_ = CommitSearchMode::kContaining;
+  // How long the mode's name shows under its button after Ctrl+M, and until
+  // when (ImGui time).
+  static constexpr double kModeFlashSeconds = 1.5;
+  double mode_flash_until_ = 0.0;
   std::string head_label_;
   bool head_detached_ = false;
   std::vector<std::string> local_branches_;

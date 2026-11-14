@@ -119,6 +119,8 @@ the controls. CSD can be toggled in Settings (requires restart).
 - **Ctrl+0** -- Reset font scale to 1.0
 - **Ctrl+Q** -- Quit
 - **/** -- Focus the commit search field
+- **Ctrl+M / Ctrl+Shift+M** -- Switch to the next / previous commit search
+  mode
 - **Tab / Shift+Tab** -- Cycle focus between toolbar input fields
 - **Enter / Escape** -- Dismiss message or error popups (text is selectable
   in popups)
@@ -196,8 +198,10 @@ are displayed in bold in the commit history.
 - A progress bar appears in the search field while scanning large histories.
 
 The search mode button in front of the search field picks what the term is
-matched against. Its icon shows the current mode; click it to choose another.
-Gel always starts in Containing mode.
+matched against. Its icon shows the current mode; click it to choose another,
+or press **Ctrl+M** for the next mode and **Ctrl+Shift+M** for the previous
+one, which also works while typing in the search field and briefly shows the
+mode's name under the button. Gel always starts in Containing mode.
 
 - **Containing** (lines of text) -- Author, committer, message, tag and branch
   names, as described above.

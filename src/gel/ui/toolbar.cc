@@ -194,6 +194,17 @@ void Toolbar::Update(float search_progress) {
   // What the commit search matches, as in gitk's find bar: an icon button
   // showing the current mode, opening a menu of the modes.
   {
+    // Ctrl+M cycles to the next mode, Ctrl+Shift+M to the previous one. It
+    // works while typing in the search field too, as it types no character.
+    if (!modal_open && ImGui::GetIO().KeyCtrl &&
+        ImGui::IsKeyPressed(ImGuiKey_M, false)) {
+      constexpr int kModes = static_cast<int>(CommitSearchMode::kCount);
+      int step = ImGui::GetIO().KeyShift ? kModes - 1 : 1;
+      search_mode_ = static_cast<CommitSearchMode>(
+          (static_cast<int>(search_mode_) + step) % kModes);
+      mode_flash_until_ = ImGui::GetTime() + kModeFlashSeconds;
+    }
+
     ImVec2 button_size(frame_h, frame_h);
     if (ImGui::Button("##search_mode", button_size))
       ImGui::OpenPopup("##search_mode_menu");
@@ -202,10 +213,29 @@ void Toolbar::Update(float search_progress) {
     DrawSearchModeIcon(search_mode_, icon_min, icon_max);
     DrawMenuCaret();
     char tooltip[256];
-    snprintf(tooltip, sizeof(tooltip), "Search mode: %s\n%s",
+    snprintf(tooltip, sizeof(tooltip),
+             "Search mode: %s (Ctrl+M / Ctrl+Shift+M)\n%s",
              GetCommitSearchModeName(search_mode_),
              GetCommitSearchModeDescription(search_mode_));
     ItemTooltip(tooltip, any_toolbar_hovered, tooltip_suppressed_);
+
+    // After the shortcut, name the new mode under the button for a moment:
+    // the four icons are easy to mix up at a glance.
+    if (ImGui::GetTime() < mode_flash_until_ &&
+        !ImGui::IsPopupOpen("##search_mode_menu")) {
+      ImGui::SetNextWindowPos(ImVec2(icon_min.x, icon_max.y + 2.0f));
+      ImGui::Begin("##search_mode_flash", nullptr,
+                   ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
+                       ImGuiWindowFlags_NoDecoration |
+                       ImGuiWindowFlags_AlwaysAutoResize |
+                       ImGuiWindowFlags_NoSavedSettings |
+                       ImGuiWindowFlags_NoFocusOnAppearing |
+                       ImGuiWindowFlags_NoNav);
+      ImGui::TextUnformatted(GetCommitSearchModeName(search_mode_));
+      ImGui::End();
+      // Nothing else may ask for frames while the name is up.
+      delegate_.OnKeepDrawingRequested();
+    }
 
     ImGui::SetNextWindowPos(ImVec2(icon_min.x, icon_max.y));
     if (ImGui::BeginPopup("##search_mode_menu")) {

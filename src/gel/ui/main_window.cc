@@ -826,6 +826,10 @@ void MainWindow::OnConsoleWindowRequested() {
   console_window_.Toggle();
 }
 
+void MainWindow::OnKeepDrawingRequested() {
+  main_thread_busy_();
+}
+
 void MainWindow::OnSearchRequested(int direction) {
   if (!commit_search_busy_) {
     commit_search_busy_ = true;

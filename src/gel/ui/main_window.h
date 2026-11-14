@@ -207,6 +207,7 @@ class MainWindow final : public CommitHistory::Delegate,
   const std::string& GetWindowTitle() const final;
   void OnBranchSwitchRequested(const std::string& branch) final;
   void OnConsoleWindowRequested() final;
+  void OnKeepDrawingRequested() final;
 
   // DirectoryBrowser::Delegate implementation
   void OnDirectorySelected(const std::filesystem::path& path) final;
