@@ -380,11 +380,11 @@ The **File view** button in the [diff overlay](#diff-overlay-controls)
 switches between a flat list of paths and a directory tree. In the tree,
 entries keep the diff's order, and a directory that only contains another
 directory is shown on one row (e.g. `src/gel/ui`). Directories start
-collapsed. Click a directory to expand or collapse it, or use the **Expand
+expanded. Click a directory to expand or collapse it, or use the **Expand
 all** and **Collapse all** buttons next to the File view button. Expanded and
-collapsed directories stay that way when switching commits, and after Expand
-all, directories in other commits start expanded too. When the selected file is inside a collapsed directory, the
-directory is highlighted instead. The choice of view is remembered.
+collapsed directories stay that way when switching commits, and after Collapse
+all, directories in other commits start collapsed too. When the selected file
+is inside a collapsed directory, the directory is highlighted instead. The choice of view is remembered.
 
 #### Multi-Selection
 

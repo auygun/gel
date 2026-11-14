@@ -189,8 +189,8 @@ class FileList {
   bool tree_dirty_ = false;
   // Whether directories are open, unless listed in |toggled_dirs_|. Set by
   // expand all / collapse all. Both are kept across commits. Directories
-  // start collapsed.
-  bool dirs_open_by_default_ = false;
+  // start expanded.
+  bool dirs_open_by_default_ = true;
   // Paths of directories the user expanded or collapsed away from the
   // default.
   std::unordered_set<std::string, StringHash, std::equal_to<>> toggled_dirs_;
