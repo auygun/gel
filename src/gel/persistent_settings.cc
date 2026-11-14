@@ -281,6 +281,8 @@ void PersistentSettings::Load() {
     diff_search_options.whole_word = j["diff_search_whole_word"].get<bool>();
   if (j.contains("show_line_numbers") && j["show_line_numbers"].is_boolean())
     show_line_numbers = j["show_line_numbers"].get<bool>();
+  if (j.contains("show_commit_graph") && j["show_commit_graph"].is_boolean())
+    show_commit_graph = j["show_commit_graph"].get<bool>();
   if (j.contains("diff_color_mode")) {
     if (j["diff_color_mode"].is_string())
       diff_color_mode = ParseEnum(j["diff_color_mode"].get<std::string>(),
@@ -402,6 +404,7 @@ void PersistentSettings::Save() {
   j["diff_search_case_sensitive"] = diff_search_options.case_sensitive;
   j["diff_search_whole_word"] = diff_search_options.whole_word;
   j["show_line_numbers"] = show_line_numbers;
+  j["show_commit_graph"] = show_commit_graph;
   j["diff_color_mode"] = GetDiffColorModeName(diff_color_mode);
   // show_size_panel is intentionally not saved; always start in diff view.
   j["chart_style"] = GetChartStyleName(chart_style);

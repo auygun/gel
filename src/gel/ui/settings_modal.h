@@ -64,6 +64,7 @@ class SettingsModal {
   DiffColorMode settings_diff_color_mode_ = DiffColorMode::kAnsi;
   bool settings_file_list_on_right_ = false;
   bool settings_show_line_numbers_ = true;
+  bool settings_show_commit_graph_ = true;
   bool settings_csd_ = false;
   DisplayBackend settings_display_backend_ = DisplayBackend::kAuto;
   int settings_font_index_ = 0;

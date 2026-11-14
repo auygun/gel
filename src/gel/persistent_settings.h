@@ -85,6 +85,7 @@ class PersistentSettings {
   base::MatchOptions search_options;
   base::MatchOptions diff_search_options;
   bool show_line_numbers = true;
+  bool show_commit_graph = true;
   DiffColorMode diff_color_mode = DiffColorMode::kSyntax;
   bool show_size_panel = false;
   ChartStyle chart_style = ChartStyle::kDonut;

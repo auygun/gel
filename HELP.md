@@ -660,6 +660,9 @@ Open the settings modal via the gear button in the toolbar.
 - **Renderer** -- Vulkan or OpenGL (not available on macOS)
 - **GPU** -- Select which GPU to use (Vulkan only, shown when multiple GPUs are available)
 - **Client-side decorations** (Linux) -- Use custom title bar drawn in the toolbar (requires restart)
+- **Show commit graph** -- Draw the commit graph in the Message column
+  (enabled by default). With it off, the graph isn't computed, which saves
+  memory and time in very large repositories
 - **Commit list columns** -- Expandable section to customize the commit history
   table columns: add a column (maximum 6), change a column's data type, or
   remove it. Available types: Author, Author Date, Commit, Committer,

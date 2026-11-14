@@ -59,6 +59,7 @@ void SettingsModal::Open(PersistentSettings& settings,
   new_ext_lang_index_ = 1;
   settings_file_list_on_right_ = settings.file_list_on_right;
   settings_show_line_numbers_ = settings.show_line_numbers;
+  settings_show_commit_graph_ = settings.show_commit_graph;
   settings_csd_ = settings.client_side_decorations;
   settings_display_backend_ = settings.display_backend;
   fonts_ = &fonts;
@@ -399,6 +400,7 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
       ImGui::TextDisabled("Requires restart");
     ImGui::Separator();
 #endif
+    ImGui::Checkbox("Show commit graph", &settings_show_commit_graph_);
     if (ImGui::TreeNode("Commit list columns")) {
       int remove_idx = -1;
       for (size_t i = 0; i < settings_table_columns_.size(); i++) {
@@ -579,6 +581,7 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
                settings_diff_tool_);
       settings.diff_color_mode = settings_diff_color_mode_;
       settings.show_line_numbers = settings_show_line_numbers_;
+      settings.show_commit_graph = settings_show_commit_graph_;
       settings.table_columns = settings_table_columns_;
       settings.ext_mappings = settings_ext_mappings_;
       settings.file_list_on_right = settings_file_list_on_right_;
