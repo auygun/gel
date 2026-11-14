@@ -471,17 +471,10 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
                               ImGuiTableFlags_NoSavedSettings |
                               ImGuiTableFlags_BordersInnerV |
                               ImGuiTableFlags_PadOuterX)) {
-      // Row height must satisfy two constraints:
-      // 1. >= text height, so the table doesn't expand rows beyond the
-      //    clipper's item height.
-      // 2. Even integer, so that n*row_height is always representable as a
-      //    float when total content exceeds 2^24 pixels (~1M rows).  At
-      //    that range the float ULP is 2, meaning only even values are
-      //    representable.  An odd row_height makes odd-n products
-      //    unrepresentable, causing the clipper's seek to alternate ±1
-      //    pixel and making rows appear to change height every other step.
-      float row_height =
-          2.0f * std::ceil((ImGui::GetTextLineHeight() + 2.0f) * 0.5f);
+      // Row height must be >= text height, so the table doesn't expand rows
+      // beyond the clipper's item height, and a whole number of pixels, so
+      // that every row lands on the same pixel offset.
+      float row_height = std::ceil(ImGui::GetTextLineHeight() + 2.0f);
 
       float lane_spacing = row_height * 0.75f;
       for (int c = 0; c < total_columns; c++) {
@@ -775,7 +768,7 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
           if (has_unstaged_changes_ && row == 0) {
             // "Unstaged changes" synthetic row.
             ImGui::TableSetColumnIndex(0);
-            ImVec2 cursor = ImGui::GetCursorPos();
+            ImVec2 cursor = ImGui::GetCursorScreenPos();
             if (ImGui::Selectable("##row", selected_row_ == 0,
                                   ImGuiSelectableFlags_SpanAllColumns |
                                       ImGuiSelectableFlags_AllowOverlap,
@@ -800,12 +793,12 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
               }
               ImGui::PopStyleVar(2);
             }
-            ImGui::SetCursorPos(cursor);
+            ImGui::SetCursorScreenPos(cursor);
             ImGui::TextUnformatted("Unstaged changes");
           } else if (has_staged_changes_ && row == staged_row) {
             // "Staged changes" synthetic row.
             ImGui::TableSetColumnIndex(0);
-            ImVec2 cursor = ImGui::GetCursorPos();
+            ImVec2 cursor = ImGui::GetCursorScreenPos();
             if (ImGui::Selectable("##row", selected_row_ == row,
                                   ImGuiSelectableFlags_SpanAllColumns |
                                       ImGuiSelectableFlags_AllowOverlap,
@@ -831,18 +824,21 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
               }
               ImGui::PopStyleVar(2);
             }
-            ImGui::SetCursorPos(cursor);
+            ImGui::SetCursorScreenPos(cursor);
             ImGui::TextUnformatted("Staged changes");
           } else {
             int ci = row - synthetic_rows;
 
             // Column 0: graph + commit message.
             // An invisible Selectable spanning all columns provides row
-            // selection highlighting. SetCursorPos restores the cursor so the
-            // colored text renders on top of the selectable background.
+            // selection highlighting. SetCursorScreenPos restores the cursor so
+            // the colored text renders on top of the selectable background.
+            // Screen coordinates are used throughout the row: window-local
+            // ones (GetCursorPos) grow with the scroll offset, and past 2^24
+            // pixels a float can't hold them exactly, so restoring the cursor
+            // would shift rows by a pixel or more near the end of huge logs.
             ImGui::TableSetColumnIndex(0);
-            ImVec2 graph_origin = ImGui::GetCursorScreenPos();
-            ImVec2 cursor = ImGui::GetCursorPos();
+            ImVec2 cursor = ImGui::GetCursorScreenPos();
             if (ImGui::Selectable("##row", selected_row_ == row,
                                   ImGuiSelectableFlags_SpanAllColumns |
                                       ImGuiSelectableFlags_AllowOverlap,
@@ -873,16 +869,16 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
                     default_window_padding, default_item_spacing))
               SelectCommit(row);
 
-            ImGui::SetCursorPos(cursor);
+            ImGui::SetCursorScreenPos(cursor);
             float text_offset =
                 graph_.RowColumns(ci) * lane_spacing + lane_spacing * 0.5f;
 
             // Draw graph on top of the highlight.
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            graph_.Draw(dl, ci, graph_origin, row_height, lane_spacing);
+            graph_.Draw(dl, ci, cursor, row_height, lane_spacing);
 
             // Advance cursor past the graph for this row's text.
-            ImGui::SetCursorPosX(cursor.x + text_offset);
+            ImGui::SetCursorScreenPos(ImVec2(cursor.x + text_offset, cursor.y));
 
             const RefDecorations::Decoration* decoration =
                 ref_decorations_.Find(commit_history[ci].commit);
@@ -897,13 +893,15 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
             bool has_labels = decoration != nullptr;
             LabelInteraction labels;
             if (flagged) {
-              ImGui::SetCursorPos(ImVec2(cursor.x + text_offset + 1, cursor.y));
+              ImGui::SetCursorScreenPos(
+                  ImVec2(cursor.x + text_offset + 1, cursor.y));
               if (has_labels) {
                 RenderBranchLabels(decoration->tags, decoration->branches,
                                    decoration->is_stash, head_branch);
               }
               ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
-              ImGui::SetCursorPos(ImVec2(cursor.x + text_offset, cursor.y));
+              ImGui::SetCursorScreenPos(
+                  ImVec2(cursor.x + text_offset, cursor.y));
             }
             if (has_labels) {
               labels = RenderBranchLabels(
@@ -929,43 +927,43 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
                  col < static_cast<int>(settings_.table_columns.size());
                  col++) {
               ImGui::TableSetColumnIndex(col + 1);
-              ImVec2 cp = ImGui::GetCursorPos();
+              ImVec2 cp = ImGui::GetCursorScreenPos();
               auto data = settings_.table_columns[col];
               switch (data) {
                 case ColumnData::kAuthor:
                   if (flagged) {
-                    ImGui::SetCursorPos(
+                    ImGui::SetCursorScreenPos(
                         ImVec2(cp.x + default_cell_padding.x + 1, cp.y));
                     ImGui::TextUnformatted(commit_history[ci].author.c_str());
                   }
-                  ImGui::SetCursorPos(
+                  ImGui::SetCursorScreenPos(
                       ImVec2(cp.x + default_cell_padding.x, cp.y));
                   ImGui::TextUnformatted(commit_history[ci].author.c_str());
                   break;
                 case ColumnData::kAuthorDate:
                   if (flagged) {
-                    ImGui::SetCursorPos(
+                    ImGui::SetCursorScreenPos(
                         ImVec2(cp.x + default_cell_padding.x + 1, cp.y));
                     ImGui::TextUnformatted(
                         commit_history[ci].author_date.c_str());
                   }
-                  ImGui::SetCursorPos(
+                  ImGui::SetCursorScreenPos(
                       ImVec2(cp.x + default_cell_padding.x, cp.y));
                   ImGui::TextUnformatted(
                       commit_history[ci].author_date.c_str());
                   break;
                 case ColumnData::kCommit:
-                  ImGui::SetCursorPos(
+                  ImGui::SetCursorScreenPos(
                       ImVec2(cp.x + default_cell_padding.x, cp.y));
                   ImGui::TextUnformatted(commit_history[ci].commit.c_str());
                   break;
                 case ColumnData::kCommitter:
-                  ImGui::SetCursorPos(
+                  ImGui::SetCursorScreenPos(
                       ImVec2(cp.x + default_cell_padding.x, cp.y));
                   ImGui::TextUnformatted(commit_history[ci].committer.c_str());
                   break;
                 case ColumnData::kCommitterDate:
-                  ImGui::SetCursorPos(
+                  ImGui::SetCursorScreenPos(
                       ImVec2(cp.x + default_cell_padding.x, cp.y));
                   ImGui::TextUnformatted(
                       commit_history[ci].committer_date.c_str());
