@@ -230,7 +230,12 @@ void SizeFileTree::RenderSortButtons(float btn_size) {
 void SizeFileTree::RenderFileTree() {
   float indent = ImGui::GetFontSize() * 0.75f;
   float arrow_width = ImGui::GetFontSize();
-  float base_x = ImGui::GetStyle().FramePadding.x;
+  // Rows are positioned in screen coordinates: window-local ones
+  // (GetCursorPos) grow with the scroll offset, and past 2^24 pixels a float
+  // can't hold them exactly, so restoring the cursor would shift rows by a
+  // pixel or more in huge trees. window_x maps window-local X to screen X.
+  float window_x = ImGui::GetWindowPos().x - ImGui::GetScrollX();
+  float base_x = window_x + ImGui::GetStyle().FramePadding.x;
 
   ImGuiListClipper clipper;
   clipper.Begin(static_cast<int>(flat_tree_.size()));
@@ -252,7 +257,7 @@ void SizeFileTree::RenderFileTree() {
 
       if (node->is_directory) {
         // Draw selectable background spanning full width.
-        ImVec2 cursor = ImGui::GetCursorPos();
+        ImVec2 cursor = ImGui::GetCursorScreenPos();
         bool is_selected = (node == selected_dir_);
         if (ImGui::Selectable("##dir", is_selected,
                               ImGuiSelectableFlags_AllowOverlap | 0)) {
@@ -274,9 +279,8 @@ void SizeFileTree::RenderFileTree() {
         }
 
         // Render arrow + label on top of the selectable.
-        ImGui::SetCursorPos(cursor);
         ImGui::PushClipRect(item_min, item_max, true);
-        ImGui::SetCursorPosX(base_x + indent_px);
+        ImGui::SetCursorScreenPos(ImVec2(base_x + indent_px, cursor.y));
 
         // Draw arrow.
         auto* dl = ImGui::GetWindowDrawList();
@@ -326,8 +330,8 @@ void SizeFileTree::RenderFileTree() {
           float btn_sz = ImGui::GetTextLineHeight();
           float btn_spacing = ImGui::GetStyle().ItemSpacing.x * 0.5f;
           float btns_w = 3.0f * btn_sz + 2.0f * btn_spacing;
-          float right_edge = ImGui::GetWindowContentRegionMax().x;
-          ImGui::SetCursorPos(ImVec2(right_edge - btns_w, cursor.y));
+          float right_edge = window_x + ImGui::GetWindowContentRegionMax().x;
+          ImGui::SetCursorScreenPos(ImVec2(right_edge - btns_w, cursor.y));
 
           ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
           bool collapse_hovered = false;
@@ -355,13 +359,13 @@ void SizeFileTree::RenderFileTree() {
         }
       } else {
         // Leaf file node.
-        ImVec2 cursor = ImGui::GetCursorPos();
+        ImVec2 cursor = ImGui::GetCursorScreenPos();
         ImGui::Selectable("##file", false, 0);
         ImVec2 item_min = ImGui::GetItemRectMin();
         ImVec2 item_max = ImGui::GetItemRectMax();
-        ImGui::SetCursorPos(cursor);
         ImGui::PushClipRect(item_min, item_max, true);
-        ImGui::SetCursorPosX(base_x + indent_px + arrow_width);
+        ImGui::SetCursorScreenPos(
+            ImVec2(base_x + indent_px + arrow_width, cursor.y));
 
         char label[512];
         snprintf(label, sizeof(label), "%s (%s)", node->name.c_str(),

@@ -595,7 +595,7 @@ void FileList::RenderFileRow(std::span<const FileEntry> files,
   if (is_multi)
     ImGui::SetNextItemSelectionUserData(row);
 
-  ImVec2 cursor = ImGui::GetCursorPos();
+  ImVec2 cursor = ImGui::GetCursorScreenPos();
   bool item_selected =
       is_multi ? multi_selection_.Contains(static_cast<ImGuiID>(index))
                : selected_file_ == index;
@@ -613,9 +613,9 @@ void FileList::RenderFileRow(std::span<const FileEntry> files,
   }
 
   // Render the status letter and filename on top of the selectable.
-  ImGui::SetCursorPos(cursor);
+  ImGui::SetCursorScreenPos(cursor);
   float available_width = ImGui::GetContentRegionAvail().x;
-  ImGui::SetCursorPosX(cursor.x + text_offset);
+  ImGui::SetCursorScreenPos(ImVec2(cursor.x + text_offset, cursor.y));
 
   if (entry.status == FileStatus::kCommit) {
     ImGui::TextUnformatted(label);
@@ -680,21 +680,20 @@ void FileList::RenderDirRow(const TreeRow& row, bool selected) {
 
   ImGui::PushID(row.item);
 
-  ImVec2 cursor = ImGui::GetCursorPos();
+  ImVec2 cursor = ImGui::GetCursorScreenPos();
   // Not a multi-select item, so clicking it leaves the file selection alone.
   // Clicking anywhere on the row expands or collapses the directory. The
   // tree is reflattened after rendering.
   if (ImGui::Selectable("##dir", selected, ImGuiSelectableFlags_AllowOverlap))
     SetDirOpen(dir, !d.open);
 
-  ImGui::SetCursorPos(cursor);
-  ImGui::SetCursorPosX(cursor.x + row.depth * indent);
-  ImVec2 arrow_pos = ImGui::GetCursorScreenPos();
+  ImVec2 arrow_pos(cursor.x + row.depth * indent, cursor.y);
   ImGui::RenderArrow(ImGui::GetWindowDrawList(),
                      ImVec2(arrow_pos.x, arrow_pos.y + font_size * 0.15f),
                      ImGui::GetColorU32(ImGuiCol_Text),
                      d.open ? ImGuiDir_Down : ImGuiDir_Right, 0.7f);
-  ImGui::SetCursorPosX(cursor.x + row.depth * indent + font_size);
+  ImGui::SetCursorScreenPos(
+      ImVec2(cursor.x + row.depth * indent + font_size, cursor.y));
   ImGui::TextUnformatted(d.path.c_str() + row.label_offset);
 
   ImGui::PopID();
