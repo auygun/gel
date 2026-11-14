@@ -41,13 +41,14 @@ class TextViewer {
     virtual bool OnCtrlClick(int line_index, int char_offset) { return false; }
 
     // Called for each visible line to draw custom backgrounds before the text.
+    // row_x and row_width give the horizontal extent of a full-row background.
     virtual void DrawLineBackground(int line_index,
                                     const std::string& line,
                                     ImDrawList* draw_list,
                                     ImVec2 line_pos,
                                     float line_height,
-                                    float window_x,
-                                    float window_width) {}
+                                    float row_x,
+                                    float row_width) {}
 
     // Called to render a line's text. The default implementation renders the
     // string as plain text with the default text color.

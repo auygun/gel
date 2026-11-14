@@ -103,8 +103,8 @@ class DiffContent : public TextViewer::Delegate {
                           ImDrawList* draw_list,
                           ImVec2 line_pos,
                           float line_height,
-                          float window_x,
-                          float window_width) override;
+                          float row_x,
+                          float row_width) override;
   void RenderLine(int line_index, const std::string& line) override;
   float GetTextOffset(int line_index) const override;
   void DrawLineHighlights(int line_index,

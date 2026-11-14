@@ -664,13 +664,13 @@ void DiffContent::DrawLineBackground(int line_index,
                                      ImDrawList* draw_list,
                                      ImVec2 line_pos,
                                      float line_height,
-                                     float window_x,
-                                     float window_width) {
+                                     float row_x,
+                                     float row_width) {
   // Draw background for file header lines.
   if (IsFileHeader(line)) {
     draw_list->AddRectFilled(
-        ImVec2(window_x, line_pos.y),
-        ImVec2(window_x + window_width, line_pos.y + line_height),
+        ImVec2(row_x, line_pos.y),
+        ImVec2(row_x + row_width, line_pos.y + line_height),
         GetSyntaxPalette().file_header_bg);
   }
 
@@ -699,8 +699,8 @@ void DiffContent::DrawLineBackground(int line_index,
       else
         bg = sp.incoming_content_bg;
       draw_list->AddRectFilled(
-          ImVec2(window_x, line_pos.y),
-          ImVec2(window_x + window_width, line_pos.y + line_height), bg);
+          ImVec2(row_x, line_pos.y),
+          ImVec2(row_x + row_width, line_pos.y + line_height), bg);
     }
   }
   // Draw background tint for +/- lines in syntax/background modes.
@@ -709,8 +709,8 @@ void DiffContent::DrawLineBackground(int line_index,
       ImU32 bg = *sign == '+' ? GetSyntaxPalette().added_bg
                               : GetSyntaxPalette().removed_bg;
       draw_list->AddRectFilled(
-          ImVec2(window_x, line_pos.y),
-          ImVec2(window_x + window_width, line_pos.y + line_height), bg);
+          ImVec2(row_x, line_pos.y),
+          ImVec2(row_x + row_width, line_pos.y + line_height), bg);
     }
   }
 }

@@ -476,21 +476,31 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
     // by a few pixels as the scroll does. That moves the scroll limit, which
     // moves the scroll, every frame, so the list never comes to rest at the
     // bottom. Round up so the last row stays reachable.
+    float content_height;
     {
       bool extra_row = !info_message_.empty() ||
                        (git_log_.GetCommits().empty() && git_log_.busy());
       double height = static_cast<double>(commit_count_ + (extra_row ? 1 : 0)) *
                       static_cast<double>(row_height);
-      float content_height = static_cast<float>(height);
+      content_height = static_cast<float>(height);
       if (static_cast<double>(content_height) < height)
         content_height = std::nextafter(content_height, FLT_MAX);
       ImGui::SetNextWindowContentSize(ImVec2(0.0f, content_height));
     }
+    // Without a vertical scrollbar the rows would reach the panel's right
+    // edge, and the selected row's background would bleed out at its rounded
+    // corners. Inset the table on the right as it is on the left. Its
+    // scrolling window has no padding or border and takes the remaining height
+    // (truncated), so it shows a scrollbar exactly when the content is taller.
+    float right_padding = 0.0f;
+    if (content_height <= std::trunc(ImGui::GetContentRegionAvail().y))
+      right_padding = left_padding;
     if (ImGui::BeginTable("table_scrolly", total_columns,
                           ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
                               ImGuiTableFlags_NoSavedSettings |
                               ImGuiTableFlags_BordersInnerV |
-                              ImGuiTableFlags_PadOuterX)) {
+                              ImGuiTableFlags_PadOuterX,
+                          ImVec2(-right_padding, 0.0f))) {
       float lane_spacing = row_height * 0.75f;
       for (int c = 0; c < total_columns; c++) {
         float w = c < static_cast<int>(settings_.table_column_widths.size())

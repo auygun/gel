@@ -643,6 +643,22 @@ void TextViewer::Update(float width,
       std::swap(s_char, e_char);
     }
 
+    // Horizontal extent of full-row backgrounds and line text. Inset them from
+    // the window edges like Selectable rows (window padding minus half the item
+    // spacing) so they stay clear of the rounded corners of the frame. A
+    // vertical scrollbar already covers the right corners, so like the commit
+    // list, run them up to it.
+    float row_min_x, row_max_x;
+    {
+      const ImGuiStyle& style = ImGui::GetStyle();
+      ImGuiWindow* win = ImGui::GetCurrentWindowRead();
+      float inset = std::max(
+          0.0f, win->WindowPadding.x - IM_TRUNC(style.ItemSpacing.x * 0.5f));
+      row_min_x = win->InnerRect.Min.x + inset;
+      row_max_x = std::max(
+          row_min_x, win->InnerRect.Max.x - (win->ScrollbarY ? 0 : inset));
+    }
+
     // Use a list clipper to only submit the visible lines.
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(0, line_height - ImGui::GetTextLineHeight()));
@@ -653,6 +669,10 @@ void TextViewer::Update(float width,
     ImU32 sel_color = ImGui::GetColorU32(ImGuiCol_TextSelectedBg);
     ImU32 search_hl_color = GetSyntaxPalette().search_match_bg;
 
+    // Clip the lines to the row background's extent, so text scrolled
+    // horizontally doesn't show in the margins beside it.
+    ImGui::PushClipRect(ImVec2(row_min_x, -FLT_MAX), ImVec2(row_max_x, FLT_MAX),
+                        true);
     while (clipper.Step()) {
       for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
         const std::string& line = content[i];
@@ -667,21 +687,16 @@ void TextViewer::Update(float width,
         // Let the delegate draw custom backgrounds.
         {
           ImVec2 lp = ImGui::GetCursorScreenPos();
-          float win_x = ImGui::GetWindowPos().x;
-          float win_w = ImGui::GetWindowWidth();
           delegate_.DrawLineBackground(i, line, draw_list, lp, line_height,
-                                       win_x, win_w);
+                                       row_min_x, row_max_x - row_min_x);
         }
 
         // Draw highlight line background.
         if (i == highlight_line_) {
           ImVec2 lp = ImGui::GetCursorScreenPos();
-          float win_x = ImGui::GetWindowPos().x;
-          float win_w = ImGui::GetWindowWidth();
           ImU32 col = ImGui::GetColorU32(ImGuiCol_Header);
-          draw_list->AddRectFilled(ImVec2(win_x, lp.y),
-                                   ImVec2(win_x + win_w, lp.y + line_height),
-                                   col);
+          draw_list->AddRectFilled(ImVec2(row_min_x, lp.y),
+                                   ImVec2(row_max_x, lp.y + line_height), col);
         }
 
         // Draw selection highlight behind the text.
@@ -773,6 +788,7 @@ void TextViewer::Update(float width,
         delegate_.RenderLine(i, line);
       }
     }
+    ImGui::PopClipRect();
     ImGui::PopStyleVar();
 
     HandleKeyboardShortcuts(content, s_line, s_char, e_line, e_char);
