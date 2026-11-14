@@ -271,8 +271,9 @@ as ordinary commits.
 Drag a tag or local branch label and drop it on another commit to move it
 there (`git tag -f` / `git branch -f`). Dropping the checked-out branch asks
 for confirmation, then moves it with `git reset --keep`, which keeps local
-changes and refuses if they would be overwritten. Remote branches and the collapsed "N tags" label can't
-be dragged.
+changes and refuses if they would be overwritten. Hold the label near the
+top or bottom edge of the table to scroll it while dragging. Remote branches
+and the collapsed "N tags" label can't be dragged.
 
 #### Tag Context Menu
 

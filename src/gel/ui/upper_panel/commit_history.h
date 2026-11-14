@@ -119,6 +119,8 @@ class CommitHistory {
   CommitGraph graph_;
 
   bool tag_tooltip_suppressed_ = false;
+  // Scroll distance not yet applied while autoscrolling a label drag.
+  float autoscroll_remainder_ = 0.0f;
   std::string info_message_;
 
   // A selection history entry. Stored row-independently so entries stay valid

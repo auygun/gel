@@ -598,6 +598,54 @@ void CommitHistory::Update(const std::string& search_term) {
         }
       }
 
+      // Autoscroll while a tag or branch label is dragged near the top or
+      // bottom edge of the table, faster the closer to (or further past) the
+      // edge the mouse is.
+      if (!reset_scroll_pos) {
+        float delta = 0.0f;
+        const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+        if (payload && payload->IsDataType(kRefDragPayloadType)) {
+          ImVec2 mouse = ImGui::GetMousePos();
+          ImVec2 win_pos = ImGui::GetWindowPos();
+          float win_w = ImGui::GetWindowWidth();
+          float win_h = ImGui::GetWindowHeight();
+          float edge = std::min(row_height * 2.0f, win_h * 0.25f);
+          if (edge > 0.0f && mouse.x >= win_pos.x &&
+              mouse.x < win_pos.x + win_w) {
+            float from_top = mouse.y - win_pos.y;
+            float from_bottom = win_pos.y + win_h - mouse.y;
+            // Depth into the edge zone, in multiples of |edge|. Capped so
+            // dragging far outside the table doesn't scroll absurdly fast.
+            float depth = 0.0f;
+            float dir = 0.0f;
+            if (from_top < edge) {
+              depth = (edge - from_top) / edge;
+              dir = -1.0f;
+            } else if (from_bottom < edge) {
+              depth = (edge - from_bottom) / edge;
+              dir = 1.0f;
+            }
+            depth = std::min(depth, 3.0f);
+            constexpr float kRowsPerSecondAtEdge = 15.0f;
+            delta = dir * depth * kRowsPerSecondAtEdge * row_height *
+                    ImGui::GetIO().DeltaTime;
+          }
+        }
+        if (delta == 0.0f) {
+          autoscroll_remainder_ = 0.0f;
+        } else {
+          // The scroll position is snapped to whole rows each frame, so
+          // accumulate fractional amounts and scroll by whole rows.
+          autoscroll_remainder_ += delta;
+          float rows = std::trunc(autoscroll_remainder_ / row_height);
+          if (rows != 0.0f) {
+            autoscroll_remainder_ -= rows * row_height;
+            float target = ImGui::GetScrollY() + rows * row_height;
+            ImGui::SetScrollY(std::clamp(target, 0.0f, ImGui::GetScrollMaxY()));
+          }
+        }
+      }
+
       // Freeze the item count while the scrollbar is held. Inserting new items
       // mid-drag causes the scroll position to jump because the scrollbar
       // ratio changes.  Always clamp to the actual size to avoid out-of-bounds
