@@ -791,16 +791,23 @@ void TextViewer::HandleKeyboardShortcuts(std::span<const std::string> content,
   ImGuiWindow* modal = ImGui::GetTopMostPopupModal();
   bool blocked_by_modal = modal && !ImGui::IsWindowWithinBeginStackOf(
                                        ImGui::GetCurrentWindow(), modal);
+  // Only handle shortcuts when the window hosting this viewer has focus, so
+  // that multiple visible viewers (e.g. the diff and the console window) don't
+  // all react to the same key press.
+  bool has_focus =
+      ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+  bool enabled =
+      !blocked_by_modal && has_focus && !ImGui::GetIO().WantTextInput;
 
   // Ctrl+A selects all content.
-  if (!blocked_by_modal && !ImGui::GetIO().WantTextInput &&
-      ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) {
+  if (enabled && ImGui::GetIO().KeyCtrl &&
+      ImGui::IsKeyPressed(ImGuiKey_A, false)) {
     SelectAll(content);
   }
 
   // Ctrl+C copies the selected text to the clipboard.
-  if (!blocked_by_modal && s_line >= 0 && !ImGui::GetIO().WantTextInput &&
-      ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+  if (enabled && s_line >= 0 && ImGui::GetIO().KeyCtrl &&
+      ImGui::IsKeyPressed(ImGuiKey_C, false)) {
     ImGui::SetClipboardText(
         ExtractSelectedText(content, s_line, s_char, e_line, e_char).c_str());
   }
