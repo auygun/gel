@@ -10,6 +10,7 @@
 #include "gel/ui/icons.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
+#include "third_party/imgui/imgui/imgui_internal.h"
 
 namespace {
 
@@ -26,6 +27,13 @@ void DefaultTooltip(const char* text) {
 }
 
 }  // namespace
+
+void SearchBar::SetTerm(const std::string& term) {
+  snprintf(input_, kInputSize, "%s", term.c_str());
+  // ImGui keeps its own copy of the text while the field is being edited.
+  // Make it pick up the new text on the next Update().
+  reload_ = true;
+}
 
 void SearchBar::FocusRejectingChar(char c) {
   focus_ = true;
@@ -86,6 +94,11 @@ SearchBar::Result SearchBar::Update(const Options& opts,
         return data->EventChar == static_cast<ImWchar>(rejected) ? 1 : 0;
       },
       &reject_char_);
+  if (reload_) {
+    reload_ = false;
+    if (auto* state = ImGui::GetInputTextState(ImGui::GetItemID()))
+      state->ReloadUserBufAndSelectAll();
+  }
   result.input_active = ImGui::IsItemActive();
   result.input_deactivated = ImGui::IsItemDeactivated();
   if (reject_frames_ > 0)

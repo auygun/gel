@@ -52,6 +52,10 @@ void CommitDiff::OnShowImageDiff(const std::string& old_ref,
   delegate_.OnShowImageDiff(old_ref, new_ref, path, new_from_worktree);
 }
 
+void CommitDiff::OnSearchTouchingPaths(const std::vector<std::string>& paths) {
+  delegate_.OnSearchTouchingPaths(paths);
+}
+
 void CommitDiff::SetPrimarySelection(const std::string& text) {
   delegate_.SetPrimarySelection(text);
 }

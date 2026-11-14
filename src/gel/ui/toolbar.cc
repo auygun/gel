@@ -721,6 +721,13 @@ void Toolbar::Update(float search_progress) {
                                     static_cast<int>(csd_app_icon_max_.y));
 }
 
+void Toolbar::SetSearch(const std::string& term, CommitSearchMode mode) {
+  search_bar_.SetTerm(term);
+  // Also right away, so a search started this frame sees it.
+  search_term_ = search_bar_.term();
+  search_mode_ = mode;
+}
+
 void Toolbar::SetCommitInput(const std::string& commit) {
   snprintf(commit_input_, kCommitInputSize, "%s", commit.c_str());
   pending_commit_input_ = commit_input_;

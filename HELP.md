@@ -462,6 +462,10 @@ Right-click a file entry to access:
   for the missing side of added or deleted files. Also works for unstaged and
   staged changes. For merge commits, a submenu picks the parent to compare
   against. Disabled for multi-file selections.
+- **Search commits touching path** -- Switches the commit search to
+  [Touching paths](#commit-search) with the file's path, highlights every
+  commit that changes it, and jumps to the next one. When multiple files are
+  selected, searches for commits touching any of them.
 - **Copy path** -- Copies the file's relative path to the clipboard. When
   multiple files are selected, copies all paths joined by spaces.
 

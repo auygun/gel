@@ -47,6 +47,9 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
     virtual void OnDiffRefreshRequested() = 0;
     virtual bool HasDiffPathFilter() const = 0;
     virtual void OnNavigateToCommit(const std::string& commit) = 0;
+    // See FileList::Delegate::OnSearchTouchingPaths().
+    virtual void OnSearchTouchingPaths(
+        const std::vector<std::string>& paths) = 0;
   };
 
   CommitDiff(Delegate& delegate,
@@ -92,6 +95,7 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
                        const std::string& new_ref,
                        const std::string& path,
                        bool new_from_worktree) final;
+  void OnSearchTouchingPaths(const std::vector<std::string>& paths) final;
 
   // DiffContent::Delegate implementation
   void SetPrimarySelection(const std::string& text) final;

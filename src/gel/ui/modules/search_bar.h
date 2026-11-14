@@ -93,6 +93,9 @@ class SearchBar {
   bool empty() const { return input_[0] == '\0'; }
   void Clear() { input_[0] = '\0'; }
 
+  // Replaces the text in the input field, truncated to fit.
+  void SetTerm(const std::string& term);
+
  private:
   static constexpr int kInputSize = 256;
   char input_[kInputSize] = {};
@@ -100,6 +103,7 @@ class SearchBar {
   std::string prev_term_;
   std::string counter_;
   bool focus_ = false;
+  bool reload_ = false;  // See SetTerm().
   char reject_char_ = 0;
   int reject_frames_ = 0;
 };

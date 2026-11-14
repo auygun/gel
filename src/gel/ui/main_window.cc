@@ -836,6 +836,26 @@ void MainWindow::OnSearchRequested(int direction) {
   commit_search_.Search(commit_history_.GetSelectedCommitIndex(), direction);
 }
 
+void MainWindow::OnSearchTouchingPaths(const std::vector<std::string>& paths) {
+  // The file list's paths are relative to the top level, but pathspecs are
+  // resolved from the current directory: ":/" anchors them at the top level.
+  // The term is split on spaces, so a space in a path is matched by "?",
+  // which matches any one character.
+  std::string term;
+  for (const auto& path : paths) {
+    if (!term.empty())
+      term += ' ';
+    term += ":/";
+    for (char c : path)
+      term += c == ' ' ? '?' : c;
+  }
+  if (term.empty())
+    return;
+  toolbar_.SetSearch(term, CommitSearchMode::kTouchingPaths);
+  // Jump to the next commit touching them, as Enter in the search field does.
+  OnSearchRequested(1);
+}
+
 // -- DirectoryBrowser::Delegate -----------------------------------------------
 
 void MainWindow::OnDirectorySelected(const std::filesystem::path& path) {

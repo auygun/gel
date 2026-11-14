@@ -181,6 +181,7 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnDiffRefreshRequested() final;
   bool HasDiffPathFilter() const final;
   void OnNavigateToCommit(const std::string& commit) final;
+  void OnSearchTouchingPaths(const std::vector<std::string>& paths) final;
 
   // Toolbar::Delegate implementation
   void SelectCommitByHash(std::string_view query) final;

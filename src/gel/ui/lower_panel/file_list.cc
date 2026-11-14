@@ -531,6 +531,13 @@ void FileList::RenderFileContextMenu(std::span<const FileEntry> files,
       visual_diff(only_parent);
     }
   }
+  if (ImGui::MenuItem(multi_selected ? "Search commits touching paths"
+                                     : "Search commits touching path")) {
+    if (multi_selected)
+      delegate_.OnSearchTouchingPaths(GetSelectedPaths());
+    else
+      delegate_.OnSearchTouchingPaths({entry.path});
+  }
   if (ImGui::MenuItem("Copy path")) {
     if (multi_selected) {
       auto paths = GetSelectedPaths();

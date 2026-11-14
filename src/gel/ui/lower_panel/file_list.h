@@ -37,6 +37,10 @@ class FileList {
                                  const std::string& new_ref,
                                  const std::string& path,
                                  bool new_from_worktree = false) = 0;
+    // Searches the commit history for commits touching |paths|, relative to
+    // the repository's top level.
+    virtual void OnSearchTouchingPaths(
+        const std::vector<std::string>& paths) = 0;
   };
 
   using ConfirmCallback = std::function<void(const std::string& title,

@@ -64,6 +64,10 @@ class Toolbar {
   // every start begins with kContaining.
   CommitSearchMode search_mode() const { return search_mode_; }
 
+  // Puts |term| in the search field and switches to |mode|, as if the user
+  // had typed it.
+  void SetSearch(const std::string& term, CommitSearchMode mode);
+
   // Write a commit hash into the search input field.
   void SetCommitInput(const std::string& commit);
 
