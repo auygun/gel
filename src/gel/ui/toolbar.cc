@@ -397,10 +397,24 @@ void Toolbar::Update(float search_progress) {
         if (show_badge && git_busy) {
           ImGui::InvisibleButton("##git_busy", ImVec2(frame_h, frame_h));
           DrawBusySpinner(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+          // Identical commands (e.g. the commit search running git diff-tree
+          // in several processes) are listed once, with a count.
+          std::vector<std::pair<std::string, int>> counted;
+          for (auto& command : BusyTracker::Get().Commands()) {
+            auto it = std::find_if(
+                counted.begin(), counted.end(),
+                [&](const auto& entry) { return entry.first == command; });
+            if (it != counted.end())
+              ++it->second;
+            else
+              counted.emplace_back(std::move(command), 1);
+          }
           std::string commands = "Running in the background:";
-          for (const auto& command : BusyTracker::Get().Commands()) {
+          for (const auto& [command, count] : counted) {
             commands += '\n';
             commands += command;
+            if (count > 1)
+              commands += " (x" + std::to_string(count) + ")";
           }
           ItemTooltip(commands.c_str(), any_toolbar_hovered,
                       tooltip_suppressed_);

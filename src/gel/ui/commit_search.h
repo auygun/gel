@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -109,7 +110,12 @@ class CommitSearch {
   CommitSearchMode mode() const { return mode_; }
 
  private:
-  enum class State : uint8_t { kUnknown, kMatch, kNoMatch };
+  // kChecking: handed to a running chunk, result not known yet. Kept apart
+  // from kUnknown so that a commit is never handed to two chunks.
+  enum class State : uint8_t { kUnknown, kChecking, kMatch, kNoMatch };
+  static bool IsKnown(State state) {
+    return state == State::kMatch || state == State::kNoMatch;
+  }
 
   GitLog& git_log_;
   RefDecorations& ref_decorations_;
@@ -148,14 +154,24 @@ class CommitSearch {
   int scan_direction_ = 1;
   int scan_walked_ = 0;
 
-  // Change-based modes: the chunk GitChangeSearch is checking, as commit
-  // indices, and how many of them are done.
-  GitChangeSearch change_search_;
-  int run_id_ = 0;
-  std::vector<int> chunk_;
-  int chunk_done_ = 0;
-  bool chunk_running_ = false;
-  size_t events_seen_ = 0;
+  // Change-based modes: git diff-tree runs in several processes at once, each
+  // checking a chunk of commits. Chunks are handed out in scan order, so the
+  // nearer commits are always the ones being checked; stepping to a match only
+  // walks past commits whose result is known, so a chunk further along
+  // finishing first never makes it skip a match.
+  struct ChunkSlot {
+    explicit ChunkSlot(std::function<void(bool)> busy_callback)
+        : search(std::move(busy_callback)) {}
+    GitChangeSearch search;
+    int run_id = 0;
+    // The chunk's commit indices, and how many of them are done.
+    std::vector<int> chunk;
+    int done = 0;
+    bool running = false;
+    size_t events_seen = 0;
+  };
+  std::vector<std::unique_ptr<ChunkSlot>> slots_;
+  int next_run_id_ = 0;
 
   int visible_first_ = -1;
   int visible_last_ = -1;
@@ -183,8 +199,13 @@ class CommitSearch {
   // the time budget for kContaining, by starting the next chunk otherwise.
   void CheckMore();
   void CheckMoreContaining();
-  void StartNextChunk();
+  // Hands the next chunk to every idle slot.
+  void FillSlots();
+  // Returns false if there was nothing to hand out.
+  bool StartChunk(ChunkSlot& slot);
   void ProcessEvents();
+  void ProcessSlotEvents(ChunkSlot& slot);
+  bool any_chunk_running() const;
 
   // Makes sure the commit at |index| is checked soon, moving the scan there if
   // it is not about to reach it.
@@ -192,7 +213,8 @@ class CommitSearch {
   // Moves the scan to the visible rows once they settle.
   void PrioritizeVisible();
   void RestartScan(int index, int direction);
-  void StopChunk();
+  void StopChunk(ChunkSlot& slot);
+  void StopAllChunks();
 
   void UpdateNavigation();
   void FinishNavigation(int result);
