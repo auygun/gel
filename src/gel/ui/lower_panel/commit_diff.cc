@@ -129,8 +129,8 @@ void CommitDiff::RenderOverlayControls() {
   bool show_refresh = IsUnstagedSelected() || IsStagedSelected();
   bool show_merge_mode = IsMergeShown();
   bool tree = settings_.file_list_tree;
-  float total_width = (tree ? 2 * (frame_h + spacing) : 0.0f) + frame_h +
-                      spacing + (show_refresh ? frame_h + spacing : 0.0f) +
+  float total_width = (tree ? ctx_btn_w : 0.0f) + frame_h + spacing +
+                      (show_refresh ? frame_h + spacing : 0.0f) +
                       (show_merge_mode ? frame_h + spacing : 0.0f) + frame_h +
                       spacing + ctx_input_w + ctx_btn_w;
   ImVec2 pad = ImGui::GetStyle().WindowPadding;
@@ -156,21 +156,46 @@ void CommitDiff::RenderOverlayControls() {
     overlay_tooltip_suppressed_ = true;
   bool any_hovered = false;
 
+  float half_h = frame_h / 2;
+  ImU32 text_col = ImGui::GetColorU32(ImGuiCol_Text);
+  ImU32 dis_col = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+
   // Left of the file view toggle, so that showing them doesn't move the
-  // toggle in the right-aligned overlay.
+  // toggle in the right-aligned overlay. Stacked half-height buttons attached
+  // to the toggle like the lines of context ones to their input, marked with
+  // the arrows of the tree's open and closed directories.
   bool expand_all_requested = false;
   bool collapse_all_requested = false;
   if (tree) {
+    auto draw_arrow = [&](bool down) {
+      ImVec2 mn = ImGui::GetItemRectMin();
+      ImVec2 mx = ImGui::GetItemRectMax();
+      ImVec2 c((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
+      float r = std::floor(half_h * 0.3f);
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      if (down) {
+        dl->AddTriangleFilled(ImVec2(c.x - r, c.y - r * 0.5f),
+                              ImVec2(c.x + r, c.y - r * 0.5f),
+                              ImVec2(c.x, c.y + r * 0.5f), text_col);
+      } else {
+        dl->AddTriangleFilled(ImVec2(c.x - r * 0.5f, c.y - r),
+                              ImVec2(c.x + r * 0.5f, c.y),
+                              ImVec2(c.x - r * 0.5f, c.y + r), text_col);
+      }
+    };
+    ImGui::BeginGroup();
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     expand_all_requested =
-        ImGui::Button("##expand_all", ImVec2(frame_h, frame_h));
-    DrawExpandAllIcon();
+        ImGui::Button("##expand_all", ImVec2(ctx_btn_w, half_h));
+    draw_arrow(true);
     ItemTooltip("Expand all", any_hovered, overlay_tooltip_suppressed_);
-    ImGui::SameLine();
     collapse_all_requested =
-        ImGui::Button("##collapse_all", ImVec2(frame_h, frame_h));
-    DrawCollapseAllIcon();
+        ImGui::Button("##collapse_all", ImVec2(ctx_btn_w, half_h));
+    draw_arrow(false);
     ItemTooltip("Collapse all", any_hovered, overlay_tooltip_suppressed_);
-    ImGui::SameLine();
+    ImGui::PopStyleVar();
+    ImGui::EndGroup();
+    ImGui::SameLine(0, 0);
   }
 
   bool file_view_toggled =
@@ -224,9 +249,6 @@ void CommitDiff::RenderOverlayControls() {
           ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_AutoSelectAll))
     ctx = atoi(ctx_buf);
   ImGui::SameLine(0, 0);
-  float half_h = frame_h / 2;
-  ImU32 text_col = ImGui::GetColorU32(ImGuiCol_Text);
-  ImU32 dis_col = ImGui::GetColorU32(ImGuiCol_TextDisabled);
   ImGui::BeginGroup();
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
   ImGui::BeginDisabled(ctx >= kMaxContextLines);

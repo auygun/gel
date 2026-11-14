@@ -452,12 +452,8 @@ void DrawSortBySizeIcon() {
   }
 }
 
-namespace {
-
-// Shared body for the collapse-all and expand-all icons: a horizontal line
-// with a chevron above and below it, pointing away from the line to expand
-// (unfold) or at it to collapse (fold).
-void DrawFoldIcon(bool expand) {
+// A horizontal line with a chevron above and below it, pointing at the line.
+void DrawCollapseAllIcon() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();
   ImVec2 btn_max = ImGui::GetItemRectMax();
@@ -473,27 +469,15 @@ void DrawFoldIcon(bool expand) {
 
   float half_w = size * 0.24f;
   float height = size * 0.12f;
-  // Keeps the chevron tips clear of the line when they point at it.
+  // Keeps the chevron tips clear of the line.
   float gap = size * 0.14f;
   for (float dir : {-1.0f, 1.0f}) {
-    float near_y = cy + dir * gap;
-    float far_y = cy + dir * (gap + height);
-    float tip_y = expand ? far_y : near_y;
-    float base_y = expand ? near_y : far_y;
+    float tip_y = cy + dir * gap;
+    float base_y = cy + dir * (gap + height);
     ImVec2 points[] = {ImVec2(cx - half_w, base_y), ImVec2(cx, tip_y),
                        ImVec2(cx + half_w, base_y)};
     dl->AddPolyline(points, 3, color, ImDrawFlags_None, thickness);
   }
-}
-
-}  // namespace
-
-void DrawCollapseAllIcon() {
-  DrawFoldIcon(false);
-}
-
-void DrawExpandAllIcon() {
-  DrawFoldIcon(true);
 }
 
 void DrawFileTreeIcon() {

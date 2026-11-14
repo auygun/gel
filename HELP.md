@@ -508,7 +508,7 @@ diff-specific controls:
 - **File view** -- Toggles the [file list](#file-list) between a flat list
   (button off) and a directory tree (button on).
 - **Expand all / Collapse all** -- Shown in tree view. Expand or collapse all
-  directories of the file tree.
+  directories.
 - **Refresh** -- Refresh the diff only (without reloading the commit history).
 - **Merge diff mode** -- Shown for merge commits only. Toggles how the merge
   is diffed:
