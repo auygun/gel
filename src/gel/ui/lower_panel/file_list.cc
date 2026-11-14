@@ -198,11 +198,11 @@ void FileList::PrepareRevert() {
       "Revert selected files? Uncommitted changes will be lost.",
       [this, rp = std::move(revert_paths), cp = std::move(clean_paths)]() {
         if (!cp.empty()) {
-          runner_.Run(BuildGitArgs("clean", "-f", cp), true);
+          runner_.Run(BuildGitArgs("clean", "-f", cp), RefreshScope::kLocal);
           if (!rp.empty())
             runner_.RunNext(BuildGitArgs("checkout", rp));
         } else if (!rp.empty()) {
-          runner_.Run(BuildGitArgs("checkout", rp), true);
+          runner_.Run(BuildGitArgs("checkout", rp), RefreshScope::kLocal);
         }
       });
 }
@@ -557,7 +557,7 @@ void FileList::RenderFileContextMenu(std::span<const FileEntry> files,
     bool busy = runner_.IsCommandBusy();
     ImGui::Separator();
     if (ImGui::MenuItem("Stage to Commit", "Ctrl+T", false, !busy))
-      runner_.Run(BuildGitArgs("add", selected_paths), true);
+      runner_.Run(BuildGitArgs("add", selected_paths), RefreshScope::kLocal);
     bool plural = selected_paths.size() > 1;
     if (ImGui::MenuItem(plural ? "Revert Changes" : "Revert Change", "Ctrl+J",
                         false, !busy))
@@ -568,7 +568,8 @@ void FileList::RenderFileContextMenu(std::span<const FileEntry> files,
     bool busy = runner_.IsCommandBusy();
     ImGui::Separator();
     if (ImGui::MenuItem("Unstage from Commit", "Ctrl+U", false, !busy))
-      runner_.Run(BuildRestoreArgs("--staged", selected_paths), true);
+      runner_.Run(BuildRestoreArgs("--staged", selected_paths),
+                  RefreshScope::kLocal);
   }
 }
 
@@ -794,7 +795,7 @@ void FileList::Update(float width) {
       if (ImGui::IsKeyPressed(ImGuiKey_T, false)) {
         auto paths = GetSelectedPaths();
         if (!paths.empty())
-          runner_.Run(BuildGitArgs("add", paths), true);
+          runner_.Run(BuildGitArgs("add", paths), RefreshScope::kLocal);
       }
       if (ImGui::IsKeyPressed(ImGuiKey_J, false))
         PrepareRevert();
@@ -803,7 +804,7 @@ void FileList::Update(float width) {
         ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_U, false)) {
       auto paths = GetSelectedPaths(true);
       if (!paths.empty())
-        runner_.Run(BuildRestoreArgs("--staged", paths), true);
+        runner_.Run(BuildRestoreArgs("--staged", paths), RefreshScope::kLocal);
     }
   }
   ImGui::EndChild();

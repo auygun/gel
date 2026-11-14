@@ -424,7 +424,7 @@ void CommitHistory::MoveRef(bool is_tag,
                             const std::string& name,
                             const std::string& commit) {
   if (is_tag) {
-    runner_.Run({"tag", "-f", name, commit});
+    runner_.Run({"tag", "-f", name, commit}, RefreshScope::kRefs);
   } else if (name == ref_decorations_.head_branch()) {
     // "git branch -f" refuses to move the checked-out branch. Reset it
     // instead, keeping local changes; git aborts if they would be lost.
@@ -437,7 +437,7 @@ void CommitHistory::MoveRef(bool is_tag,
         "Move checked-out branch?", std::move(msg),
         [this, commit] { runner_.Run({"reset", "--keep", commit}); });
   } else {
-    runner_.Run({"branch", "-f", name, commit});
+    runner_.Run({"branch", "-f", name, commit}, RefreshScope::kRefs);
   }
 }
 
@@ -782,7 +782,7 @@ void CommitHistory::Update(const std::string& search_term) {
                 bool busy = runner_.IsCommandBusy();
                 if (ImGui::MenuItem("Stage All Files to Commit", nullptr, false,
                                     !busy))
-                  runner_.Run({"add", "-A"}, true);
+                  runner_.Run({"add", "-A"}, RefreshScope::kLocal);
                 if (ImGui::MenuItem("Revert All Files", nullptr, false, !busy))
                   delegate_.OnRevertAllRequested();
                 ImGui::EndPopup();
@@ -812,7 +812,7 @@ void CommitHistory::Update(const std::string& search_term) {
                 bool busy = runner_.IsCommandBusy();
                 if (ImGui::MenuItem("Unstage All Files from Commit", nullptr,
                                     false, !busy))
-                  runner_.Run({"reset", "HEAD"}, true);
+                  runner_.Run({"reset", "HEAD"}, RefreshScope::kLocal);
                 if (ImGui::MenuItem("Commit", nullptr, false, !busy)) {
                   commit_modal_.Open(false);
                 }

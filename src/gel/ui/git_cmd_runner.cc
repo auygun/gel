@@ -54,11 +54,11 @@ GitTask GitCmdRunner::ClassifyCommand(const std::string& cmd_name) {
   return GitTask::kNone;
 }
 
-bool GitCmdRunner::Run(std::vector<std::string> args, bool local_only) {
+bool GitCmdRunner::Run(std::vector<std::string> args, RefreshScope scope) {
   if (cmd_.running())
     return false;
 
-  local_only_ = local_only;
+  refresh_scope_ = scope;
   std::string cmd_name = args.empty() ? "" : args[0];
   GitTask task = ClassifyCommand(cmd_name);
 
@@ -173,7 +173,7 @@ void GitCmdRunner::Update() {
         cmd_result_callback_(
             result.success || resolved_externally,
             (cmd_.is_abort() || cmd_.is_quit()) && !resolved_externally,
-            local_only_);
+            refresh_scope_);
       }
     }
   }
@@ -225,7 +225,7 @@ void GitCmdRunner::RunFollowUp(const char* flag) {
         task_output_ += '\n';
       task_output_ += kInfoLinePrefix + std::string(GetTaskName(prev_task)) +
                       " already completed (resolved externally).";
-      cmd_result_callback_(true, false, false);
+      cmd_result_callback_(true, false, RefreshScope::kFull);
     }
     return;
   }

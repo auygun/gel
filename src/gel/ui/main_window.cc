@@ -29,15 +29,22 @@ MainWindow::MainWindow(Platform& platform,
       runner_(
           git_repo_,
           [this](bool b) { on_busy_changed_(b); },
-          [this](bool success, bool is_cancel, bool local_only) {
+          [this](bool success, bool is_cancel, RefreshScope scope) {
             if (!success || is_cancel) {
               toolbar_.UpdateHeadStatus();
               if (!browsing_specific_ref_)
                 git_status_.Run();
-            } else if (local_only) {
+            } else if (scope == RefreshScope::kLocal) {
               if (!browsing_specific_ref_)
                 git_status_.Run();
               RerunDiff();
+            } else if (scope == RefreshScope::kRefs &&
+                       !browsing_specific_ref_) {
+              // The history of HEAD and the working tree are unchanged;
+              // only the labels need reloading. When browsing specific refs
+              // (e.g. "gel --all" or "gel <branch>") the moved ref may
+              // change which commits are listed, so refresh fully instead.
+              ref_decorations_.Run();
             } else {
               Refresh();
             }

@@ -27,6 +27,17 @@ constexpr char kInfoLinePrefix = '\x01';
 // console replaces a progress line with the next output line.
 constexpr char kProgressLinePrefix = '\x02';
 
+// What a command changes, and so what needs refreshing after it succeeds.
+enum class RefreshScope {
+  // Anything, e.g. HEAD or history: reload everything.
+  kFull,
+  // Only the working tree or index (add, restore, clean).
+  kLocal,
+  // Only refs that HEAD doesn't point to, e.g. moving a tag or a branch
+  // that isn't checked out.
+  kRefs,
+};
+
 // Returns a human-readable name for the given task.
 inline const char* GetTaskName(GitTask task) {
   switch (task) {
@@ -52,7 +63,7 @@ class GitCmdRunner {
  public:
   // Called when the serialized command slot completes.
   using CmdResultCallback =
-      std::function<void(bool success, bool is_cancel, bool local_only)>;
+      std::function<void(bool success, bool is_cancel, RefreshScope scope)>;
   // Called when a git command finishes with an error. Return true if the
   // error was handled by the caller (e.g. a follow-up dialog was shown) and
   // the console window should not be opened.
@@ -66,10 +77,10 @@ class GitCmdRunner {
                ErrorCallback error_callback);
 
   // Runs "git <args...>" in the serialized slot. Returns false if the
-  // command slot is occupied. Set |local_only| for commands that only affect
-  // the working tree or index (add, restore, clean) so the result callback
-  // can skip a full refresh.
-  bool Run(std::vector<std::string> args, bool local_only = false);
+  // command slot is occupied. |scope| is passed to the result callback so it
+  // can skip a full refresh for commands with limited effect.
+  bool Run(std::vector<std::string> args,
+           RefreshScope scope = RefreshScope::kFull);
 
   // Queues a command to run after the current one finishes successfully.
   // Ignored if no command is running. The result callback fires only after
@@ -125,7 +136,7 @@ class GitCmdRunner {
   TaskState task_state_ = TaskState::kIdle;
   std::string task_output_;
   bool show_console_ = false;
-  bool local_only_ = false;
+  RefreshScope refresh_scope_ = RefreshScope::kFull;
   std::vector<std::string> next_args_;
   // Number of output lines of the running command appended to task_output_.
   size_t output_lines_appended_ = 0;
