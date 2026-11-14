@@ -466,16 +466,31 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0, 0));
     int total_columns = 1 + static_cast<int>(settings_.table_columns.size());
     ImGui::Indent(left_padding);
+    // Row height must be >= text height, so the table doesn't expand rows
+    // beyond the clipper's item height, and a whole number of pixels, so that
+    // every row lands on the same pixel offset.
+    float row_height = std::ceil(ImGui::GetTextLineHeight() + 2.0f);
+    // Give the table's scrolling window an exact content height. Measured by
+    // ImGui, it comes from float screen positions that lose precision past
+    // 2^24 pixels and depend on the scroll offset, so in huge logs it changes
+    // by a few pixels as the scroll does. That moves the scroll limit, which
+    // moves the scroll, every frame, so the list never comes to rest at the
+    // bottom. Round up so the last row stays reachable.
+    {
+      bool extra_row = !info_message_.empty() ||
+                       (git_log_.GetCommits().empty() && git_log_.busy());
+      double height = static_cast<double>(commit_count_ + (extra_row ? 1 : 0)) *
+                      static_cast<double>(row_height);
+      float content_height = static_cast<float>(height);
+      if (static_cast<double>(content_height) < height)
+        content_height = std::nextafter(content_height, FLT_MAX);
+      ImGui::SetNextWindowContentSize(ImVec2(0.0f, content_height));
+    }
     if (ImGui::BeginTable("table_scrolly", total_columns,
                           ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
                               ImGuiTableFlags_NoSavedSettings |
                               ImGuiTableFlags_BordersInnerV |
                               ImGuiTableFlags_PadOuterX)) {
-      // Row height must be >= text height, so the table doesn't expand rows
-      // beyond the clipper's item height, and a whole number of pixels, so
-      // that every row lands on the same pixel offset.
-      float row_height = std::ceil(ImGui::GetTextLineHeight() + 2.0f);
-
       float lane_spacing = row_height * 0.75f;
       for (int c = 0; c < total_columns; c++) {
         float w = c < static_cast<int>(settings_.table_column_widths.size())
