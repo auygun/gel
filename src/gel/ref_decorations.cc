@@ -107,7 +107,9 @@ const std::string& RefDecorations::Locate(const std::string& object) const {
 }
 
 void RefDecorations::AddLabel(const std::string& object, const RefKey& key) {
-  Decoration& decoration = decorations_[Locate(object)];
+  const std::string& located = Locate(object);
+  changed_objects_.push_back(located);
+  Decoration& decoration = decorations_[located];
   switch (key.kind) {
     case Ref::Kind::kTag: {
       auto& tags = decoration.tags;
@@ -136,6 +138,7 @@ void RefDecorations::RemoveLabel(const std::string& object, const RefKey& key) {
   auto it = decorations_.find(Locate(object));
   if (it == decorations_.end())
     return;
+  changed_objects_.push_back(it->first);
   Decoration& decoration = it->second;
   switch (key.kind) {
     case Ref::Kind::kTag:
@@ -167,6 +170,7 @@ void RefDecorations::ApplyPeeled(const std::string& object,
   auto node = decorations_.extract(object);
   if (node.empty())
     return;
+  changed_objects_.push_back(peeled);
   Decoration& src = node.mapped();
   Decoration& dst = decorations_[peeled];
   dst.tags.insert(dst.tags.end(), std::make_move_iterator(src.tags.begin()),

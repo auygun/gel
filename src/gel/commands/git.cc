@@ -28,7 +28,9 @@ void Git::TerminateWorkerThread() {
   }
 }
 
-bool Git::RunWithArgs(std::vector<std::string> args, std::string stdin_data) {
+bool Git::RunWithArgs(std::vector<std::string> args,
+                      std::string stdin_data,
+                      int run_id) {
   // Start a new git process and hand it to the worker thread.
   args.insert(args.begin(), "git");
   Exec proc;
@@ -38,6 +40,7 @@ bool Git::RunWithArgs(std::vector<std::string> args, std::string stdin_data) {
     std::scoped_lock scoped_lock(lock_);
     new_procs_.push_front(std::move(proc));
     pending_stdin_ = std::move(stdin_data);
+    pending_run_id_ = run_id;
     detach_requested_ = false;
   }
   semaphore_.release();
@@ -80,11 +83,13 @@ void Git::WorkerMain() {
       // Pick up new processes queued by the main thread.
       std::list<Exec> procs;
       std::string stdin_data;
+      int run_id = 0;
       bool detach = false;
       {
         std::scoped_lock scoped_lock(lock_);
         procs.swap(new_procs_);
         stdin_data = std::move(pending_stdin_);
+        run_id = pending_run_id_;
         detach = detach_requested_;
         detach_requested_ = false;
       }
@@ -126,6 +131,7 @@ void Git::WorkerMain() {
           OnKilled();
         if (curent_proc_.GetStatus() == Exec::Status::RUNNING) {
           current_stdin_ = std::move(stdin_data);
+          run_id_ = run_id;
           stdin_offset_ = 0;
           stdin_open_ = !current_stdin_.empty();
           out_splitter_.carryover.clear();

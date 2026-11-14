@@ -135,8 +135,11 @@ The toolbar spans the top of the window and contains the following controls
 - **Row counter** -- Shows selected row and total count (e.g. 42/1500)
 - **Refresh** -- Reloads the commit history and diff (F5)
 - **Clear filter** -- Clears all active path filters in a single press (Ctrl+L)
+- **Search mode** -- Icon button showing what the search field matches:
+  commit fields, touched paths, or changed content. Click it for a menu of
+  the modes (see [Commit Search](#commit-search))
 - **Search field** -- Search commits by author, committer, message, tag,
-  or branch name
+  or branch name, or by what they changed
 - **Case toggle** -- Toggle case-sensitive / case-insensitive commit search
 - **Whole word toggle** -- Match complete words only; letters, digits and `_`
   count as part of a word
@@ -188,6 +191,35 @@ are displayed in bold in the commit history.
 - Enter and Shift+Enter work while the search input is focused; the input
   retains focus with text selected after navigation.
 - A progress bar appears in the search field while scanning large histories.
+
+The search mode button in front of the search field picks what the term is
+matched against. Its icon shows the current mode; click it to choose another.
+Gel always starts in Containing mode.
+
+- **Containing** (lines of text) -- Author, committer, message, tag and branch
+  names, as described above.
+- **Touching paths** (folder) -- Commits that change any of the given paths. Separate
+  several paths with spaces; globs such as `*.cc` work, and paths are relative
+  to the directory Gel was started in.
+- **Adding/removing string** (±) -- Commits that change the number of occurrences
+  of the string (`git log -S`): typically the commit that introduced it and
+  the one that removed it. Editing a line that contains the string, or moving
+  it, does not count.
+- **Changing lines matching** (`.*`) -- Commits that add or remove a line matching
+  the regex (`git log -G`). Unlike the previous mode this includes commits
+  that only edit or move such lines.
+
+Every mode finds all matching commits, starting with the rows on screen, and
+highlights them as they are found; the rest of the history is searched once
+you stop typing for a moment. Matches are remembered, so jumping to the next
+or previous one is instant once the search has passed it, and the progress bar
+shows how much of the history has been searched.
+
+Containing searches commit fields directly, so the rows on screen are
+highlighted as you type. The last three modes ask git about each commit's
+changes in the background. They respect the case toggle; whole word is not
+available. Merge commits are not searched, as in `git log`. An invalid regex
+is reported when navigating to a match.
 
 ### Status Indicators
 

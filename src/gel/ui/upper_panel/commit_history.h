@@ -47,8 +47,17 @@ class CommitHistory {
                 PersistentSettings& settings,
                 std::function<void(const std::string&)> open_in_new_window);
 
+  // Whether the commit at index |ci| matches the toolbar search, to draw it
+  // highlighted.
+  using SearchMatcher = std::function<bool(int ci)>;
+
   // Renders the commit history table.
-  void Update(const std::string& search_term);
+  void Update(const SearchMatcher& is_search_match);
+
+  // The range of commit indices visible in the table as of the last Update(),
+  // [first, last], or -1 for both when there are no commits.
+  int visible_first() const { return visible_first_; }
+  int visible_last() const { return visible_last_; }
 
   // Resets the scroll position to the top on the next frame.
   void ResetScrollPos();
@@ -109,6 +118,8 @@ class CommitHistory {
   std::string selected_commit_;
   std::string scroll_to_commit_;
   size_t scroll_search_offset_ = 0;
+  int visible_first_ = -1;
+  int visible_last_ = -1;
   int scroll_to_row_ = -1;
   int commit_count_ = 0;
 

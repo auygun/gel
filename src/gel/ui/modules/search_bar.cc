@@ -148,12 +148,16 @@ SearchBar::Result SearchBar::Update(const Options& opts,
 
   if (opts.whole_word_toggle && match) {
     ImGui::SameLine(0, 0);
-    bool ww = match->whole_word;
+    bool disabled = opts.whole_word_disabled;
+    bool ww = match->whole_word && !disabled;
+    ImGui::BeginDisabled(disabled);
     if (ToggleButton(widget_id("word"), ww, ImVec2(frame_h, frame_h)))
       match->whole_word = !ww;
     DrawWholeWordIcon();
-    tooltip(ww ? "Whole word (click to toggle)"
-               : "Partial word (click to toggle)");
+    tooltip(disabled ? "Whole word is not available in this search mode"
+            : ww     ? "Whole word (click to toggle)"
+                     : "Partial word (click to toggle)");
+    ImGui::EndDisabled();
   }
 
   bool nav_enabled = opts.nav_enable == NavEnable::kHasTerm

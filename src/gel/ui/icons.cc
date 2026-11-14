@@ -197,6 +197,98 @@ void DrawWholeWordIcon() {
                     size * 0.05f);
 }
 
+void DrawSearchModeIcon(CommitSearchMode mode,
+                        ImVec2 min,
+                        ImVec2 max,
+                        bool enabled) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  float size = std::min(max.x - min.x, max.y - min.y);
+  float thickness = std::max(1.5f, size * 0.08f);
+  ImU32 color =
+      ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+  float cx = (min.x + max.x) * 0.5f;
+  float cy = (min.y + max.y) * 0.5f;
+
+  switch (mode) {
+    case CommitSearchMode::kContaining: {
+      // Containing: lines of text, the last one shorter, like a paragraph.
+      float left = cx - size * 0.28f;
+      float right = cx + size * 0.28f;
+      float step = size * 0.17f;
+      dl->AddLine(ImVec2(left, cy - step * 1.5f),
+                  ImVec2(right, cy - step * 1.5f), color, thickness);
+      dl->AddLine(ImVec2(left, cy - step * 0.5f),
+                  ImVec2(right, cy - step * 0.5f), color, thickness);
+      dl->AddLine(ImVec2(left, cy + step * 0.5f),
+                  ImVec2(right, cy + step * 0.5f), color, thickness);
+      dl->AddLine(ImVec2(left, cy + step * 1.5f),
+                  ImVec2(cx + size * 0.02f, cy + step * 1.5f), color,
+                  thickness);
+      break;
+    }
+    case CommitSearchMode::kTouchingPaths: {
+      // Touching paths: a folder, matching DrawFolderIcon() at a size that
+      // leaves room for the menu caret.
+      float half_w = size * 0.32f;
+      float half_h = size * 0.24f;
+      float tab_w = size * 0.18f;
+      float tab_h = size * 0.08f;
+      float x0 = cx - half_w, y0 = cy - half_h + tab_h;
+      float x1 = cx + half_w, y1 = cy + half_h;
+      dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), color, 0, 0, thickness);
+      dl->AddLine(ImVec2(x0, y0), ImVec2(x0, y0 - tab_h), color, thickness);
+      dl->AddLine(ImVec2(x0, y0 - tab_h), ImVec2(x0 + tab_w, y0 - tab_h), color,
+                  thickness);
+      dl->AddLine(ImVec2(x0 + tab_w, y0 - tab_h), ImVec2(x0 + tab_w, y0), color,
+                  thickness);
+      break;
+    }
+    case CommitSearchMode::kAddingRemoving: {
+      // Adding/removing string: a plus over a minus.
+      float half = size * 0.17f;
+      float plus_y = cy - size * 0.13f;
+      float minus_y = cy + size * 0.26f;
+      dl->AddLine(ImVec2(cx - half, plus_y), ImVec2(cx + half, plus_y), color,
+                  thickness);
+      dl->AddLine(ImVec2(cx, plus_y - half), ImVec2(cx, plus_y + half), color,
+                  thickness);
+      dl->AddLine(ImVec2(cx - half, minus_y), ImVec2(cx + half, minus_y), color,
+                  thickness);
+      break;
+    }
+    case CommitSearchMode::kChangingLines: {
+      // Changing lines matching: ".*", the regex every user knows.
+      float dot_r = std::max(1.2f, size * 0.06f);
+      float base_y = cy + size * 0.22f;
+      dl->AddCircleFilled(ImVec2(cx - size * 0.2f, base_y), dot_r, color);
+      // Asterisk: three strokes through one center.
+      ImVec2 star(cx + size * 0.1f, cy - size * 0.06f);
+      float r = size * 0.19f;
+      for (int i = 0; i < 3; ++i) {
+        float a = kPi * 0.5f + i * kPi / 3.0f;
+        ImVec2 d(r * cosf(a), r * sinf(a));
+        dl->AddLine(ImVec2(star.x - d.x, star.y - d.y),
+                    ImVec2(star.x + d.x, star.y + d.y), color, thickness);
+      }
+      break;
+    }
+    case CommitSearchMode::kCount:
+      break;
+  }
+}
+
+void DrawMenuCaret() {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 btn_min = ImGui::GetItemRectMin();
+  ImVec2 btn_max = ImGui::GetItemRectMax();
+  float size = std::min(btn_max.x - btn_min.x, btn_max.y - btn_min.y);
+  float half = std::max(2.0f, size * 0.09f);
+  ImVec2 tip(btn_max.x - size * 0.12f - half, btn_max.y - size * 0.1f);
+  dl->AddTriangleFilled(ImVec2(tip.x - half, tip.y - half),
+                        ImVec2(tip.x + half, tip.y - half), tip,
+                        ImGui::GetColorU32(ImGuiCol_Text));
+}
+
 void DrawClearFilterIcon() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();

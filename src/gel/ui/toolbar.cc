@@ -189,12 +189,81 @@ void Toolbar::Update(float search_progress) {
   ImGui::SameLine();
   ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
   ImGui::SameLine();
+
+  // What the commit search matches, as in gitk's find bar: an icon button
+  // showing the current mode, opening a menu of the modes.
+  {
+    ImVec2 button_size(frame_h, frame_h);
+    if (ImGui::Button("##search_mode", button_size))
+      ImGui::OpenPopup("##search_mode_menu");
+    ImVec2 icon_min = ImGui::GetItemRectMin();
+    ImVec2 icon_max = ImGui::GetItemRectMax();
+    DrawSearchModeIcon(search_mode_, icon_min, icon_max);
+    DrawMenuCaret();
+    char tooltip[256];
+    snprintf(tooltip, sizeof(tooltip), "Search mode: %s\n%s",
+             GetCommitSearchModeName(search_mode_),
+             GetCommitSearchModeDescription(search_mode_));
+    ItemTooltip(tooltip, any_toolbar_hovered, tooltip_suppressed_);
+
+    ImGui::SetNextWindowPos(ImVec2(icon_min.x, icon_max.y));
+    if (ImGui::BeginPopup("##search_mode_menu")) {
+      // Icons as large as on the toolbar button; smaller, the "+/-" and ".*"
+      // shapes are hard to tell apart.
+      float icon_w = frame_h;
+      float gap = ImGui::GetStyle().ItemInnerSpacing.x;
+      float text_y = (icon_w - ImGui::GetTextLineHeight()) * 0.5f;
+      float label_w = 0;
+      for (int i = 0; i < static_cast<int>(CommitSearchMode::kCount); ++i) {
+        label_w = std::max(
+            label_w, ImGui::CalcTextSize(GetCommitSearchModeName(
+                                             static_cast<CommitSearchMode>(i)))
+                         .x);
+      }
+      for (int i = 0; i < static_cast<int>(CommitSearchMode::kCount); ++i) {
+        auto mode = static_cast<CommitSearchMode>(i);
+        ImGui::PushID(i);
+        // The row is one selectable wide enough for the icon and the label,
+        // which are drawn over it, so the highlight covers both.
+        ImVec2 row = ImGui::GetCursorScreenPos();
+        if (ImGui::Selectable("##mode", mode == search_mode_, 0,
+                              ImVec2(icon_w + gap + label_w, icon_w))) {
+          search_mode_ = mode;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+          ImGui::SetTooltip("%s", GetCommitSearchModeDescription(mode));
+        DrawSearchModeIcon(mode, row, ImVec2(row.x + icon_w, row.y + icon_w));
+        ImGui::GetWindowDrawList()->AddText(
+            ImVec2(row.x + icon_w + gap, row.y + text_y),
+            ImGui::GetColorU32(ImGuiCol_Text), GetCommitSearchModeName(mode));
+        ImGui::PopID();
+      }
+      ImGui::EndPopup();
+    }
+  }
+  ImGui::SameLine(0, 0);
+
+  bool containing = search_mode_ == CommitSearchMode::kContaining;
   SearchBar::Options search_opts;
   search_opts.id = "search";
   search_opts.nav_enable = SearchBar::NavEnable::kHasTerm;
   search_opts.progress = search_progress;
   search_opts.arrow_shortcuts = !modal_open;
-  search_opts.input_tooltip = "Search in commits";
+  search_opts.whole_word_disabled = !containing;
+  switch (search_mode_) {
+    case CommitSearchMode::kTouchingPaths:
+      search_opts.input_tooltip = "Paths or globs, separated by spaces";
+      break;
+    case CommitSearchMode::kAddingRemoving:
+      search_opts.input_tooltip = "String whose occurrences a commit changes";
+      break;
+    case CommitSearchMode::kChangingLines:
+      search_opts.input_tooltip = "Regex matching an added or removed line";
+      break;
+    default:
+      search_opts.input_tooltip = "Search in commits";
+      break;
+  }
   search_opts.tooltip = [&](const char* text) {
     ItemTooltip(text, any_toolbar_hovered, tooltip_suppressed_);
   };
@@ -606,7 +675,7 @@ void Toolbar::Update(float search_progress) {
   if (toggle_panel_requested)
     delegate_.OnToggleLowerPanel();
   if (search.next || search.prev)
-    delegate_.OnSearchRequested(search_term_, search.next ? 1 : -1);
+    delegate_.OnSearchRequested(search.next ? 1 : -1);
   if (minimize_requested)
     delegate_.OnMinimizeRequested();
   if (maximize_toggle_requested)

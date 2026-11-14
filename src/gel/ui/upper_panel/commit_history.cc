@@ -12,7 +12,6 @@
 #include "gel/commands/git_log.h"
 #include "gel/persistent_settings.h"
 #include "gel/ref_decorations.h"
-#include "gel/ui/commit_search.h"
 #include "gel/ui/git_cmd_runner.h"
 #include "gel/ui/style.h"
 #include "gel/ui/utils.h"
@@ -445,7 +444,7 @@ void CommitHistory::ResetScrollPos() {
   reset_scroll_pos_ = true;
 }
 
-void CommitHistory::Update(const std::string& search_term) {
+void CommitHistory::Update(const SearchMatcher& is_search_match) {
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     tag_tooltip_suppressed_ = true;
   bool any_tag_hovered = false;
@@ -751,8 +750,20 @@ void CommitHistory::Update(const std::string& search_term) {
       }
 
       const std::string& head_branch = ref_decorations_.head_branch();
-      // Built once per frame: the rows below all match the same term.
-      base::SearchTerm search_needle(search_term, settings_.search_options);
+
+      // The commit indices on screen, for the commit search to check first.
+      {
+        int first_row = static_cast<int>(ImGui::GetScrollY() / row_height);
+        int rows_shown =
+            static_cast<int>(ImGui::GetWindowHeight() / row_height) + 1;
+        int commits_n = static_cast<int>(commit_history.size());
+        visible_first_ = std::clamp(first_row - synthetic_rows, 0,
+                                    std::max(0, commits_n - 1));
+        visible_last_ = std::clamp(first_row + rows_shown - synthetic_rows, 0,
+                                   std::max(0, commits_n - 1));
+        if (commits_n == 0)
+          visible_first_ = visible_last_ = -1;
+      }
 
       ImGuiListClipper clipper;
       clipper.Begin(commit_count_, row_height);
@@ -875,8 +886,7 @@ void CommitHistory::Update(const std::string& search_term) {
 
             const RefDecorations::Decoration* decoration =
                 ref_decorations_.Find(commit_history[ci].commit);
-            bool flagged = CommitMatchesSearch(commit_history[ci], decoration,
-                                               search_needle);
+            bool flagged = is_search_match(ci);
 
             TagTooltipArgs tooltip_args{any_tag_hovered,
                                         tag_tooltip_suppressed_,

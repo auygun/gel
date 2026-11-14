@@ -46,7 +46,15 @@ class Git {
   // Starts a new git process with the given arguments. Any currently running
   // process is killed and superseded. If |stdin_data| is non-empty, the
   // process is started with a stdin pipe and the data is written to it.
-  bool RunWithArgs(std::vector<std::string> args, std::string stdin_data = {});
+  // |run_id| is handed back through run_id() while the process runs, so a
+  // derived class can tag its results with the run that produced them.
+  bool RunWithArgs(std::vector<std::string> args,
+                   std::string stdin_data = {},
+                   int run_id = 0);
+
+  // Worker thread: the |run_id| passed to RunWithArgs() for the current
+  // process. Valid from OnStarted() on.
+  int run_id() const { return run_id_; }
 
  protected:
   void TerminateWorkerThread();
@@ -54,7 +62,9 @@ class Git {
  private:
   std::list<Exec> new_procs_;
   std::string pending_stdin_;  // Guarded by lock_.
+  int pending_run_id_ = 0;     // Guarded by lock_.
   std::mutex lock_;
+  int run_id_ = 0;  // Worker thread.
 
   Exec curent_proc_;
 

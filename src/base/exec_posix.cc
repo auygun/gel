@@ -4,7 +4,9 @@
 
 #include "base/exec.h"
 
+#include <fcntl.h>
 #include <poll.h>
+#include <pthread.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <cerrno>
@@ -65,6 +67,10 @@ bool Exec::Start(const std::vector<std::string>& args, bool with_stdin) {
     if (with_stdin) {
       in_pipe_.Close(Pipe::kRead);
       in_pipe_.MakeNonBlocking(Pipe::kWrite);
+#if defined(F_SETNOSIGPIPE)
+      // See Write(). macOS can turn SIGPIPE off for the descriptor itself.
+      fcntl(in_pipe_[Pipe::kWrite], F_SETNOSIGPIPE, 1);
+#endif
     }
     out_pipe_.Close(Pipe::kWrite);
     out_pipe_.MakeNonBlocking(Pipe::kRead);
@@ -170,7 +176,29 @@ void Exec::Detach() {
 }
 
 int64_t Exec::Write(std::span<const char> data) {
+  // A child that exits before reading all of its input (e.g. git rejecting an
+  // invalid argument) makes the write raise SIGPIPE, which terminates the
+  // whole process by default.
+#if defined(F_SETNOSIGPIPE)
+  // Turned off for the descriptor in Start().
   auto written = write(in_pipe_[Pipe::kWrite], data.data(), data.size());
+#else
+  // Block SIGPIPE on this thread for the write and discard it if it was
+  // raised, leaving the process-wide disposition alone.
+  sigset_t sigpipe_set, old_set;
+  sigemptyset(&sigpipe_set);
+  sigaddset(&sigpipe_set, SIGPIPE);
+  pthread_sigmask(SIG_BLOCK, &sigpipe_set, &old_set);
+  auto written = write(in_pipe_[Pipe::kWrite], data.data(), data.size());
+  int write_errno = errno;
+  if (written < 0 && write_errno == EPIPE) {
+    // Consume the SIGPIPE the failed write left pending on this thread.
+    timespec zero = {};
+    sigtimedwait(&sigpipe_set, nullptr, &zero);
+  }
+  pthread_sigmask(SIG_SETMASK, &old_set, nullptr);
+  errno = write_errno;
+#endif
   if (written < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK)
       return 0;

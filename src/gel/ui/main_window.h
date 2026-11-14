@@ -188,7 +188,7 @@ class MainWindow final : public CommitHistory::Delegate,
   int GetSelectedRowIndex() const final;
   void OnRefreshRequested() final;
   void OnSettingsRequested() final;
-  void OnSearchRequested(std::string term, int direction) final;
+  void OnSearchRequested(int direction) final;
   void OnHelpRequested() final;
   bool HasLogPathFilter() const final;
   void OnClearPathFilterRequested() final;

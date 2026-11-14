@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "gel/ui/commit_search_mode.h"
 #include "gel/ui/modules/search_bar.h"
 #include "third_party/imgui/imgui/imgui.h"
 
@@ -27,7 +28,8 @@ class Toolbar {
     virtual int GetSelectedRowIndex() const = 0;
     virtual void OnRefreshRequested() = 0;
     virtual void OnSettingsRequested() = 0;
-    virtual void OnSearchRequested(std::string term, int direction) = 0;
+    // Steps to the next commit matching search_term() in |direction|.
+    virtual void OnSearchRequested(int direction) = 0;
     virtual void OnHelpRequested() = 0;
     virtual bool HasDiffPathFilter() const = 0;
     virtual bool HasLogPathFilter() const = 0;
@@ -57,6 +59,10 @@ class Toolbar {
   void Update(float search_progress);
 
   const std::string& search_term() const { return search_term_; }
+
+  // What the commit search matches search_term() against. Not persisted:
+  // every start begins with kContaining.
+  CommitSearchMode search_mode() const { return search_mode_; }
 
   // Write a commit hash into the search input field.
   void SetCommitInput(const std::string& commit);
@@ -88,6 +94,7 @@ class Toolbar {
   ImVec2 csd_app_icon_max_{};
 
   std::string search_term_;
+  CommitSearchMode search_mode_ = CommitSearchMode::kContaining;
   std::string head_label_;
   bool head_detached_ = false;
   std::vector<std::string> local_branches_;

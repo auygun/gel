@@ -5,6 +5,9 @@
 #ifndef GEL_UI_ICONS_H
 #define GEL_UI_ICONS_H
 
+#include "gel/ui/commit_search_mode.h"
+#include "third_party/imgui/imgui/imgui.h"
+
 // Draw a circular-arrow refresh icon into the last item's rect.
 // Call immediately after the button/item whose rect should contain the icon.
 void DrawRefreshIcon();
@@ -27,6 +30,21 @@ void DrawWholeWordIcon();
 // false to draw in the disabled text color.
 void DrawArrowUpIcon(bool enabled);
 void DrawArrowDownIcon(bool enabled);
+
+// Draw the icon for a commit search |mode| into the rect [min, max].
+// |enabled| false draws in the disabled text color.
+//   Containing:              lines of text.
+//   Touching paths:          a folder.
+//   Adding/removing string:  a plus over a minus.
+//   Changing lines matching: ".*", as the term is a regex.
+void DrawSearchModeIcon(CommitSearchMode mode,
+                        ImVec2 min,
+                        ImVec2 max,
+                        bool enabled = true);
+
+// Draw a small down-pointing caret in the bottom-right corner of the last
+// item's rect, marking a button that opens a menu.
+void DrawMenuCaret();
 
 // Draw a funnel with an "X" overlay for removing a path filter.
 void DrawClearFilterIcon();

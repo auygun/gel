@@ -14,6 +14,14 @@
 using namespace base;
 using namespace eng;
 
+namespace {
+
+// Passed to the diff panel in place of the toolbar term when nothing should be
+// highlighted. A named string, so the term is not copied per frame.
+const std::string kEmptySearchTerm;
+
+}  // namespace
+
 MainWindow::MainWindow(Platform& platform,
                        PersistentSettings& settings,
                        std::function<void(bool)> on_busy_changed,
@@ -105,7 +113,9 @@ MainWindow::MainWindow(Platform& platform,
           [this](const std::string& title, std::string message) {
             ShowPopup(title, std::move(message));
           }),
-      commit_search_(git_log_, ref_decorations_),
+      commit_search_(git_log_,
+                     ref_decorations_,
+                     [this](bool b) { on_busy_changed_(b); }),
       popup_modal_([this]() { platform_.Exit(); }),
       directory_browser_(*this) {}
 
@@ -272,6 +282,7 @@ void MainWindow::MergeWorkerData() {
   git_log_.Update();
   ref_decorations_.Update();
   if (git_log_.DidClear()) {
+    commit_search_.OnCommitsCleared();
     commit_history_.ResetGraph();
     commit_history_.ScrollToSelected();
     commit_history_.SetInfoMessage({});
@@ -355,7 +366,18 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
 
   if (gel_open) {
     {
+      // Last frame's search state, so the rows drawn this frame and the
+      // query being searched agree.
+      commit_search_.SetQuery(toolbar_.search_term(), toolbar_.search_mode(),
+                              settings_.search_options);
+      commit_search_.SetVisibleRange(commit_history_.visible_first(),
+                                     commit_history_.visible_last());
       bool still_searching = commit_search_.Update();
+      if (commit_search_.needs_frames())
+        main_thread_busy_();
+      std::string search_error;
+      if (commit_search_.ConsumeError(search_error))
+        ShowPopup("Search failed", std::move(search_error));
       int search_result = commit_search_.ConsumeResult();
       if (search_result >= 0) {
         if (commit_search_busy_) {
@@ -371,11 +393,18 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
       }
     }
     toolbar_.Update(commit_search_.progress());
-    commit_history_.Update(toolbar_.search_term());
-    if (settings_.show_size_panel)
+    commit_history_.Update(
+        [this](int ci) { return commit_search_.IsMatch(ci); });
+    if (settings_.show_size_panel) {
       commit_size_.Update();
-    else
-      commit_diff_.Update(toolbar_.search_term());
+    } else {
+      // Only Containing matches the commit message, which is where the diff
+      // panel highlights the term. The other modes match the changes, so
+      // they highlight nothing there.
+      bool containing = toolbar_.search_mode() == CommitSearchMode::kContaining;
+      commit_diff_.Update(containing ? toolbar_.search_term()
+                                     : kEmptySearchTerm);
+    }
 
     popup_modal_.Render(window_focused_);
     directory_browser_.Update(window_focused_);
@@ -797,14 +826,14 @@ void MainWindow::OnConsoleWindowRequested() {
   console_window_.Toggle();
 }
 
-void MainWindow::OnSearchRequested(std::string term, int direction) {
+void MainWindow::OnSearchRequested(int direction) {
   if (!commit_search_busy_) {
     commit_search_busy_ = true;
     on_busy_changed_(true);
   }
-  commit_search_.Search(std::move(term),
-                        commit_history_.GetSelectedCommitIndex(), direction,
-                        settings_.search_options);
+  commit_search_.SetQuery(toolbar_.search_term(), toolbar_.search_mode(),
+                          settings_.search_options);
+  commit_search_.Search(commit_history_.GetSelectedCommitIndex(), direction);
 }
 
 // -- DirectoryBrowser::Delegate -----------------------------------------------

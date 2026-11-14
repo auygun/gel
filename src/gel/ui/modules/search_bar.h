@@ -41,6 +41,9 @@ class SearchBar {
     float width = 0.0f;
     bool case_toggle = true;
     bool whole_word_toggle = true;
+    // Shows the whole word toggle disabled, for a backend that can't honor
+    // it right now. Its setting is kept.
+    bool whole_word_disabled = false;
     bool nav_buttons = true;
     bool match_counter = false;
     bool close_button = false;

@@ -55,6 +55,15 @@ class RefDecorations {
   // The checked-out branch, empty when HEAD is detached.
   const std::string& head_branch() const { return head_branch_; }
 
+  // Objects whose labels changed since the last call, moved into |objects|.
+  // Mostly commits; an annotated tag not resolved yet is keyed by its tag
+  // object. Lets a consumer that caches something derived from the labels
+  // (e.g. the commit search) refresh just those.
+  void ConsumeChangedObjects(std::vector<std::string>& objects) {
+    objects.swap(changed_objects_);
+    changed_objects_.clear();
+  }
+
  private:
   using Ref = GitRefs::Ref;
 
@@ -104,6 +113,9 @@ class RefDecorations {
 
   // Number of results of the current GitPeelTags run already applied.
   size_t peeled_consumed_ = 0;
+
+  // See ConsumeChangedObjects().
+  std::vector<std::string> changed_objects_;
 
   void ApplyRef(const Ref& ref);
   void OnRunComplete();
