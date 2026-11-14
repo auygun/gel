@@ -5,6 +5,7 @@
 #include "gel/ui/git_console_window.h"
 
 #include <algorithm>
+#include <string_view>
 
 #include "gel/ui/style.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -81,23 +82,22 @@ void GitConsoleWindow::RebuildLines() {
   }
 
   // Parse only new output since last call.
-  const char* p = output.c_str();
-  while (*p) {
-    const char* eol = p;
-    while (*eol && *eol != '\n')
-      eol++;
+  std::string_view rest(output);
+  while (!rest.empty()) {
+    size_t eol = rest.find('\n');
+    std::string_view line = rest.substr(0, eol);
+    rest.remove_prefix(eol == std::string_view::npos ? rest.size() : eol + 1);
 
-    bool is_cmd = (eol - p >= 2 && p[0] == '$' && p[1] == ' ');
-    bool is_info = (!is_cmd && p[0] == kInfoLinePrefix);
-    bool is_progress = (!is_cmd && p[0] == kProgressLinePrefix);
+    bool is_cmd = line.starts_with("$ ");
+    bool is_info = !is_cmd && line.starts_with(kInfoLinePrefix);
+    bool is_progress = !is_cmd && line.starts_with(kProgressLinePrefix);
 
-    const char* text_start = (is_info || is_progress) ? p + 1 : p;
-    AppendLine({text_start, eol}, is_cmd        ? LineType::kCommand
+    if (is_info || is_progress)
+      line.remove_prefix(1);
+    AppendLine(std::string(line), is_cmd        ? LineType::kCommand
                                   : is_info     ? LineType::kInfo
                                   : is_progress ? LineType::kProgress
                                                 : LineType::kDefault);
-
-    p = *eol ? eol + 1 : eol;
   }
   output.clear();
 }
