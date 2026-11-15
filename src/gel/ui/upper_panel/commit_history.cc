@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string_view>
+#include <type_traits>
 
 #include "base/utf8.h"
 #include "gel/commands/git_log.h"
@@ -40,35 +42,110 @@ constexpr char kRefDragPayloadType[] = "GEL_REF";
 
 struct RefDragPayload {
   LabelKind kind = LabelKind::kTag;
+  // Offset of the mouse from the label's top-left corner when it was grabbed.
+  ImVec2 grab_offset;
+  // The text shown on the label, which may be truncated.
+  std::string label;
   std::string name;
   // The commit the ref pointed to when the drag started.
   std::string commit;
 };
 
-// Serialized as: kind byte, name, '\0', commit.
-std::string EncodeRefDragPayload(LabelKind kind,
-                                 const std::string& name,
-                                 const std::string& commit) {
-  std::string data(1, static_cast<char>(kind));
-  data += name;
+// The fixed-size fields of RefDragPayload, copied as is at the start of the
+// encoded payload.
+struct RefDragHeader {
+  LabelKind kind;
+  ImVec2 grab_offset;
+};
+static_assert(std::is_trivially_copyable_v<RefDragHeader>);
+
+// Serialized as: RefDragHeader, label, '\0', name, '\0', commit.
+std::string EncodeRefDragPayload(const RefDragPayload& payload) {
+  RefDragHeader header{payload.kind, payload.grab_offset};
+  std::string data(reinterpret_cast<const char*>(&header), sizeof(header));
+  data += payload.label;
   data += '\0';
-  data += commit;
+  data += payload.name;
+  data += '\0';
+  data += payload.commit;
   return data;
 }
 
 bool DecodeRefDragPayload(const ImGuiPayload* payload, RefDragPayload& out) {
   if (!payload || !payload->IsDataType(kRefDragPayloadType) ||
-      payload->DataSize < 1)
+      payload->DataSize < static_cast<int>(sizeof(RefDragHeader)))
     return false;
   std::string_view data(static_cast<const char*>(payload->Data),
                         payload->DataSize);
-  size_t sep = data.find('\0', 1);
-  if (sep == std::string_view::npos)
+  size_t label_end = data.find('\0', sizeof(RefDragHeader));
+  if (label_end == std::string_view::npos)
     return false;
-  out.kind = static_cast<LabelKind>(data[0]);
-  out.name = data.substr(1, sep - 1);
-  out.commit = data.substr(sep + 1);
+  size_t name_end = data.find('\0', label_end + 1);
+  if (name_end == std::string_view::npos)
+    return false;
+  RefDragHeader header;
+  std::memcpy(&header, data.data(), sizeof(header));
+  out.kind = header.kind;
+  out.grab_offset = header.grab_offset;
+  out.label =
+      data.substr(sizeof(RefDragHeader), label_end - sizeof(RefDragHeader));
+  out.name = data.substr(label_end + 1, name_end - label_end - 1);
+  out.commit = data.substr(name_end + 1);
   return true;
+}
+
+struct LabelFrame {
+  // The label's rectangle, excluding a tag's arrow.
+  ImVec2 rect_min;
+  ImVec2 rect_max;
+  ImVec2 text_pos;
+};
+
+// Draws the background and border of a label showing |text| with its top-left
+// corner (a tag's arrow tip) at |pos|. Tags get a left-pointing arrow shape,
+// branches and the stash are rounded rectangles.
+LabelFrame DrawLabelFrame(ImDrawList* dl,
+                          ImVec2 pos,
+                          const std::string& text,
+                          LabelKind kind) {
+  float font_size = ImGui::GetFontSize();
+  float pad_x = font_size * 0.3f;
+  float pad_y = font_size * 0.05f;
+  float rounding = font_size * 0.2f;
+  bool is_tag = kind == LabelKind::kTag;
+
+  ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
+  float arrow_w = is_tag ? (text_size.y + pad_y * 2) * 0.5f : 0.0f;
+  ImVec2 rect_min(pos.x + arrow_w, pos.y + 1.0f);
+  ImVec2 rect_max(rect_min.x + text_size.x + pad_x * 2,
+                  rect_min.y + text_size.y + pad_y * 2);
+
+  uint32_t bg = GetSyntaxPalette().added_bg;
+  if (kind == LabelKind::kTag)
+    bg = GetSyntaxPalette().tag_bg;
+  else if (kind == LabelKind::kStash)
+    bg = GetSyntaxPalette().stash_bg;
+  ImVec4 text_col = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+  text_col.w *= 0.4f;
+  uint32_t border = ImGui::GetColorU32(text_col);
+  if (is_tag) {
+    // Tag shape: rectangle with a left-pointing arrow.
+    float mid_y = (rect_min.y + rect_max.y) * 0.5f;
+    float tip_x = rect_min.x - arrow_w;
+    dl->AddTriangleFilled(ImVec2(tip_x, mid_y), rect_min,
+                          ImVec2(rect_min.x, rect_max.y), bg);
+    dl->AddRectFilled(rect_min, rect_max, bg);
+    dl->AddLine(ImVec2(tip_x, mid_y), rect_min, border);
+    dl->AddLine(ImVec2(tip_x, mid_y), ImVec2(rect_min.x, rect_max.y), border);
+    dl->AddLine(rect_min, ImVec2(rect_max.x, rect_min.y), border);
+    dl->AddLine(ImVec2(rect_max.x, rect_min.y), rect_max, border);
+    dl->AddLine(rect_max, ImVec2(rect_min.x, rect_max.y), border);
+  } else {
+    dl->AddRectFilled(rect_min, rect_max, bg, rounding);
+    dl->AddRect(rect_min, rect_max, border, rounding);
+  }
+
+  return {rect_min, rect_max, ImVec2(rect_min.x + pad_x, rect_min.y + pad_y)};
 }
 
 // Renders stash, tag and branch labels as individually bordered rectangles.
@@ -90,11 +167,7 @@ LabelInteraction RenderBranchLabels(
     TagTooltipArgs* tooltip_args = nullptr,
     ContextMenuArgs* ctx_args = nullptr) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  float font_size = ImGui::GetFontSize();
-  float pad_x = font_size * 0.3f;
-  float pad_y = font_size * 0.05f;
-  float rounding = font_size * 0.2f;
-  float spacing = font_size * 0.3f;
+  float spacing = ImGui::GetFontSize() * 0.3f;
 
   LabelInteraction result;
 
@@ -102,42 +175,11 @@ LabelInteraction RenderBranchLabels(
   // the label can't be dragged.
   auto render_label = [&](const std::string& name, LabelKind kind,
                           const std::string* ref_name = nullptr) {
-    bool is_tag = kind == LabelKind::kTag;
     bool is_head = kind == LabelKind::kBranch && (name == head_branch);
 
-    ImVec2 text_size = ImGui::CalcTextSize(name.c_str());
     ImVec2 cursor_screen = ImGui::GetCursorScreenPos();
-    float arrow_w = is_tag ? (text_size.y + pad_y * 2) * 0.5f : 0.0f;
-    ImVec2 rect_min(cursor_screen.x + arrow_w, cursor_screen.y + 1.0f);
-    ImVec2 rect_max(rect_min.x + text_size.x + pad_x * 2,
-                    rect_min.y + text_size.y + pad_y * 2);
-
-    uint32_t bg = GetSyntaxPalette().added_bg;
-    if (kind == LabelKind::kTag)
-      bg = GetSyntaxPalette().tag_bg;
-    else if (kind == LabelKind::kStash)
-      bg = GetSyntaxPalette().stash_bg;
-    ImVec4 text_col = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-    text_col.w *= 0.4f;
-    uint32_t border = ImGui::GetColorU32(text_col);
-    if (is_tag) {
-      // Tag shape: rectangle with a left-pointing arrow.
-      float mid_y = (rect_min.y + rect_max.y) * 0.5f;
-      float tip_x = rect_min.x - arrow_w;
-      dl->AddTriangleFilled(ImVec2(tip_x, mid_y), rect_min,
-                            ImVec2(rect_min.x, rect_max.y), bg);
-      dl->AddRectFilled(rect_min, rect_max, bg);
-      dl->AddLine(ImVec2(tip_x, mid_y), rect_min, border);
-      dl->AddLine(ImVec2(tip_x, mid_y), ImVec2(rect_min.x, rect_max.y), border);
-      dl->AddLine(rect_min, ImVec2(rect_max.x, rect_min.y), border);
-      dl->AddLine(ImVec2(rect_max.x, rect_min.y), rect_max, border);
-      dl->AddLine(rect_max, ImVec2(rect_min.x, rect_max.y), border);
-    } else {
-      dl->AddRectFilled(rect_min, rect_max, bg, rounding);
-      dl->AddRect(rect_min, rect_max, border, rounding);
-    }
-
-    ImVec2 text_pos(rect_min.x + pad_x, rect_min.y + pad_y);
+    auto [rect_min, rect_max, text_pos] =
+        DrawLabelFrame(dl, cursor_screen, name, kind);
     ImGui::SetCursorScreenPos(text_pos);
     ImGui::TextUnformatted(name.c_str());
     if (is_head) {
@@ -162,12 +204,17 @@ LabelInteraction RenderBranchLabels(
         if (ImGui::ButtonBehavior(bb, id, &hovered, &held))
           result.clicked = true;
         result.hovered |= hovered;
-        // The preview tooltip is drawn by CommitHistory::Update() so it stays
-        // visible when the source row scrolls out of view.
+        // The preview is drawn by CommitHistory::Update() so it stays visible
+        // when the source row scrolls out of view.
         if (ImGui::BeginDragDropSource(
                 ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
-          std::string data =
-              EncodeRefDragPayload(kind, *ref_name, ctx_args->commit);
+          ImVec2 grab_offset(
+              ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left].x -
+                  cursor_screen.x,
+              ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left].y -
+                  cursor_screen.y);
+          std::string data = EncodeRefDragPayload(
+              {kind, grab_offset, name, *ref_name, ctx_args->commit});
           ImGui::SetDragDropPayload(kRefDragPayloadType, data.data(),
                                     data.size(), ImGuiCond_Once);
           ImGui::EndDragDropSource();
@@ -1012,16 +1059,24 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
         }
       }
 
-      // Preview tooltip for a dragged tag or branch label.
+      // Preview of a dragged tag or branch label: the label itself, following
+      // the mouse from where it was grabbed and drawn on top of everything.
       RefDragPayload dragged_ref;
       if (DecodeRefDragPayload(ImGui::GetDragDropPayload(), dragged_ref)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            default_window_padding);
-        ImGui::SetTooltip(
-            "Move %s %s",
-            dragged_ref.kind == LabelKind::kTag ? "tag" : "branch",
-            dragged_ref.name.c_str());
-        ImGui::PopStyleVar();
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        ImVec2 mouse = ImGui::GetMousePos();
+        ImVec2 pos(mouse.x - dragged_ref.grab_offset.x,
+                   mouse.y - dragged_ref.grab_offset.y);
+        LabelFrame frame =
+            DrawLabelFrame(fg, pos, dragged_ref.label, dragged_ref.kind);
+        uint32_t text_col = ImGui::GetColorU32(ImGuiCol_Text);
+        fg->AddText(frame.text_pos, text_col, dragged_ref.label.c_str());
+        if (dragged_ref.kind == LabelKind::kBranch &&
+            dragged_ref.name == head_branch) {
+          // Faux bold, as for the checked-out branch's label in the row.
+          fg->AddText(ImVec2(frame.text_pos.x + 1.0f, frame.text_pos.y),
+                      text_col, dragged_ref.label.c_str());
+        }
       }
 
       bool is_loading = commit_history.empty() && git_log_.busy();
