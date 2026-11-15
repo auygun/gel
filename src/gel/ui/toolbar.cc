@@ -188,6 +188,41 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     ImGui::EndDisabled();
   }
 
+  // Lower panel toggle button.
+  bool toggle_panel_requested = false;
+  {
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+    bool size_active = delegate_.IsSizePanelActive();
+    toggle_panel_requested =
+        ToggleButton("##panel_toggle", size_active, ImVec2(frame_h, frame_h)) ||
+        (!modal_open && ImGui::IsKeyPressed(ImGuiKey_F6));
+    if (size_active)
+      DrawSizePanelIcon();
+    else
+      DrawDiffPanelIcon();
+    ItemTooltip(
+        size_active ? "Show diff view (F6)" : "Show commit size view (F6)",
+        any_toolbar_hovered, tooltip_suppressed_);
+  }
+
+  ImGui::SameLine();
+  ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+  ImGui::SameLine();
+  bool settings_requested =
+      ImGui::Button("##settings", ImVec2(frame_h, frame_h)) ||
+      (!modal_open && ImGui::GetIO().KeyCtrl &&
+       ImGui::IsKeyPressed(ImGuiKey_Comma));
+  DrawSettingsIcon();
+  ItemTooltip("Settings (Ctrl+,)", any_toolbar_hovered, tooltip_suppressed_);
+
+  ImGui::SameLine();
+  bool help_requested = ImGui::Button("##help", ImVec2(frame_h, frame_h)) ||
+                        (!modal_open && ImGui::IsKeyPressed(ImGuiKey_F1));
+  DrawHelpIcon();
+  ItemTooltip("Help (F1)", any_toolbar_hovered, tooltip_suppressed_);
+
   ImGui::SameLine();
   ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
   ImGui::SameLine();
@@ -304,22 +339,14 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
   };
   search_opts.history = &settings_.search_history;
   // Like the diff search, show the match counter and a button clearing the
-  // search once there is something being searched for.
+  // search once there is something being searched for. The search bar is the
+  // last item on the toolbar, so the counter can grow without moving anything
+  // but the branch label at the far right.
   if (!search_bar_.empty()) {
     search_opts.match_counter = true;
     search_opts.matches = search_matches;
     search_opts.close_button = true;
     search_opts.close_tooltip = "Clear search";
-    // Wide enough for the largest count this history can have, so the
-    // buttons after it don't shift while the count grows.
-    int digits = 1;
-    for (int n = delegate_.GetTotalRowCount(); n >= 10; n /= 10)
-      ++digits;
-    std::string widest =
-        std::string(digits, '0') + " of " + std::string(digits, '0') + "+";
-    search_opts.counter_width = std::max({ImGui::CalcTextSize(widest.c_str()).x,
-                                          ImGui::CalcTextSize("Searching...").x,
-                                          ImGui::CalcTextSize("No results").x});
   }
   SearchBar::Result search =
       search_bar_.Update(search_opts, &settings_.search_options);
@@ -341,41 +368,6 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     active_field_ = 1;
   else
     active_field_ = -1;
-
-  // Lower panel toggle button.
-  bool toggle_panel_requested = false;
-  {
-    ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
-    bool size_active = delegate_.IsSizePanelActive();
-    toggle_panel_requested =
-        ToggleButton("##panel_toggle", size_active, ImVec2(frame_h, frame_h)) ||
-        (!modal_open && ImGui::IsKeyPressed(ImGuiKey_F6));
-    if (size_active)
-      DrawSizePanelIcon();
-    else
-      DrawDiffPanelIcon();
-    ItemTooltip(
-        size_active ? "Show diff view (F6)" : "Show commit size view (F6)",
-        any_toolbar_hovered, tooltip_suppressed_);
-  }
-
-  ImGui::SameLine();
-  ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-  ImGui::SameLine();
-  bool settings_requested =
-      ImGui::Button("##settings", ImVec2(frame_h, frame_h)) ||
-      (!modal_open && ImGui::GetIO().KeyCtrl &&
-       ImGui::IsKeyPressed(ImGuiKey_Comma));
-  DrawSettingsIcon();
-  ItemTooltip("Settings (Ctrl+,)", any_toolbar_hovered, tooltip_suppressed_);
-
-  ImGui::SameLine();
-  bool help_requested = ImGui::Button("##help", ImVec2(frame_h, frame_h)) ||
-                        (!modal_open && ImGui::IsKeyPressed(ImGuiKey_F1));
-  DrawHelpIcon();
-  ItemTooltip("Help (F1)", any_toolbar_hovered, tooltip_suppressed_);
 
   if (!any_toolbar_hovered)
     tooltip_suppressed_ = false;

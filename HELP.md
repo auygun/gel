@@ -137,6 +137,9 @@ The toolbar spans the top of the window and contains the following controls
 - **Row counter** -- Shows selected row and total count (e.g. 42/1500)
 - **Refresh** -- Reloads the commit history and diff (F5)
 - **Clear filter** -- Clears all active path filters in a single press (Ctrl+L)
+- **Panel toggle** -- Switch lower panel between diff and size view (F6)
+- **Settings** -- Opens the settings modal (Ctrl+,)
+- **Help** -- Opens this help window (F1)
 - **Search mode** -- Icon button showing what the search field matches:
   commit fields, touched paths, or changed content. Click it for a menu of
   the modes (see [Commit Search](#commit-search))
@@ -149,10 +152,8 @@ The toolbar spans the top of the window and contains the following controls
 - **Match counter** -- While there is a search term: which match the selected
   commit is and how many commits match (e.g. "3 of 20"), with a "+" while
   the search is still running
-- **Clear search** -- Shown with the match counter; empties the search field
-- **Panel toggle** -- Switch lower panel between diff and size view (F6)
-- **Settings** -- Opens the settings modal (Ctrl+,)
-- **Help** -- Opens this help window (F1)
+- **Clear search** -- Shown with the match counter; empties the search field.
+  The search controls come last, so the counter has room to grow
 - **Busy spinner** -- Turns to the left of the status dot while git commands
   run in the background; hover it to see which. See
   [Status Indicators](#status-indicators)

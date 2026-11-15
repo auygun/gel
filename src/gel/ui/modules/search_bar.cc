@@ -296,11 +296,6 @@ SearchBar::Result SearchBar::Update(const Options& opts,
     }
     ImGui::SameLine();
     ImGui::TextUnformatted(counter_.c_str());
-    float text_w = ImGui::GetItemRectSize().x;
-    if (text_w < opts.counter_width) {
-      ImGui::SameLine(0, 0);
-      ImGui::Dummy(ImVec2(opts.counter_width - text_w, 0));
-    }
   }
 
   if (opts.close_button) {
