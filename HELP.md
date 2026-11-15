@@ -195,6 +195,9 @@ are displayed in bold in the commit history.
 - **Shift+Up** / **Shift+Down** also navigate between matches.
 - Enter and Shift+Enter work while the search input is focused; the input
   retains focus with text selected after navigation.
+- **Up** / **Down** while the search input is focused step through earlier
+  search terms. A term is remembered when you press Enter on it or leave the
+  field; the last 50 are kept across restarts.
 - A progress bar appears in the search field while scanning large histories.
 
 The search mode button in front of the search field picks what the term is
@@ -515,6 +518,8 @@ Press **Ctrl+F** to open a search bar within the diff viewer.
 - Type a term and press **Enter** to jump to the next match.
 - **Shift+Enter** jumps to the previous match.
 - Arrow buttons next to the search field navigate between matches.
+- **Up** / **Down** step through earlier diff search terms, kept separately
+  from the commit search's.
 - A case toggle button switches between case-sensitive and case-insensitive
   matching.
 - A whole-word toggle button restricts matches to complete words.

@@ -23,6 +23,13 @@
 
 namespace {
 
+// Like ImGui::IsKeyPressed(), but false while a widget owns |key|, e.g. a
+// search field browsing its history with Up / Down.
+bool IsUnownedKeyPressed(ImGuiKey key) {
+  return ImGui::IsKeyPressed(key, ImGuiInputFlags_Repeat,
+                             ImGuiKeyOwner_NoOwner);
+}
+
 struct TagTooltipArgs {
   bool& any_hovered;
   bool tooltip_suppressed;
@@ -779,9 +786,9 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
           int page = std::max(
               1, static_cast<int>(ImGui::GetWindowHeight() / row_height) - 1);
           new_row = std::max(0, (selected_row_ < 0 ? 0 : selected_row_) - page);
-        } else if (!ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+        } else if (!ctrl && !shift && IsUnownedKeyPressed(ImGuiKey_UpArrow)) {
           new_row = std::max(0, (selected_row_ < 0 ? 0 : selected_row_) - 1);
-        } else if (!ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+        } else if (!ctrl && !shift && IsUnownedKeyPressed(ImGuiKey_DownArrow)) {
           new_row = std::min(commit_count_ - 1,
                              (selected_row_ < 0 ? 0 : selected_row_) + 1);
         } else if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_PageDown)) {

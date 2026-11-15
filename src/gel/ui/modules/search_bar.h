@@ -7,8 +7,11 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "base/text_search.h"
+
+struct ImGuiInputTextCallbackData;
 
 // A reusable search input row: text field, case-sensitivity toggle, stacked
 // previous/next buttons, match counter and close button. Owns the input buffer
@@ -63,7 +66,15 @@ class SearchBar {
     // Called right after the input field with its buffer, for custom input
     // handling (e.g. a right-click context menu).
     std::function<void(char*, size_t)> on_input;
+    // Past search terms, most recent first, browsed with Up / Down while the
+    // field has focus. The term is added when the user presses Enter or
+    // leaves the field. Owned by the caller so it can be persisted. Null
+    // disables history.
+    std::vector<std::string>* history = nullptr;
   };
+
+  // Most terms kept in Options::history.
+  static constexpr size_t kMaxHistory = 50;
 
   // What the user asked for this frame.
   struct Result {
@@ -97,6 +108,15 @@ class SearchBar {
   void SetTerm(const std::string& term);
 
  private:
+  static int InputCallback(ImGuiInputTextCallbackData* data);
+
+  // Replaces the field's text with the next older (|dir| > 0) or newer
+  // (|dir| < 0) history entry.
+  void StepHistory(ImGuiInputTextCallbackData* data, int dir);
+
+  // Moves |term| to the front of the history.
+  void AddToHistory(const char* term);
+
   static constexpr int kInputSize = 256;
   char input_[kInputSize] = {};
 
@@ -106,6 +126,13 @@ class SearchBar {
   bool reload_ = false;  // See SetTerm().
   char reject_char_ = 0;
   int reject_frames_ = 0;
+
+  // Options::history of the Update() in progress, for the input callback.
+  std::vector<std::string>* history_ = nullptr;
+  // Index of the history entry in the field, -1 while the user's own text is.
+  int history_pos_ = -1;
+  // The user's own text, put back when stepping past the newest entry.
+  std::string history_draft_;
 };
 
 #endif  // GEL_UI_MODULES_SEARCH_BAR_H

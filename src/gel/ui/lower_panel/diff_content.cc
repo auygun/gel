@@ -283,7 +283,9 @@ DiffContent::DiffContent(Delegate& delegate,
     : delegate_(delegate),
       git_diff_(git_diff),
       settings_(settings),
-      text_viewer_(*this, std::move(main_thread_busy)) {}
+      text_viewer_(*this, std::move(main_thread_busy)) {
+  text_viewer_.set_search_history(&settings_.diff_search_history);
+}
 
 DiffContent::~DiffContent() = default;
 

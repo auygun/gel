@@ -84,6 +84,9 @@ class PersistentSettings {
   bool client_side_decorations = false;
   base::MatchOptions search_options;
   base::MatchOptions diff_search_options;
+  // Past commit and diff search terms, most recent first.
+  std::vector<std::string> search_history;
+  std::vector<std::string> diff_search_history;
   bool show_line_numbers = true;
   bool show_commit_graph = true;
   DiffColorMode diff_color_mode = DiffColorMode::kSyntax;

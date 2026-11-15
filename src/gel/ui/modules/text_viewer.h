@@ -116,6 +116,12 @@ class TextViewer {
   // Returns true if the search bar is currently visible.
   bool search_active() const { return search_active_; }
 
+  // Past search terms for the search bar to keep and browse with Up / Down,
+  // most recent first. Null (the default) disables history.
+  void set_search_history(std::vector<std::string>* history) {
+    search_history_ = history;
+  }
+
   // Enables keyboard scrolling (arrow keys, page up/down, home/end).
   // Disabled by default.
   void set_keyboard_scroll(bool enabled) { keyboard_scroll_ = enabled; }
@@ -158,6 +164,7 @@ class TextViewer {
   TextViewerSearch search_;
   SearchBar search_bar_;
   bool search_active_ = false;
+  std::vector<std::string>* search_history_ = nullptr;
   // Reusable fold buffer for painting highlights on the visible lines.
   std::string match_buf_;
   ImVec2 content_top_right_{0, 0};

@@ -279,6 +279,17 @@ void PersistentSettings::Load() {
   if (j.contains("diff_search_whole_word") &&
       j["diff_search_whole_word"].is_boolean())
     diff_search_options.whole_word = j["diff_search_whole_word"].get<bool>();
+  auto load_strings = [&j](const char* key, std::vector<std::string>& out) {
+    if (!j.contains(key) || !j[key].is_array())
+      return;
+    out.clear();
+    for (auto& v : j[key]) {
+      if (v.is_string())
+        out.push_back(v.get<std::string>());
+    }
+  };
+  load_strings("search_history", search_history);
+  load_strings("diff_search_history", diff_search_history);
   if (j.contains("show_line_numbers") && j["show_line_numbers"].is_boolean())
     show_line_numbers = j["show_line_numbers"].get<bool>();
   if (j.contains("show_commit_graph") && j["show_commit_graph"].is_boolean())
@@ -403,6 +414,8 @@ void PersistentSettings::Save() {
   j["search_whole_word"] = search_options.whole_word;
   j["diff_search_case_sensitive"] = diff_search_options.case_sensitive;
   j["diff_search_whole_word"] = diff_search_options.whole_word;
+  j["search_history"] = search_history;
+  j["diff_search_history"] = diff_search_history;
   j["show_line_numbers"] = show_line_numbers;
   j["show_commit_graph"] = show_commit_graph;
   j["diff_color_mode"] = GetDiffColorModeName(diff_color_mode);

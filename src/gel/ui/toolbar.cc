@@ -301,6 +301,7 @@ void Toolbar::Update(float search_progress) {
   search_opts.on_input = [](char* buf, size_t buf_size) {
     InputTextContextMenu(buf, buf_size);
   };
+  search_opts.history = &settings_.search_history;
   SearchBar::Result search =
       search_bar_.Update(search_opts, &settings_.search_options);
   search_term_ = search_bar_.term();

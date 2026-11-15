@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <string_view>
 
+#include "base/utf8.h"
 #include "gel/ui/icons.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -33,12 +35,61 @@ void SearchBar::SetTerm(const std::string& term) {
   // ImGui keeps its own copy of the text while the field is being edited.
   // Make it pick up the new text on the next Update().
   reload_ = true;
+  history_pos_ = -1;
 }
 
 void SearchBar::FocusRejectingChar(char c) {
   focus_ = true;
   reject_char_ = c;
   reject_frames_ = kRejectFrames;
+}
+
+int SearchBar::InputCallback(ImGuiInputTextCallbackData* data) {
+  auto* self = static_cast<SearchBar*>(data->UserData);
+  if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter)
+    return data->EventChar == static_cast<ImWchar>(self->reject_char_) ? 1 : 0;
+  if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
+    self->StepHistory(data, data->EventKey == ImGuiKey_UpArrow ? 1 : -1);
+  return 0;
+}
+
+void SearchBar::StepHistory(ImGuiInputTextCallbackData* data, int dir) {
+  // Leave modified arrows to their own shortcuts (Shift+Up / Shift+Down
+  // navigate matches, Ctrl+Up / Ctrl+Down scroll the commit list).
+  const ImGuiIO& io = ImGui::GetIO();
+  if (!history_ || io.KeyShift || io.KeyCtrl || io.KeyAlt || io.KeySuper)
+    return;
+
+  if (history_pos_ < 0)
+    history_draft_.assign(data->Buf, data->BufTextLen);
+  // Skip the entry matching the user's own text, which would look like the
+  // key did nothing (e.g. the term just searched for with Enter).
+  const std::vector<std::string>& history = *history_;
+  int size = static_cast<int>(history.size());
+  int pos = history_pos_;
+  do {
+    pos += dir;
+  } while (pos >= 0 && pos < size && history[pos] == history_draft_);
+  if (pos >= size || (pos < 0 && history_pos_ < 0))
+    return;  // Already at the oldest entry, or at the user's own text.
+  pos = std::max(pos, -1);
+
+  std::string_view text = pos < 0 ? history_draft_ : history[pos];
+  text = text.substr(0, base::Utf8SafePrefixLength(text, data->BufSize - 1));
+  history_pos_ = pos;
+  data->DeleteChars(0, data->BufTextLen);
+  data->InsertChars(0, text.data(), text.data() + text.size());
+}
+
+void SearchBar::AddToHistory(const char* term) {
+  history_pos_ = -1;
+  if (!history_ || !*term)
+    return;
+  std::vector<std::string>& history = *history_;
+  std::erase(history, term);
+  history.insert(history.begin(), term);
+  if (history.size() > kMaxHistory)
+    history.resize(kMaxHistory);
 }
 
 SearchBar::Result SearchBar::Update(const Options& opts,
@@ -87,13 +138,11 @@ SearchBar::Result SearchBar::Update(const Options& opts,
       ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll;
   if (reject_frames_ > 0)
     flags |= ImGuiInputTextFlags_CallbackCharFilter;
-  bool entered = ImGui::InputText(
-      widget_id("input"), input_, kInputSize, flags,
-      [](ImGuiInputTextCallbackData* data) -> int {
-        char rejected = *static_cast<const char*>(data->UserData);
-        return data->EventChar == static_cast<ImWchar>(rejected) ? 1 : 0;
-      },
-      &reject_char_);
+  history_ = opts.history;
+  if (history_)
+    flags |= ImGuiInputTextFlags_CallbackHistory;
+  bool entered = ImGui::InputText(widget_id("input"), input_, kInputSize, flags,
+                                  &SearchBar::InputCallback, this);
   if (reload_) {
     reload_ = false;
     if (auto* state = ImGui::GetInputTextState(ImGui::GetItemID()))
@@ -101,6 +150,13 @@ SearchBar::Result SearchBar::Update(const Options& opts,
   }
   result.input_active = ImGui::IsItemActive();
   result.input_deactivated = ImGui::IsItemDeactivated();
+  // Editing an entry pulled from the history makes it the user's own text.
+  if (history_pos_ >= 0 &&
+      (!history_ || history_pos_ >= static_cast<int>(history_->size()) ||
+       (*history_)[history_pos_] != input_))
+    history_pos_ = -1;
+  if (entered || result.input_deactivated)
+    AddToHistory(input_);
   if (reject_frames_ > 0)
     reject_frames_--;
   if (opts.on_input)

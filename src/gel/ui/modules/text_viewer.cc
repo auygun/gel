@@ -85,6 +85,7 @@ void TextViewer::UpdateSearchBar(std::span<const std::string> content,
   opts.on_input = [this](char* buf, size_t buf_size) {
     delegate_.OnSearchInput(buf, buf_size);
   };
+  opts.history = search_history_;
   SearchBar::Result search = search_bar_.Update(opts, match_options);
 
   if (!search_.matches().empty() && (search.next || search.prev)) {
