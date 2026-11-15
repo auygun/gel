@@ -448,9 +448,16 @@ void FontSrcDestroy(ImFontAtlas*, ImFontConfig* src) {
   ReleaseFreeType();
 }
 
-bool FontSrcContainsGlyph(ImFontAtlas*, ImFontConfig* src, ImWchar codepoint) {
+int FontSrcGetGlyphIndexFromCodepoint(ImFontAtlas*,
+                                      ImFontConfig* src,
+                                      ImWchar codepoint) {
   auto* data = static_cast<SrcData*>(src->FontLoaderData);
-  return FT_Get_Char_Index(data->face, codepoint) != 0;
+  return static_cast<int>(FT_Get_Char_Index(data->face, codepoint));
+}
+
+bool FontSrcContainsGlyph(ImFontAtlas*, ImFontConfig* src, int glyph_index) {
+  auto* data = static_cast<SrcData*>(src->FontLoaderData);
+  return glyph_index > 0 && glyph_index < data->num_glyphs;
 }
 
 bool FontBakedInit(ImFontAtlas*,
@@ -498,15 +505,14 @@ bool FontBakedLoadGlyph(ImFontAtlas* atlas,
                         ImFontConfig* src,
                         ImFontBaked* baked,
                         void* loader_data_for_baked_src,
-                        ImWchar codepoint,
+                        int glyph_index,
                         ImFontGlyph* out_glyph,
                         float* out_advance_x) {
   auto* data = static_cast<SrcData*>(src->FontLoaderData);
   auto* baked_data = static_cast<BakedData*>(loader_data_for_baked_src);
   const Strike& strike = data->strikes[baked_data->strike_index];
 
-  uint32_t glyph_index = FT_Get_Char_Index(data->face, codepoint);
-  if (glyph_index == 0)
+  if (glyph_index <= 0)
     return false;
 
   GlyphBitmap bitmap;
@@ -535,7 +541,6 @@ bool FontBakedLoadGlyph(ImFontAtlas* atlas,
   if (data->kind == StrikeKind::kSbix)
     bitmap.bearing_y += h;
 
-  out_glyph->Codepoint = codepoint;
   out_glyph->AdvanceX = advance_x;
 
   const int dst_w = std::max(1, static_cast<int>(std::lround(w * scale)));
@@ -602,6 +607,7 @@ const ImFontLoader* GetColorBitmapFontLoader() {
     l.Name = "ColorBitmap";
     l.FontSrcInit = FontSrcInit;
     l.FontSrcDestroy = FontSrcDestroy;
+    l.FontSrcGetGlyphIndexFromCodepoint = FontSrcGetGlyphIndexFromCodepoint;
     l.FontSrcContainsGlyph = FontSrcContainsGlyph;
     l.FontBakedInit = FontBakedInit;
     l.FontBakedDestroy = FontBakedDestroy;
