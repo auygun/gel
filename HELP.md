@@ -146,6 +146,10 @@ The toolbar spans the top of the window and contains the following controls
 - **Whole word toggle** -- Match complete words only; letters, digits and `_`
   count as part of a word
 - **Search arrows** -- Navigate forward/backward through search matches
+- **Match counter** -- While there is a search term: which match the selected
+  commit is and how many commits match (e.g. "3 of 20"), with a "+" while
+  the search is still running
+- **Clear search** -- Shown with the match counter; empties the search field
 - **Panel toggle** -- Switch lower panel between diff and size view (F6)
 - **Settings** -- Opens the settings modal (Ctrl+,)
 - **Help** -- Opens this help window (F1)
@@ -199,6 +203,11 @@ are displayed in bold in the commit history.
   search terms. A term is remembered when you press Enter on it or leave the
   field; the last 50 are kept across restarts.
 - A progress bar appears in the search field while scanning large histories.
+- Next to the search buttons, a counter shows which match the selected commit
+  is and how many commits match, e.g. "3 of 20". It reads "3 of 20+" while
+  commits are still being checked, "Searching..." before the first match is
+  found, and "No results" when nothing matches. The **x** button after it
+  clears the search.
 
 The search mode button in front of the search field picks what the term is
 matched against. Its icon shows the current mode; click it to choose another,

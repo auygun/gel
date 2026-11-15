@@ -175,6 +175,8 @@ void CommitSearch::ResetResults() {
   StopAllChunks();
   states_.assign(states_.size(), State::kUnknown);
   known_ = 0;
+  matches_ = 0;
+  ++match_generation_;
   scan_enabled_ = false;
   scan_walked_ = 0;
 }
@@ -203,6 +205,10 @@ void CommitSearch::SetState(int index, State state) {
     ++known_;
   else if (IsKnown(states_[index]) && !IsKnown(state))
     --known_;
+  if ((states_[index] == State::kMatch) != (state == State::kMatch)) {
+    matches_ += state == State::kMatch ? 1 : -1;
+    ++match_generation_;
+  }
   states_[index] = state;
 }
 
@@ -623,6 +629,27 @@ bool CommitSearch::ConsumeError(std::string& error) {
   has_error_ = false;
   error = std::move(error_);
   return true;
+}
+
+int CommitSearch::MatchRank(int index) const {
+  if (!IsMatch(index))
+    return -1;
+  // Counting is linear in the list, so only redo it when the selection or the
+  // matches changed.
+  if (index != rank_index_ || match_generation_ != rank_generation_) {
+    rank_index_ = index;
+    rank_generation_ = match_generation_;
+    rank_ = static_cast<int>(
+        std::count(states_.begin(), states_.begin() + index, State::kMatch));
+  }
+  return rank_;
+}
+
+bool CommitSearch::search_complete() const {
+  if (!active_)
+    return true;  // Nothing to search for, or git failed on the query.
+  return !settle_pending_ && scan_enabled_ && !git_log_.busy() &&
+         known_ >= static_cast<int>(git_log_.GetCommits().size());
 }
 
 float CommitSearch::progress() const {

@@ -107,6 +107,18 @@ class CommitSearch {
   // commits checked, while stepping to a match or checking the list.
   float progress() const;
 
+  // Commits known to match the current query so far.
+  int match_count() const { return matches_; }
+
+  // Returns the 0-based position of the commit at |index| among the matches
+  // in list order, or -1 if it is not known to match.
+  int MatchRank(int index) const;
+
+  // Returns true once every loaded commit has been checked against the
+  // current query and the log has finished loading, so match_count() is the
+  // final count.
+  bool search_complete() const;
+
   CommitSearchMode mode() const { return mode_; }
 
  private:
@@ -145,6 +157,13 @@ class CommitSearch {
   // What is known about each commit, by index.
   std::vector<State> states_;
   int known_ = 0;
+  int matches_ = 0;
+  // Bumped whenever a commit becomes or stops being a match, to invalidate
+  // the MatchRank() cache.
+  uint64_t match_generation_ = 0;
+  mutable int rank_index_ = -1;
+  mutable int rank_ = -1;
+  mutable uint64_t rank_generation_ = 0;
 
   // Checking commits beyond the visible rows. Commits are taken from
   // |scan_cursor_| on in |scan_direction_|, wrapping around, until

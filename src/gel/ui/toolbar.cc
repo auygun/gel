@@ -31,7 +31,8 @@ Toolbar::Toolbar(Delegate& delegate,
       git_repo_(git_repo),
       settings_(settings) {}
 
-void Toolbar::Update(float search_progress) {
+void Toolbar::Update(const SearchBar::MatchState& search_matches,
+                     float search_progress) {
   bool modal_open = ImGui::GetTopMostPopupModal() != nullptr;
   bool focus_search = false;
 
@@ -302,8 +303,28 @@ void Toolbar::Update(float search_progress) {
     InputTextContextMenu(buf, buf_size);
   };
   search_opts.history = &settings_.search_history;
+  // Like the diff search, show the match counter and a button clearing the
+  // search once there is something being searched for.
+  if (!search_bar_.empty()) {
+    search_opts.match_counter = true;
+    search_opts.matches = search_matches;
+    search_opts.close_button = true;
+    search_opts.close_tooltip = "Clear search";
+    // Wide enough for the largest count this history can have, so the
+    // buttons after it don't shift while the count grows.
+    int digits = 1;
+    for (int n = delegate_.GetTotalRowCount(); n >= 10; n /= 10)
+      ++digits;
+    std::string widest =
+        std::string(digits, '0') + " of " + std::string(digits, '0') + "+";
+    search_opts.counter_width = std::max({ImGui::CalcTextSize(widest.c_str()).x,
+                                          ImGui::CalcTextSize("Searching...").x,
+                                          ImGui::CalcTextSize("No results").x});
+  }
   SearchBar::Result search =
       search_bar_.Update(search_opts, &settings_.search_options);
+  if (search.close_requested)
+    search_bar_.SetTerm("");
   search_term_ = search_bar_.term();
 
   // '/' focuses the search field when no text input is active.  WantTextInput

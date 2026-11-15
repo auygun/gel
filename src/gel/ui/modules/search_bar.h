@@ -49,7 +49,11 @@ class SearchBar {
     bool whole_word_disabled = false;
     bool nav_buttons = true;
     bool match_counter = false;
+    // Minimum width of the match counter, so the items after it don't shift
+    // as the count grows. 0 sizes it to its text.
+    float counter_width = 0.0f;
     bool close_button = false;
+    const char* close_tooltip = "Close (Escape)";
     NavEnable nav_enable = NavEnable::kHasMatches;
     MatchState matches;
     // Progress of an in-flight search in [0,1], drawn as a fill behind the

@@ -59,7 +59,10 @@ class Toolbar {
           GitRepo& git_repo,
           PersistentSettings& settings);
 
-  void Update(float search_progress);
+  // |search_matches| and |search_progress| report the state of the commit
+  // search for search_term(); see SearchBar::Options.
+  void Update(const SearchBar::MatchState& search_matches,
+              float search_progress);
 
   const std::string& search_term() const { return search_term_; }
 

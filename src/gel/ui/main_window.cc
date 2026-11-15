@@ -392,7 +392,10 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
         on_busy_changed_(false);
       }
     }
-    toolbar_.Update(commit_search_.progress());
+    SearchBar::MatchState search_matches{
+        commit_search_.MatchRank(commit_history_.GetSelectedCommitIndex()),
+        commit_search_.match_count(), commit_search_.search_complete()};
+    toolbar_.Update(search_matches, commit_search_.progress());
     commit_history_.Update(
         [this](int ci) { return commit_search_.IsMatch(ci); });
     if (settings_.show_size_panel) {
