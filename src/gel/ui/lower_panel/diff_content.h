@@ -89,6 +89,13 @@ class DiffContent : public TextViewer::Delegate {
   void Reset();
   void CancelSearch();
 
+  // See the TextViewer methods of the same names.
+  bool search_active() const { return text_viewer_.search_active(); }
+  bool search_input_active() const {
+    return text_viewer_.search_input_active();
+  }
+  void FocusSearch() { text_viewer_.FocusSearch(); }
+
   // Returns the top-right anchor for overlay controls, inset from the
   // scrollbar and below the search bar. Valid after Update().
   ImVec2 GetOverlayAnchor() const { return overlay_anchor_; }

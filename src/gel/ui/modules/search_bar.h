@@ -96,6 +96,10 @@ class SearchBar {
   // Focuses the input field on the next Update().
   void Focus() { focus_ = true; }
 
+  // Returns true while the input field has keyboard focus. Usable between
+  // Update() calls, e.g. by code that runs before the bar in the frame.
+  bool IsInputActive() const;
+
   // Focuses the input field, dropping |c| from the input for a few frames.
   // Lets a single-character shortcut focus the field without the shortcut key
   // itself leaking in through ImGui's event queue.
@@ -121,6 +125,7 @@ class SearchBar {
   static constexpr int kInputSize = 256;
   char input_[kInputSize] = {};
 
+  unsigned int input_id_ = 0;  // ImGuiID of the input field.
   std::string prev_term_;
   std::string counter_;
   bool focus_ = false;

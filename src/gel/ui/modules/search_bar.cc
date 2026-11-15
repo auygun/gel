@@ -44,6 +44,10 @@ void SearchBar::FocusRejectingChar(char c) {
   reject_frames_ = kRejectFrames;
 }
 
+bool SearchBar::IsInputActive() const {
+  return input_id_ != 0 && ImGui::GetActiveID() == input_id_;
+}
+
 int SearchBar::InputCallback(ImGuiInputTextCallbackData* data) {
   auto* self = static_cast<SearchBar*>(data->UserData);
   if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter)
@@ -143,9 +147,10 @@ SearchBar::Result SearchBar::Update(const Options& opts,
     flags |= ImGuiInputTextFlags_CallbackHistory;
   bool entered = ImGui::InputText(widget_id("input"), input_, kInputSize, flags,
                                   &SearchBar::InputCallback, this);
+  input_id_ = ImGui::GetItemID();
   if (reload_) {
     reload_ = false;
-    if (auto* state = ImGui::GetInputTextState(ImGui::GetItemID()))
+    if (auto* state = ImGui::GetInputTextState(input_id_))
       state->ReloadUserBufAndSelectAll();
   }
   result.input_active = ImGui::IsItemActive();

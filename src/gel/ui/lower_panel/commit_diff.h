@@ -83,6 +83,14 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
 
   void CancelSearch();
 
+  // The diff content's search bar: whether it is open, whether its input has
+  // focus, and focusing it on the next Update().
+  bool search_active() const { return diff_content_.search_active(); }
+  bool search_input_active() const {
+    return diff_content_.search_input_active();
+  }
+  void FocusSearch() { diff_content_.FocusSearch(); }
+
   // Scrolls to and highlights the given diff line.
   void HighlightLine(int line);
 

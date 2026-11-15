@@ -121,7 +121,8 @@ the controls. CSD can be toggled in Settings (requires restart).
 - **/** -- Focus the commit search field
 - **Ctrl+M / Ctrl+Shift+M** -- Switch to the next / previous commit search
   mode
-- **Tab / Shift+Tab** -- Cycle focus between toolbar input fields
+- **Tab / Shift+Tab** -- Cycle focus between the toolbar input fields and,
+  while it is open, the diff search field
 - **Enter / Escape** -- Dismiss message or error popups (text is selectable
   in popups)
 - **Alt+Mouse Wheel** -- Scroll five times faster in any scrollable view,

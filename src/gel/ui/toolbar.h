@@ -52,6 +52,11 @@ class Toolbar {
     // Asks for another frame, for a transient message with nothing else
     // keeping the window redrawing.
     virtual void OnKeepDrawingRequested() = 0;
+    // The diff content's search field, which Tab / Shift+Tab cycle to after
+    // the toolbar's own fields while it is shown.
+    virtual bool IsDiffSearchShown() const = 0;
+    virtual bool IsDiffSearchFocused() const = 0;
+    virtual void FocusDiffSearch() = 0;
   };
 
   Toolbar(Delegate& delegate,
@@ -94,7 +99,9 @@ class Toolbar {
   std::string pending_commit_input_;
   bool commit_input_changed_ = false;
   bool focus_input_ = false;
-  int active_field_ = -1;  // 0=commit, 1=search, -1=none
+  // Fields Tab / Shift+Tab cycle through, in order.
+  enum class Field { kNone = -1, kCommit, kSearch, kDiffSearch };
+  Field active_field_ = Field::kNone;
   bool tooltip_suppressed_ = false;
 
   // CSD button state for foreground draw list rendering and raw input.

@@ -116,6 +116,18 @@ class TextViewer {
   // Returns true if the search bar is currently visible.
   bool search_active() const { return search_active_; }
 
+  // Returns true while the search bar's input field has keyboard focus.
+  bool search_input_active() const {
+    return search_active_ && search_bar_.IsInputActive();
+  }
+
+  // Focuses the search bar's input field on the next Update(), if the bar is
+  // visible.
+  void FocusSearch() {
+    if (search_active_)
+      search_bar_.Focus();
+  }
+
   // Past search terms for the search bar to keep and browse with Up / Down,
   // most recent first. Null (the default) disables history.
   void set_search_history(std::vector<std::string>* history) {

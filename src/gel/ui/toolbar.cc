@@ -36,24 +36,35 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
   bool modal_open = ImGui::GetTopMostPopupModal() != nullptr;
   bool focus_search = false;
 
-  // Tab cycles focus between toolbar input fields, Shift+Tab goes backward.
-  // 0 = commit input, 1 = search.
+  // Tab cycles focus forward through the toolbar's input fields and, while it
+  // is shown, the diff content's search field. Shift+Tab goes backward. With
+  // none of them focused, Tab starts at the first and Shift+Tab at the last.
   if (!modal_open && !ImGui::GetIO().KeyCtrl &&
       ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
-    if (ImGui::GetIO().KeyShift) {
-      if (active_field_ == 0)
-        focus_search = true;
-      else if (active_field_ == 1)
+    std::vector<Field> fields = {Field::kCommit, Field::kSearch};
+    if (delegate_.IsDiffSearchShown())
+      fields.push_back(Field::kDiffSearch);
+    int count = static_cast<int>(fields.size());
+    auto it = std::find(fields.begin(), fields.end(), active_field_);
+    int next;
+    if (it == fields.end())
+      next = ImGui::GetIO().KeyShift ? count - 1 : 0;
+    else
+      next = (static_cast<int>(it - fields.begin()) +
+              (ImGui::GetIO().KeyShift ? count - 1 : 1)) %
+             count;
+    switch (fields[next]) {
+      case Field::kCommit:
         focus_input_ = true;
-      else
+        break;
+      case Field::kSearch:
         focus_search = true;
-    } else {
-      if (active_field_ == 0)
-        focus_search = true;
-      else if (active_field_ == 1)
-        focus_input_ = true;
-      else
-        focus_input_ = true;
+        break;
+      case Field::kDiffSearch:
+        delegate_.FocusDiffSearch();
+        break;
+      case Field::kNone:
+        break;
     }
   }
   if (focus_search)
@@ -361,13 +372,17 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
       ImGui::IsKeyPressed(ImGuiKey_Slash, false))
     search_bar_.FocusRejectingChar('/');
 
-  // Track which field is active for next frame's Tab handling.
+  // Track which field is active for next frame's Tab handling. The diff
+  // search is drawn after the toolbar, so this sees its state as of the last
+  // frame, like the toolbar's own fields at the next Tab press.
   if (commit_input_active)
-    active_field_ = 0;
+    active_field_ = Field::kCommit;
   else if (search.input_active)
-    active_field_ = 1;
+    active_field_ = Field::kSearch;
+  else if (delegate_.IsDiffSearchFocused())
+    active_field_ = Field::kDiffSearch;
   else
-    active_field_ = -1;
+    active_field_ = Field::kNone;
 
   if (!any_toolbar_hovered)
     tooltip_suppressed_ = false;

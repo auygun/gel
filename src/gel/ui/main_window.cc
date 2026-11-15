@@ -771,6 +771,19 @@ void MainWindow::OnToggleLowerPanel() {
   }
 }
 
+bool MainWindow::IsDiffSearchShown() const {
+  return !settings_.show_size_panel && commit_diff_.search_active();
+}
+
+bool MainWindow::IsDiffSearchFocused() const {
+  return IsDiffSearchShown() && commit_diff_.search_input_active();
+}
+
+void MainWindow::FocusDiffSearch() {
+  if (IsDiffSearchShown())
+    commit_diff_.FocusSearch();
+}
+
 bool MainWindow::IsSizePanelActive() const {
   return settings_.show_size_panel;
 }

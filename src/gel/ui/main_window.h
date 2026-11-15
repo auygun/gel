@@ -208,6 +208,9 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnBranchSwitchRequested(const std::string& branch) final;
   void OnConsoleWindowRequested() final;
   void OnKeepDrawingRequested() final;
+  bool IsDiffSearchShown() const final;
+  bool IsDiffSearchFocused() const final;
+  void FocusDiffSearch() final;
 
   // DirectoryBrowser::Delegate implementation
   void OnDirectorySelected(const std::filesystem::path& path) final;
