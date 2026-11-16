@@ -362,7 +362,9 @@ Right-click a branch label to access:
 - **Copy branch name** -- Copy the branch name to the clipboard.
 - **Open in new window** -- Open a new Gel instance at that branch.
 - **Rename** -- Rename the branch (inline input field, disabled for remote
-  branches).
+  branches). If it fails (e.g. a branch with the new name exists), a
+  confirmation dialog shows git's error and offers to force the rename
+  (`git branch -M`).
 - **Create branch** -- Create a new branch from this branch (inline input
   field). If it fails (e.g. the branch already exists), a confirmation dialog
   shows git's error and offers to force create it (`git branch -f`).

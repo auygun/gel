@@ -72,7 +72,8 @@ class GitCmdRunner {
                                            const std::string& cmd_name,
                                            bool show_popup)>;
   // Called with git's error when a command started with Run() fails. Return
-  // true if the failure was handled, so ErrorCallback is skipped.
+  // true if the failure was handled, so ErrorCallback is skipped (or, for a
+  // task command such as cherry-pick, the console isn't opened).
   using FailureCallback = std::function<bool(const std::string& error)>;
 
   GitCmdRunner(GitRepo& git_repo,
@@ -83,7 +84,8 @@ class GitCmdRunner {
   // Runs "git <args...>" in the serialized slot. Returns false if the
   // command slot is occupied. |scope| is passed to the result callback so it
   // can skip a full refresh for commands with limited effect. |on_failure|,
-  // if set, is called instead of the error callback if this command fails.
+  // if set, is called if this command fails, before the error callback. It
+  // isn't called for a command queued with RunNext().
   bool Run(std::vector<std::string> args,
            RefreshScope scope = RefreshScope::kFull,
            FailureCallback on_failure = {});

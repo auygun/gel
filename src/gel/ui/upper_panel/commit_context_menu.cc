@@ -39,6 +39,34 @@ void CreateRef(GitCmdRunner& runner,
   ImGui::CloseCurrentPopup();
 }
 
+// Runs "git branch -m <branch> <new name>", where <new name> is the text in
+// |buf|. If it fails (e.g. a branch with the new name exists), git's error is
+// shown with an offer to force the rename with "-M". Once the command has
+// started, the input is cleared and the popup closes.
+void RenameBranch(GitCmdRunner& runner,
+                  const ConfirmFn& confirm,
+                  const std::string& branch,
+                  char* buf) {
+  if (buf[0] == '\0')
+    return;
+  std::string new_name = buf;
+  auto on_failure = [&runner, confirm, branch,
+                     new_name](const std::string& error) {
+    std::string msg = error.empty() ? "Command failed." : error;
+    msg += "\n\nForce rename branch '" + branch + "' to '" + new_name +
+           "' (git branch -M)?";
+    confirm("branch failed", std::move(msg), [&runner, branch, new_name] {
+      runner.Run({"branch", "-M", branch, new_name}, RefreshScope::kRefs);
+    });
+    return true;
+  };
+  if (!runner.Run({"branch", "-m", branch, new_name}, RefreshScope::kRefs,
+                  std::move(on_failure)))
+    return;
+  buf[0] = '\0';
+  ImGui::CloseCurrentPopup();
+}
+
 }  // namespace
 
 CommitContextMenu::CommitContextMenu(
@@ -316,19 +344,11 @@ void RenderBranchMenuItems(
   if (ImGui::InputTextWithHint("##rename_branch", "New name", rename_buf,
                                rename_buf_size,
                                ImGuiInputTextFlags_EnterReturnsTrue)) {
-    if (rename_buf[0] != '\0') {
-      runner.Run({"branch", "-m", branch_name, rename_buf},
-                 RefreshScope::kRefs);
-      rename_buf[0] = '\0';
-      ImGui::CloseCurrentPopup();
-    }
+    RenameBranch(runner, confirm, branch_name, rename_buf);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Rename") && rename_buf[0] != '\0') {
-    runner.Run({"branch", "-m", branch_name, rename_buf}, RefreshScope::kRefs);
-    rename_buf[0] = '\0';
-    ImGui::CloseCurrentPopup();
-  }
+  if (ImGui::Button("Rename"))
+    RenameBranch(runner, confirm, branch_name, rename_buf);
   ImGui::EndDisabled();
   ImGui::BeginDisabled(busy);
   ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);

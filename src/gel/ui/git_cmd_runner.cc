@@ -131,11 +131,15 @@ void GitCmdRunner::Update() {
       // Belongs to this command only, not to any follow-up from RunNext().
       FailureCallback on_failure = std::move(on_failure_);
       on_failure_ = nullptr;
+      std::string error;
+      if (!result.success) {
+        error = JoinLines(cmd_.GetOutput(), true);
+        if (error.empty())
+          error = JoinLines(cmd_.GetOutput(), false);
+      }
 
       if (task_ != GitTask::kNone &&
           ClassifyCommand(cmd_.cmd_name()) != GitTask::kNone) {
-        if (!result.success)
-          show_console_ = true;
         // Fallback: if --continue fails with "nothing to commit", the
         // revert was committed externally and REVERT_HEAD is stale.
         // (Primary detection is the MERGE_MSG check in UpdateTaskState.)
@@ -147,6 +151,12 @@ void GitCmdRunner::Update() {
             });
         if (resolved_externally)
           std::filesystem::remove(git_repo_.git_dir() / "REVERT_HEAD");
+        // The console shows the task's output and its continue/abort
+        // controls, unless |on_failure| handled the failure. A revert
+        // resolved externally didn't really fail, so it isn't reported.
+        if (!result.success &&
+            (resolved_externally || !on_failure || !on_failure(error)))
+          show_console_ = true;
         GitTask prev_task = task_;
         UpdateTaskState();
         if (prev_task != GitTask::kNone && task_ == GitTask::kNone) {
@@ -167,9 +177,6 @@ void GitCmdRunner::Update() {
         }
       } else if (!result.success) {
         next_args_.clear();
-        std::string error = JoinLines(cmd_.GetOutput(), true);
-        if (error.empty())
-          error = JoinLines(cmd_.GetOutput(), false);
         if (on_failure && on_failure(error)) {
           // Handled by the caller of Run().
         } else if (!error_callback_(error, cmd_.cmd_name(), false)) {
