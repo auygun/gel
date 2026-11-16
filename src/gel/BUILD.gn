@@ -155,6 +155,8 @@ executable("gel") {
     "ui/modules/text_viewer.h",
     "ui/modules/text_viewer_search.cc",
     "ui/modules/text_viewer_search.h",
+    "ui/overlay_toolbar.cc",
+    "ui/overlay_toolbar.h",
     "ui/popup_modal.cc",
     "ui/popup_modal.h",
     "ui/settings_modal.cc",

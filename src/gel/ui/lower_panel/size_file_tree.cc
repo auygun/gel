@@ -8,7 +8,6 @@
 #include <functional>
 
 #include "gel/persistent_settings.h"
-#include "gel/ui/icons.h"
 #include "gel/ui/lower_panel/charts/chart_renderer.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -188,43 +187,40 @@ void SizeFileTree::OpenAncestors(TreeNode* target) {
   }
 }
 
-void SizeFileTree::RenderSortButtons(float btn_size) {
-  struct SortButton {
-    SizeTreeSort sort;
-    const char* id;
-    void (*draw_icon)();
-    const char* tooltip;
+void SizeFileTree::SetAllDirsOpen(bool open) {
+  std::function<void(TreeNode&)> set_open = [&](TreeNode& n) {
+    if (!n.is_directory)
+      return;
+    n.open = open;
+    for (auto& child : n.children)
+      set_open(child);
   };
-  static const SortButton kButtons[] = {
-      {SizeTreeSort::kName, "##sort_name", DrawSortByNameIcon, "Sort by name"},
-      {SizeTreeSort::kSize, "##sort_size", DrawSortBySizeIcon, "Sort by size"},
-  };
-  constexpr int kNumButtons = 2;
-
-  float spacing = ImGui::GetStyle().ItemSpacing.x * 0.5f;
-
-  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-    sort_tooltip_suppressed_ = true;
-  bool any_hovered = false;
-
-  for (int i = 0; i < kNumButtons; i++) {
-    auto& btn = kButtons[i];
-    bool active = (settings_.size_tree_sort == btn.sort);
-    ToggleButton(btn.id, active, ImVec2(btn_size, btn_size));
-    btn.draw_icon();
-    if (ImGui::IsItemClicked()) {
-      settings_.size_tree_sort = btn.sort;
-      settings_.Save();
-      SortTree();
-      FlattenTree();
-    }
-    ItemTooltip(btn.tooltip, any_hovered, sort_tooltip_suppressed_);
-    if (i < kNumButtons - 1)
-      ImGui::SameLine(0, spacing);
+  for (auto& child : root_.children)
+    set_open(child);
+  root_.open = true;
+  FlattenTree();
+  // Keep the selected directory, or the directory now hiding it, in view.
+  TreeNode* target = selected_dir_;
+  if (!open && target && target != &root_) {
+    // The top-level directory containing it.
+    auto slash = target->full_path.find('/');
+    target = FindNode(target->full_path.substr(0, slash));
   }
+  for (int i = 0; i < static_cast<int>(flat_tree_.size()); i++) {
+    if (flat_tree_[i].node == target) {
+      scroll_to_row_ = i;
+      break;
+    }
+  }
+}
 
-  if (!any_hovered)
-    sort_tooltip_suppressed_ = false;
+void SizeFileTree::SetSort(SizeTreeSort sort) {
+  if (settings_.size_tree_sort == sort)
+    return;
+  settings_.size_tree_sort = sort;
+  settings_.Save();
+  SortTree();
+  FlattenTree();
 }
 
 void SizeFileTree::RenderFileTree() {
@@ -325,38 +321,6 @@ void SizeFileTree::RenderFileTree() {
         ImGui::TextUnformatted(label);
         ImGui::PopClipRect();
 
-        // Overlay collapse + sort buttons right-aligned on the root row.
-        if (node == &root_) {
-          float btn_sz = ImGui::GetTextLineHeight();
-          float btn_spacing = ImGui::GetStyle().ItemSpacing.x * 0.5f;
-          float btns_w = 3.0f * btn_sz + 2.0f * btn_spacing;
-          float right_edge = window_x + ImGui::GetWindowContentRegionMax().x;
-          ImGui::SetCursorScreenPos(ImVec2(right_edge - btns_w, cursor.y));
-
-          ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-          bool collapse_hovered = false;
-          ImGui::Button("##collapse", ImVec2(btn_sz, btn_sz));
-          DrawCollapseAllIcon();
-          if (ImGui::IsItemClicked()) {
-            std::function<void(TreeNode&)> collapse = [&](TreeNode& n) {
-              if (!n.is_directory)
-                return;
-              n.open = false;
-              for (auto& child : n.children)
-                collapse(child);
-            };
-            for (auto& child : root_.children)
-              collapse(child);
-            root_.open = true;
-            need_reflatten = true;
-          }
-          ItemTooltip("Collapse all", collapse_hovered,
-                      sort_tooltip_suppressed_);
-          ImGui::SameLine(0, btn_spacing);
-
-          RenderSortButtons(btn_sz);
-          ImGui::PopStyleVar();
-        }
       } else {
         // Leaf file node.
         ImVec2 cursor = ImGui::GetCursorScreenPos();

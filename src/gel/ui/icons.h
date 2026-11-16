@@ -65,9 +65,6 @@ void DrawTreemapIcon();
 void DrawSortByNameIcon();
 void DrawSortBySizeIcon();
 
-// Collapse-all icon for tree views.
-void DrawCollapseAllIcon();
-
 // File tree icon (a trunk with indented branches) for the file list's
 // list/tree view toggle.
 void DrawFileTreeIcon();

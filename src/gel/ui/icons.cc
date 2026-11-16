@@ -544,34 +544,6 @@ void DrawSortBySizeIcon() {
   }
 }
 
-// A horizontal line with a chevron above and below it, pointing at the line.
-void DrawCollapseAllIcon() {
-  ImDrawList* dl = ImGui::GetWindowDrawList();
-  ImVec2 btn_min = ImGui::GetItemRectMin();
-  ImVec2 btn_max = ImGui::GetItemRectMax();
-  float size = std::min(btn_max.x - btn_min.x, btn_max.y - btn_min.y);
-  float thickness = std::max(1.5f, size * 0.08f);
-  ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
-  float cx = (btn_min.x + btn_max.x) * 0.5f;
-  float cy = (btn_min.y + btn_max.y) * 0.5f;
-
-  float line_half_w = size * 0.32f;
-  dl->AddLine(ImVec2(cx - line_half_w, cy), ImVec2(cx + line_half_w, cy), color,
-              thickness);
-
-  float half_w = size * 0.24f;
-  float height = size * 0.12f;
-  // Keeps the chevron tips clear of the line.
-  float gap = size * 0.14f;
-  for (float dir : {-1.0f, 1.0f}) {
-    float tip_y = cy + dir * gap;
-    float base_y = cy + dir * (gap + height);
-    ImVec2 points[] = {ImVec2(cx - half_w, base_y), ImVec2(cx, tip_y),
-                       ImVec2(cx + half_w, base_y)};
-    dl->AddPolyline(points, 3, color, ImDrawFlags_None, thickness);
-  }
-}
-
 void DrawFileTreeIcon() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();

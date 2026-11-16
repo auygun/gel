@@ -15,6 +15,7 @@
 #include "gel/commands/git_diff_tree.h"
 #include "gel/ui/lower_panel/charts/chart_renderer.h"
 #include "gel/ui/lower_panel/size_file_tree.h"
+#include "gel/ui/overlay_toolbar.h"
 
 class BarChart;
 class DonutChart;
@@ -49,7 +50,11 @@ class CommitSize : public ChartRenderer::Delegate,
   // SizeFileTree::Delegate implementation.
   void OnDirectorySelected(SizeFileTree::TreeNode* node) override;
 
-  void RenderChartStyleButtons();
+  static float OverlayContentWidth();
+  // Renders the overlay toolbar with the tree's and the chart's controls over
+  // the chart's window, whose top-right corner is |anchor|. Call after the
+  // chart's window ends.
+  void RenderOverlay(const ImVec2& anchor);
   void RenderBreadcrumb();
   std::vector<SliceInfo> ComputeSlices();
 
@@ -69,7 +74,7 @@ class CommitSize : public ChartRenderer::Delegate,
   std::unique_ptr<BarChart> bar_chart_;
   std::unique_ptr<TreemapChart> treemap_chart_;
 
-  bool chart_tooltip_suppressed_ = false;
+  OverlayToolbar overlay_;
 };
 
 #endif  // GEL_UI_LOWER_PANEL_COMMIT_SIZE_H

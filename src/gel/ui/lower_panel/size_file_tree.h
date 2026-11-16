@@ -16,6 +16,7 @@ struct ChangedFileEntry {
 };
 
 class PersistentSettings;
+enum class SizeTreeSort;
 
 // File tree panel for the size view. Builds an in-memory tree from a flat
 // file list, renders it with expand/collapse, and notifies a delegate when
@@ -62,6 +63,12 @@ class SizeFileTree {
 
   bool HasData() const { return !files_.empty(); }
 
+  // Expands or collapses all directories below the root.
+  void SetAllDirsOpen(bool open);
+
+  // Sorts the tree by |sort| and remembers the choice.
+  void SetSort(SizeTreeSort sort);
+
  private:
   // A visible row in the flattened tree, used by the clipper.
   struct FlatRow {
@@ -75,7 +82,6 @@ class SizeFileTree {
   void FlattenNode(TreeNode& node, int depth);
   void OpenAncestors(TreeNode* target);
 
-  void RenderSortButtons(float btn_size);
   void RenderFileTree();
 
   Delegate& delegate_;
@@ -88,7 +94,6 @@ class SizeFileTree {
 
   bool scroll_to_selected_ = false;
   int scroll_to_row_ = -1;
-  bool sort_tooltip_suppressed_ = false;
 };
 
 #endif  // GEL_UI_LOWER_PANEL_SIZE_FILE_TREE_H

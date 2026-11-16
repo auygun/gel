@@ -11,6 +11,7 @@
 #include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/lower_panel/diff_content.h"
 #include "gel/ui/lower_panel/file_list.h"
+#include "gel/ui/overlay_toolbar.h"
 
 class GitCmdRunner;
 class GitDiff;
@@ -128,7 +129,7 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
   FileList file_list_;
   DiffContent diff_content_;
 
-  bool overlay_tooltip_suppressed_ = false;
+  OverlayToolbar overlay_;
 };
 
 #endif  // GEL_UI_LOWER_PANEL_COMMIT_DIFF_H

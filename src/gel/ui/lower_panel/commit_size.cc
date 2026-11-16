@@ -5,12 +5,15 @@
 #include "gel/ui/lower_panel/commit_size.h"
 
 #include <algorithm>
+#include <iterator>
+#include <optional>
 
 #include "gel/persistent_settings.h"
 #include "gel/ui/icons.h"
 #include "gel/ui/lower_panel/charts/bar_chart.h"
 #include "gel/ui/lower_panel/charts/donut_chart.h"
 #include "gel/ui/lower_panel/charts/treemap_chart.h"
+#include "gel/ui/overlay_toolbar.h"
 #include "gel/ui/style.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -130,53 +133,98 @@ std::vector<SliceInfo> CommitSize::ComputeSlices() {
   return slices;
 }
 
-void CommitSize::RenderChartStyleButtons() {
-  struct StyleButton {
-    ChartStyle style;
-    const char* id;
-    void (*draw_icon)();
-    const char* tooltip;
-  };
-  static const StyleButton kButtons[] = {
-      {ChartStyle::kDonut, "##donut", DrawDonutChartIcon, "Donut chart"},
-      {ChartStyle::kBar, "##bar", DrawBarChartIcon, "Bar chart"},
-      {ChartStyle::kTreemap, "##treemap", DrawTreemapIcon, "Treemap"},
-  };
-  constexpr int kNumButtons = 3;
+namespace {
 
-  float btn_size = ImGui::GetFrameHeight();
-  float spacing = ImGui::GetStyle().ItemSpacing.x * 0.5f;
-  float total_w = static_cast<float>(kNumButtons) * btn_size +
-                  static_cast<float>(kNumButtons - 1) * spacing +
-                  ImGui::GetStyle().FramePadding.x;
-  float avail_w = ImGui::GetContentRegionAvail().x;
-  ImGui::SameLine(avail_w - total_w);
+struct StyleButton {
+  ChartStyle style;
+  const char* id;
+  void (*draw_icon)();
+  const char* tooltip;
+};
+constexpr StyleButton kStyleButtons[] = {
+    {ChartStyle::kDonut, "##donut", DrawDonutChartIcon, "Donut chart"},
+    {ChartStyle::kBar, "##bar", DrawBarChartIcon, "Bar chart"},
+    {ChartStyle::kTreemap, "##treemap", DrawTreemapIcon, "Treemap"},
+};
 
-  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-    chart_tooltip_suppressed_ = true;
-  bool any_hovered = false;
+}  // namespace
 
-  for (int i = 0; i < kNumButtons; i++) {
-    auto& btn = kButtons[i];
+float CommitSize::OverlayContentWidth() {
+  float num_buttons =
+      static_cast<float>(1 + std::size(kStyleButtons));  // Sort + styles.
+  // Plus the separator between the tree's and the chart's controls.
+  return OverlayToolbar::HalfButtonWidth() +
+         num_buttons *
+             (OverlayToolbar::Spacing() + OverlayToolbar::ButtonSize()) +
+         OverlayToolbar::Spacing() + OverlayToolbar::SeparatorWidth();
+}
+
+void CommitSize::RenderOverlay(const ImVec2& anchor) {
+  float btn_size = OverlayToolbar::ButtonSize();
+  overlay_.Begin("##size_overlay", anchor, OverlayContentWidth());
+
+  // The tree's controls first, as the file list's are in the diff overlay,
+  // then the chart's.
+  bool expand_all_requested = false;
+  bool collapse_all_requested = false;
+  overlay_.ExpandCollapseButtons(expand_all_requested, collapse_all_requested);
+
+  // On while the tree is sorted by size, off while by name.
+  ImGui::SameLine();
+  bool by_size = settings_.size_tree_sort == SizeTreeSort::kSize;
+  std::optional<SizeTreeSort> sort_requested;
+  if (ToggleButton("##sort_by_size", by_size, ImVec2(btn_size, btn_size)))
+    sort_requested = by_size ? SizeTreeSort::kName : SizeTreeSort::kSize;
+  DrawSortBySizeIcon();
+  overlay_.Tooltip(by_size ? "Sort: by size" : "Sort: by name");
+
+  // Separates the tree's controls from the chart's.
+  ImGui::SameLine();
+  overlay_.Separator();
+
+  std::optional<ChartStyle> style_requested;
+  for (auto& btn : kStyleButtons) {
+    ImGui::SameLine();
     bool active = (settings_.chart_style == btn.style);
-    ToggleButton(btn.id, active, ImVec2(btn_size, btn_size));
+    if (ToggleButton(btn.id, active, ImVec2(btn_size, btn_size)) && !active)
+      style_requested = btn.style;
     btn.draw_icon();
-    if (ImGui::IsItemClicked()) {
-      settings_.chart_style = btn.style;
-      settings_.Save();
-    }
-    ItemTooltip(btn.tooltip, any_hovered, chart_tooltip_suppressed_);
-    if (i < kNumButtons - 1)
-      ImGui::SameLine(0, spacing);
+    overlay_.Tooltip(btn.tooltip);
   }
 
-  if (!any_hovered)
-    chart_tooltip_suppressed_ = false;
+  overlay_.End();
+
+  if (expand_all_requested)
+    file_tree_.SetAllDirsOpen(true);
+  if (collapse_all_requested)
+    file_tree_.SetAllDirsOpen(false);
+  if (sort_requested)
+    file_tree_.SetSort(*sort_requested);
+  if (style_requested) {
+    settings_.chart_style = *style_requested;
+    settings_.Save();
+  }
 }
 
 void CommitSize::RenderBreadcrumb() {
   auto* dir = file_tree_.GetSelectedDirectory();
   int64_t total = dir->size;
+
+  // On the overlay's line, centered on it and clipped short of it, with the
+  // chart starting below it.
+  ImVec2 anchor = OverlayToolbar::WindowAnchor();
+  float row_top = ImGui::GetCursorScreenPos().y;
+  ImGui::SetCursorScreenPos(
+      ImVec2(ImGui::GetCursorScreenPos().x,
+             std::max(row_top, anchor.y + OverlayToolbar::CenterOffset() -
+                                   ImGui::GetTextLineHeight() / 2)));
+  float clip_right = anchor.x - OverlayToolbar::Width(OverlayContentWidth()) -
+                     OverlayToolbar::Spacing() * 2;
+  ImVec2 win_min = ImGui::GetWindowPos();
+  ImVec2 win_max(win_min.x + ImGui::GetWindowSize().x,
+                 win_min.y + ImGui::GetWindowSize().y);
+  ImGui::PushClipRect(win_min,
+                      ImVec2(std::max(win_min.x, clip_right), win_max.y), true);
 
   SizeFileTree::TreeNode* nav_target = nullptr;
   if (ImGui::SmallButton("/##chart_root"))
@@ -212,9 +260,11 @@ void CommitSize::RenderBreadcrumb() {
   }
   ImGui::SameLine();
   ImGui::TextDisabled("(%s)", HumanSize(total).c_str());
+  ImGui::PopClipRect();
 
-  // Chart style buttons on the same line, right-aligned.
-  RenderChartStyleButtons();
+  float chart_top = anchor.y + OverlayToolbar::BottomOffset();
+  if (ImGui::GetCursorScreenPos().y < chart_top)
+    ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, chart_top));
 
   if (nav_target && nav_target->is_directory) {
     file_tree_.ScrollToDirectory(nav_target);
@@ -317,6 +367,8 @@ void CommitSize::Update() {
     draw_separator();
 
     // Right: chart view.
+    bool chart_visible = false;
+    ImVec2 chart_anchor;
     if (ImGui::BeginChild("size_chart", ImVec2(-FLT_MIN, -FLT_MIN),
                           ImGuiChildFlags_Borders)) {
       if (has_tree_data) {
@@ -346,8 +398,15 @@ void CommitSize::Update() {
           }
         }
       }
+      chart_visible = true;
+      chart_anchor = OverlayToolbar::WindowAnchor();
     }
     ImGui::EndChild();
+
+    // Over the chart, after its window, like the diff view's overlay over the
+    // diff.
+    if (chart_visible && has_tree_data)
+      RenderOverlay(chart_anchor);
   }
   ImGui::EndChild();
 }

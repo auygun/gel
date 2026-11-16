@@ -5,12 +5,12 @@
 #include "gel/ui/lower_panel/commit_diff.h"
 
 #include <algorithm>
-#include <cmath>
 #include <optional>
 
 #include "gel/commands/git_diff.h"
 #include "gel/persistent_settings.h"
 #include "gel/ui/icons.h"
+#include "gel/ui/overlay_toolbar.h"
 #include "gel/ui/style.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -123,90 +123,46 @@ void CommitDiff::RenderOverlayControls() {
   if (anchor.x == 0 && anchor.y == 0)
     return;
 
-  float frame_h = ImGui::GetFrameHeight();
-  float spacing = ImGui::GetStyle().ItemSpacing.x;
+  float frame_h = OverlayToolbar::ButtonSize();
+  float spacing = OverlayToolbar::Spacing();
   float ctx_input_w =
       ImGui::CalcTextSize("0000").x + ImGui::GetStyle().FramePadding.x * 2;
-  float ctx_btn_w =
-      ImGui::CalcTextSize("+").x + ImGui::GetStyle().FramePadding.x * 2;
+  float ctx_btn_w = OverlayToolbar::HalfButtonWidth();
 
   bool show_refresh = IsUnstagedSelected() || IsStagedSelected();
   bool show_merge_mode = IsMergeShown();
   bool tree = settings_.file_list_tree;
+  // The file list's controls, a separator, then the diff's.
   float total_width = (tree ? ctx_btn_w : 0.0f) + frame_h + spacing +
+                      OverlayToolbar::SeparatorWidth() + spacing +
                       (show_refresh ? frame_h + spacing : 0.0f) +
                       (show_merge_mode ? frame_h + spacing : 0.0f) + frame_h +
                       spacing + ctx_input_w + ctx_btn_w;
-  ImVec2 pad = ImGui::GetStyle().WindowPadding;
-  pad.x *= 0.5f;
-  pad.y *= 0.5f;
-  ImVec2 pos(anchor.x - total_width - spacing - pad.x * 2, anchor.y + spacing);
-
-  // Lightweight child container so widgets get hit testing.
-  ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-  bg.w = 1.0f;
-  ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, 0));
-  ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-  ImGui::BeginChild("##diff_overlay",
-                    ImVec2(total_width + pad.x * 2, frame_h + pad.y * 2),
-                    ImGuiChildFlags_None);
-
-  // Center content within the padded frame
-  ImGui::SetCursorPosY(pad.y);
-  ImGui::SetCursorPosX(pad.x);
-
-  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-    overlay_tooltip_suppressed_ = true;
-  bool any_hovered = false;
+  overlay_.Begin("##diff_overlay", anchor, total_width);
 
   float half_h = frame_h / 2;
   ImU32 text_col = ImGui::GetColorU32(ImGuiCol_Text);
   ImU32 dis_col = ImGui::GetColorU32(ImGuiCol_TextDisabled);
 
   // Left of the file view toggle, so that showing them doesn't move the
-  // toggle in the right-aligned overlay. Stacked half-height buttons attached
-  // to the toggle like the lines of context ones to their input, marked with
-  // the arrows of the tree's open and closed directories.
+  // toggle in the right-aligned overlay, and attached to it like the lines of
+  // context ones to their input.
   bool expand_all_requested = false;
   bool collapse_all_requested = false;
   if (tree) {
-    auto draw_arrow = [&](bool down) {
-      ImVec2 mn = ImGui::GetItemRectMin();
-      ImVec2 mx = ImGui::GetItemRectMax();
-      ImVec2 c((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
-      float r = std::floor(half_h * 0.3f);
-      ImDrawList* dl = ImGui::GetWindowDrawList();
-      if (down) {
-        dl->AddTriangleFilled(ImVec2(c.x - r, c.y - r * 0.5f),
-                              ImVec2(c.x + r, c.y - r * 0.5f),
-                              ImVec2(c.x, c.y + r * 0.5f), text_col);
-      } else {
-        dl->AddTriangleFilled(ImVec2(c.x - r * 0.5f, c.y - r),
-                              ImVec2(c.x + r * 0.5f, c.y),
-                              ImVec2(c.x - r * 0.5f, c.y + r), text_col);
-      }
-    };
-    ImGui::BeginGroup();
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    expand_all_requested =
-        ImGui::Button("##expand_all", ImVec2(ctx_btn_w, half_h));
-    draw_arrow(true);
-    ItemTooltip("Expand all", any_hovered, overlay_tooltip_suppressed_);
-    collapse_all_requested =
-        ImGui::Button("##collapse_all", ImVec2(ctx_btn_w, half_h));
-    draw_arrow(false);
-    ItemTooltip("Collapse all", any_hovered, overlay_tooltip_suppressed_);
-    ImGui::PopStyleVar();
-    ImGui::EndGroup();
+    overlay_.ExpandCollapseButtons(expand_all_requested,
+                                   collapse_all_requested);
     ImGui::SameLine(0, 0);
   }
 
   bool file_view_toggled =
       ToggleButton("##file_tree_view", tree, ImVec2(frame_h, frame_h));
   DrawFileTreeIcon();
-  ItemTooltip(tree ? "File view: tree" : "File view: list", any_hovered,
-              overlay_tooltip_suppressed_);
+  overlay_.Tooltip(tree ? "File view: tree" : "File view: list");
+
+  // Separates the file list's controls from the diff's.
+  ImGui::SameLine();
+  overlay_.Separator();
   ImGui::SameLine();
 
   bool refresh_requested = false;
@@ -214,7 +170,7 @@ void CommitDiff::RenderOverlayControls() {
     refresh_requested =
         ImGui::Button("##diff_refresh", ImVec2(frame_h, frame_h));
     DrawRefreshIcon();
-    ItemTooltip("Refresh diff", any_hovered, overlay_tooltip_suppressed_);
+    overlay_.Tooltip("Refresh diff");
     ImGui::SameLine();
   }
   std::optional<MergeDiffMode> merge_mode_requested;
@@ -228,9 +184,9 @@ void CommitDiff::RenderOverlayControls() {
       merge_mode_requested =
           first_parent ? MergeDiffMode::kCombined : MergeDiffMode::kFirstParent;
     DrawMergeIcon();
-    ItemTooltip(first_parent ? "Merge diff: against first parent"
-                             : "Merge diff: combined (conflict resolutions)",
-                any_hovered, overlay_tooltip_suppressed_);
+    overlay_.Tooltip(first_parent
+                         ? "Merge diff: against first parent"
+                         : "Merge diff: combined (conflict resolutions)");
     ImGui::SameLine();
   }
   bool has_filter = delegate_.HasDiffPathFilter();
@@ -238,8 +194,7 @@ void CommitDiff::RenderOverlayControls() {
   bool clear_filter_requested =
       ImGui::Button("##diff_clear_filter", ImVec2(frame_h, frame_h));
   DrawClearFilterIcon();
-  ItemTooltip("Clear diff path filter", any_hovered,
-              overlay_tooltip_suppressed_);
+  overlay_.Tooltip("Clear diff path filter");
   ImGui::EndDisabled();
 
   ImGui::SameLine();
@@ -280,15 +235,10 @@ void CommitDiff::RenderOverlayControls() {
   ImGui::PopStyleVar();
   ImGui::EndGroup();
   ImGui::EndGroup();
-  ItemTooltip("Lines of context", any_hovered, overlay_tooltip_suppressed_);
+  overlay_.Tooltip("Lines of context");
   ctx = std::clamp(ctx, 0, kMaxContextLines);
 
-  if (!any_hovered)
-    overlay_tooltip_suppressed_ = false;
-
-  ImGui::PopStyleVar();
-  ImGui::PopStyleColor();
-  ImGui::EndChild();
+  overlay_.End();
 
   if (expand_all_requested)
     file_list_.SetAllDirsOpen(true);

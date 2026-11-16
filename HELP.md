@@ -38,6 +38,7 @@ merging.
 - [Size View (Lower Panel)](#size-view-lower-panel)
   - [File Tree](#file-tree-left-side)
   - [Chart View](#chart-view-right-side)
+  - [Size Overlay Controls](#size-overlay-controls)
   - [Chart Interaction](#chart-interaction)
 - [Directory Browser](#directory-browser)
 - [Settings](#settings)
@@ -623,10 +624,7 @@ A hierarchical tree of directories and files changed in the selected commit,
 with sizes displayed next to each entry.
 
 - Click a directory to select it and update the chart.
-- Three buttons at the top control the tree:
-  - **Collapse all** -- Collapse all expanded directories.
-  - **Sort by name** -- Sort entries alphabetically.
-  - **Sort by size** -- Sort entries by size (largest first, default).
+- The tree is controlled from the [size overlay](#size-overlay-controls).
 
 ### Chart View (Right Side)
 
@@ -634,8 +632,19 @@ Visualizes the size breakdown of the selected directory. A breadcrumb path at
 the top shows the current directory with clickable components for navigation.
 The / button jumps to the root. Total directory size is shown in parentheses.
 
-Three chart styles are available via buttons in the top-right corner:
+Three chart styles are available in the
+[size overlay](#size-overlay-controls).
 
+### Size Overlay Controls
+
+A floating overlay in the upper-right corner of the chart, like the
+[diff overlay](#diff-overlay-controls), provides the size view's controls:
+
+- **Expand all / Collapse all** -- Expand or collapse all directories of the
+  file tree.
+- **Sort** -- Toggles how the file tree is sorted: by size, largest first
+  (default, button on), or alphabetically by name (button off). The choice is
+  remembered.
 - **Donut chart** -- Pie-like ring visualization (default).
 - **Bar chart** -- Horizontal bars showing file sizes.
 - **Treemap** -- Rectangular area-proportional layout.
