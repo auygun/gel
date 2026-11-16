@@ -349,6 +349,7 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     InputTextContextMenu(buf, buf_size);
   };
   search_opts.history = &settings_.search_history;
+  search_opts.idle_hint = "Type / to search";
   // Like the diff search, show the match counter and a button clearing the
   // search once there is something being searched for. The search bar is the
   // last item on the toolbar, so the counter can grow without moving anything

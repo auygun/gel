@@ -59,6 +59,10 @@ class SearchBar {
     // Also navigate on Shift+Up / Shift+Down, for a bar that is always
     // visible and owns those keys.
     bool arrow_shortcuts = false;
+    // Hint shown in the empty input field while it doesn't have focus. While
+    // it has focus, the field hints at the history keys instead (or just
+    // "Find" without a history).
+    const char* idle_hint = nullptr;
     // Tooltip for the input field. Suppressed while the field has focus.
     const char* input_tooltip = nullptr;
     // Shows a tooltip for the last item. Defaults to a delayed SetTooltip().

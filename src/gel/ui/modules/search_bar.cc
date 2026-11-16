@@ -21,6 +21,10 @@ namespace {
 // frames after the key press that triggered the focus.
 constexpr int kRejectFrames = 5;
 
+// Hint in the focused, empty input field of a bar with a history. The arrows
+// are U+2191 and U+2193 in UTF-8.
+constexpr char kHistoryHint[] = "Find (\xe2\x86\x91\xe2\x86\x93 for history)";
+
 void DefaultTooltip(const char* text) {
   auto flags = ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_Stationary |
                ImGuiHoveredFlags_AllowWhenDisabled;
@@ -120,6 +124,13 @@ SearchBar::Result SearchBar::Update(const Options& opts,
                           ImGui::GetStyle().FramePadding.x * 2;
   ImGui::SetNextItemWidth(width);
 
+  // The field's hint depends on whether it has focus. Its state as of the
+  // last frame is the best available before drawing it, plus a pending focus
+  // request so the hint doesn't lag a frame behind a shortcut.
+  bool focused = focus_ || IsInputActive();
+  const char* hint = focused ? (opts.history ? kHistoryHint : "Find")
+                             : (opts.idle_hint ? opts.idle_hint : "");
+
   if (focus_) {
     ImGui::SetKeyboardFocusHere();
     focus_ = false;
@@ -145,8 +156,9 @@ SearchBar::Result SearchBar::Update(const Options& opts,
   history_ = opts.history;
   if (history_)
     flags |= ImGuiInputTextFlags_CallbackHistory;
-  bool entered = ImGui::InputText(widget_id("input"), input_, kInputSize, flags,
-                                  &SearchBar::InputCallback, this);
+  bool entered =
+      ImGui::InputTextWithHint(widget_id("input"), hint, input_, kInputSize,
+                               flags, &SearchBar::InputCallback, this);
   input_id_ = ImGui::GetItemID();
   if (reload_) {
     reload_ = false;
