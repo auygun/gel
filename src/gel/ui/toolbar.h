@@ -6,7 +6,9 @@
 #define GEL_UI_TOOLBAR_H
 
 #include <filesystem>
+#include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "gel/ui/commit_search_mode.h"
@@ -49,6 +51,10 @@ class Toolbar {
     virtual bool IsWindowFocused() const = 0;
     virtual void OnBranchSwitchRequested(const std::string& branch) = 0;
     virtual void OnConsoleWindowRequested() = 0;
+    // Asks the user to confirm |message| before running |on_confirm|.
+    virtual void OnConfirmationRequested(std::string_view title,
+                                         std::string message,
+                                         std::function<void()> on_confirm) = 0;
     // Asks for another frame, for a transient message with nothing else
     // keeping the window redrawing.
     virtual void OnKeepDrawingRequested() = 0;

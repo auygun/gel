@@ -38,9 +38,6 @@ MainWindow::MainWindow(Platform& platform,
           git_repo_,
           [this](bool b) { on_busy_changed_(b); },
           [this](bool success, bool is_cancel, RefreshScope scope) {
-            // A failed "git tag" has already consumed its request in the
-            // error callback, which runs first. Drop it in every other case.
-            commit_history_.ClearPendingTagCreate();
             if (!success || is_cancel) {
               toolbar_.UpdateHeadStatus();
               if (!browsing_specific_ref_)
@@ -65,20 +62,6 @@ MainWindow::MainWindow(Platform& platform,
           [this](const std::string& error,
                  const std::string& cmd_name,
                  bool show_popup) -> bool {
-            std::string tag_name, tag_commit;
-            if (cmd_name == "tag" &&
-                commit_history_.ConsumePendingTagCreate(tag_name, tag_commit)) {
-              // Show git's own error rather than assuming the tag exists, so
-              // other failures (e.g. an invalid name) are reported as such.
-              std::string msg = error.empty() ? "Command failed." : error;
-              msg += "\n\nForce create tag '" + tag_name + "' (git tag -f)?";
-              popup_modal_.ShowConfirmation(
-                  cmd_name + " failed", std::move(msg),
-                  [this, n = std::move(tag_name), c = std::move(tag_commit)]() {
-                    runner_.Run({"tag", "-f", n, c}, RefreshScope::kRefs);
-                  });
-              return true;
-            }
             if (show_popup)
               ShowPopup(cmd_name + " failed",
                         error.empty() ? "Command failed." : error);

@@ -364,7 +364,8 @@ Right-click a branch label to access:
 - **Rename** -- Rename the branch (inline input field, disabled for remote
   branches).
 - **Create branch** -- Create a new branch from this branch (inline input
-  field).
+  field). If it fails (e.g. the branch already exists), a confirmation dialog
+  shows git's error and offers to force create it (`git branch -f`).
 - **Delete branch** -- Force-delete the branch (disabled for remote branches
   and the current branch).
 
@@ -384,7 +385,8 @@ Right-click a commit row to access:
   error and offers to force create it (`git tag -f`).
 - **Copy commit subject** -- Copy the commit's subject line to the clipboard.
 - **Create branch** -- Create a branch at the selected commit (inline input
-  field).
+  field). If it fails (e.g. the branch already exists), a confirmation dialog
+  shows git's error and offers to force create it (`git branch -f`).
 
 ## Console
 

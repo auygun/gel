@@ -155,6 +155,7 @@ class MainWindow final : public CommitHistory::Delegate,
                         bool reselected,
                         bool from_history) final;
   void OnRevertAllRequested() final;
+  // Also implements Toolbar::Delegate.
   void OnConfirmationRequested(std::string_view title,
                                std::string message,
                                std::function<void()> on_confirm) final;

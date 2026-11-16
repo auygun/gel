@@ -530,8 +530,14 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
                 RenderBranchMenuItems(
                     runner_, branch, false, is_current, branch_rename_input_,
                     sizeof(branch_rename_input_), branch_create_input_,
-                    sizeof(branch_create_input_), [this](const std::string& b) {
+                    sizeof(branch_create_input_),
+                    [this](const std::string& b) {
                       delegate_.OnBranchSwitchRequested(b);
+                    },
+                    [this](std::string_view title, std::string message,
+                           std::function<void()> on_confirm) {
+                      delegate_.OnConfirmationRequested(
+                          title, std::move(message), std::move(on_confirm));
                     });
                 ImGui::EndMenu();
               }

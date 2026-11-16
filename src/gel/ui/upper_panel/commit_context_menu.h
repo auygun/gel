@@ -7,15 +7,20 @@
 
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class GitCmdRunner;
 struct ImVec2;
 
+// Asks the user to confirm |message| before running |on_confirm|.
+using ConfirmFn = std::function<void(std::string_view title,
+                                     std::string message,
+                                     std::function<void()> on_confirm)>;
+
 // Renders the standard set of tag context menu items (checkout, reset, copy,
-// open in new window, delete). Used by both single and collapsed tag menus.
-// When tag creation is triggered, |pending_tag_name| and |pending_tag_commit|
-// are set so the caller can offer a "force create" retry on failure.
+// open in new window, create, delete). Used by both single and collapsed tag
+// menus.
 void RenderTagMenuItems(
     GitCmdRunner& runner,
     const std::string& tag_name,
@@ -23,8 +28,7 @@ void RenderTagMenuItems(
     char* create_buf,
     size_t create_buf_size,
     const std::function<void(const std::string&)>& open_in_new_window,
-    std::string& pending_tag_name,
-    std::string& pending_tag_commit);
+    const ConfirmFn& confirm);
 
 // Renders the standard set of branch context menu items used by both the
 // commit history branch labels and the toolbar branch popup.
@@ -37,14 +41,16 @@ void RenderBranchMenuItems(
     size_t rename_buf_size,
     char* create_buf,
     size_t create_buf_size,
-    const std::function<void(const std::string&)>& open_in_new_window);
+    const std::function<void(const std::string&)>& open_in_new_window,
+    const ConfirmFn& confirm);
 
 // Context menus for the commit history table: commit row right-click menu,
 // tag label menus, and branch label menus.
 class CommitContextMenu {
  public:
   CommitContextMenu(GitCmdRunner& runner,
-                    std::function<void(const std::string&)> open_in_new_window);
+                    std::function<void(const std::string&)> open_in_new_window,
+                    ConfirmFn confirm);
 
   // Renders the right-click context menu for a commit row. Returns true if the
   // popup is open.
@@ -74,23 +80,13 @@ class CommitContextMenu {
                         const ImVec2& window_padding,
                         const ImVec2& item_spacing);
 
-  // Takes the name and commit of the last "Create tag" request. Called
-  // when a "git tag" command fails, to offer forcing it with "git tag -f".
-  bool ConsumePendingTagCreate(std::string& name, std::string& commit);
-
-  // Forgets the last "Create tag" request. Called whenever a command in
-  // the serialized slot finishes, so a stale request can't be picked up by a
-  // later, unrelated "git tag" failure.
-  void ClearPendingTagCreate();
-
  private:
   GitCmdRunner& runner_;
   std::function<void(const std::string&)> open_in_new_window_;
+  ConfirmFn confirm_;
   char tag_create_input_[128] = {};
   char branch_create_input_[128] = {};
   char branch_rename_input_[128] = {};
-  std::string pending_tag_name_;
-  std::string pending_tag_commit_;
 };
 
 #endif  // GEL_UI_UPPER_PANEL_COMMIT_CONTEXT_MENU_H

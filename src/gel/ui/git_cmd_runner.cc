@@ -54,7 +54,9 @@ GitTask GitCmdRunner::ClassifyCommand(const std::string& cmd_name) {
   return GitTask::kNone;
 }
 
-bool GitCmdRunner::Run(std::vector<std::string> args, RefreshScope scope) {
+bool GitCmdRunner::Run(std::vector<std::string> args,
+                       RefreshScope scope,
+                       FailureCallback on_failure) {
   if (cmd_.running())
     return false;
 
@@ -77,6 +79,7 @@ bool GitCmdRunner::Run(std::vector<std::string> args, RefreshScope scope) {
     task_state_ = TaskState::kCmdRunning;
   }
 
+  on_failure_ = std::move(on_failure);
   PrependTopLevel(args);
 
   // Add command to output for all commands
@@ -125,6 +128,9 @@ void GitCmdRunner::Update() {
     if (finished) {
       const GitCmd::Result& result = cmd_.GetResult();
       bool resolved_externally = false;
+      // Belongs to this command only, not to any follow-up from RunNext().
+      FailureCallback on_failure = std::move(on_failure_);
+      on_failure_ = nullptr;
 
       if (task_ != GitTask::kNone &&
           ClassifyCommand(cmd_.cmd_name()) != GitTask::kNone) {
@@ -164,8 +170,11 @@ void GitCmdRunner::Update() {
         std::string error = JoinLines(cmd_.GetOutput(), true);
         if (error.empty())
           error = JoinLines(cmd_.GetOutput(), false);
-        if (!error_callback_(error, cmd_.cmd_name(), false))
+        if (on_failure && on_failure(error)) {
+          // Handled by the caller of Run().
+        } else if (!error_callback_(error, cmd_.cmd_name(), false)) {
           show_console_ = true;
+        }
       }
 
       if (result.success && !next_args_.empty()) {

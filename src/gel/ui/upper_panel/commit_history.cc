@@ -307,7 +307,14 @@ CommitHistory::CommitHistory(
       git_log_(git_log),
       ref_decorations_(ref_decorations),
       runner_(runner),
-      context_menu_(runner, std::move(open_in_new_window)),
+      context_menu_(runner,
+                    std::move(open_in_new_window),
+                    [this](std::string_view title,
+                           std::string message,
+                           std::function<void()> on_confirm) {
+                      delegate_.OnConfirmationRequested(
+                          title, std::move(message), std::move(on_confirm));
+                    }),
       settings_(settings),
       commit_modal_(runner, git_repo) {}
 

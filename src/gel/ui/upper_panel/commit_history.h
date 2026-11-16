@@ -99,12 +99,6 @@ class CommitHistory {
     return (has_unstaged_changes_ ? 1 : 0) + (has_staged_changes_ ? 1 : 0);
   }
 
-  bool ConsumePendingTagCreate(std::string& name, std::string& commit) {
-    return context_menu_.ConsumePendingTagCreate(name, commit);
-  }
-
-  void ClearPendingTagCreate() { context_menu_.ClearPendingTagCreate(); }
-
  private:
   Delegate& delegate_;
   GitLog& git_log_;

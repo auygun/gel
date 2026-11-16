@@ -71,6 +71,9 @@ class GitCmdRunner {
   using ErrorCallback = std::function<bool(const std::string& error,
                                            const std::string& cmd_name,
                                            bool show_popup)>;
+  // Called with git's error when a command started with Run() fails. Return
+  // true if the failure was handled, so ErrorCallback is skipped.
+  using FailureCallback = std::function<bool(const std::string& error)>;
 
   GitCmdRunner(GitRepo& git_repo,
                std::function<void(bool)> busy_callback,
@@ -79,9 +82,11 @@ class GitCmdRunner {
 
   // Runs "git <args...>" in the serialized slot. Returns false if the
   // command slot is occupied. |scope| is passed to the result callback so it
-  // can skip a full refresh for commands with limited effect.
+  // can skip a full refresh for commands with limited effect. |on_failure|,
+  // if set, is called instead of the error callback if this command fails.
   bool Run(std::vector<std::string> args,
-           RefreshScope scope = RefreshScope::kFull);
+           RefreshScope scope = RefreshScope::kFull,
+           FailureCallback on_failure = {});
 
   // Queues a command to run after the current one finishes successfully.
   // Ignored if no command is running. The result callback fires only after
@@ -138,6 +143,8 @@ class GitCmdRunner {
   std::string task_output_;
   bool show_console_ = false;
   RefreshScope refresh_scope_ = RefreshScope::kFull;
+  // |on_failure| of the running command, see Run().
+  FailureCallback on_failure_;
   std::vector<std::string> next_args_;
   // Number of output lines of the running command appended to task_output_.
   size_t output_lines_appended_ = 0;
