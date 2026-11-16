@@ -750,12 +750,17 @@ void MainWindow::OnToggleLowerPanel() {
   settings_.show_size_panel = !settings_.show_size_panel;
   settings_.Save();
   if (settings_.show_size_panel) {
+    // Selections made in the diff view never reached the size view. Without
+    // a commit selected (e.g. unstaged changes), clear it rather than leave
+    // the last commit it showed.
+    std::string commit;
     int idx = commit_history_.GetSelectedCommitIndex();
     if (idx >= 0) {
       auto commits = git_log_.GetCommits();
       if (idx < static_cast<int>(commits.size()))
-        commit_size_.SetCommit(commits[idx].commit);
+        commit = commits[idx].commit;
     }
+    commit_size_.SetCommit(commit);
   } else if (diff_stale_) {
     diff_stale_ = false;
     RerunDiff();
