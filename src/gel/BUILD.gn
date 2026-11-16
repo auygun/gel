@@ -143,6 +143,8 @@ executable("gel") {
     "ui/lower_panel/diff_content.h",
     "ui/lower_panel/file_list.cc",
     "ui/lower_panel/file_list.h",
+    "ui/lower_panel/lower_panel.cc",
+    "ui/lower_panel/lower_panel.h",
     "ui/lower_panel/size_file_tree.cc",
     "ui/lower_panel/size_file_tree.h",
     "ui/main_window.cc",

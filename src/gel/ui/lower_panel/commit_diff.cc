@@ -11,7 +11,6 @@
 #include "gel/persistent_settings.h"
 #include "gel/ui/icons.h"
 #include "gel/ui/overlay_toolbar.h"
-#include "gel/ui/style.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
 
@@ -265,80 +264,34 @@ bool CommitDiff::IsMergeShown() const {
   return !commit.empty() && file_list_.GetCommitParents(commit).size() > 1;
 }
 
-void CommitDiff::Update(const std::string& search_term) {
-  ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                        ImGui::GetColorU32(ImGuiCol_WindowBg));
-  bool lower_part_visible =
-      ImGui::BeginChild("lower_part", ImVec2(-FLT_MIN, -FLT_MIN));
-  ImGui::PopStyleColor();
-  if (lower_part_visible) {
-    float available = ImGui::GetContentRegionAvail().x;
-    float thickness = GetSeparatorThickness() * ImGui::GetStyle()._MainScale;
-    float max_file_list = available - thickness - 50.0f;
-    if (max_file_list >= 50.0f)
-      settings_.file_list_width =
-          std::clamp(settings_.file_list_width, 50.0f, max_file_list);
+void CommitDiff::SetSearchTerm(const std::string& search_term) {
+  // Called every frame; copies only when the term changes.
+  if (search_term_ != search_term)
+    search_term_ = search_term;
+}
 
-    auto draw_separator = [&]() {
-      ImVec2 pos = ImGui::GetCursorScreenPos();
-      float height = ImGui::GetContentRegionAvail().y;
-      ImGui::InvisibleButton("##separator", ImVec2(thickness, height));
-      bool hovered = ImGui::IsItemHovered();
-      if (hovered)
-        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-      ImU32 color = (hovered || ImGui::IsItemActive())
-                        ? ImGui::GetColorU32(ImGuiCol_SeparatorHovered)
-                        : ImGui::GetColorU32(ImGuiCol_WindowBg);
-      float rounding = ImGui::GetStyle().ChildRounding;
-      ImGui::GetWindowDrawList()->AddRectFilled(
-          ImVec2(pos.x, pos.y + rounding),
-          ImVec2(pos.x + thickness, pos.y + height - rounding), color);
-      if (ImGui::IsItemActive()) {
-        float delta = ImGui::GetIO().MouseDelta.x;
-        if (settings_.file_list_on_right)
-          settings_.file_list_width -= delta;
-        else
-          settings_.file_list_width += delta;
-        settings_.file_list_width =
-            std::clamp(settings_.file_list_width, 50.0f, available - 50.0f);
-      }
-      ImGui::SameLine(0, 0);
-    };
+void CommitDiff::RenderSidePane(float width) {
+  file_list_.Update(width);
+}
 
-    float file_list_width =
-        settings_.file_list_on_right ? -FLT_MIN : settings_.file_list_width;
-    float diff_width = settings_.file_list_on_right
-                           ? available - settings_.file_list_width - thickness
-                           : -FLT_MIN;
+void CommitDiff::RenderMainPane(float width) {
+  diff_content_.Update(width, search_term_);
+}
 
-    if (settings_.file_list_on_right) {
-      diff_content_.Update(diff_width, search_term);
-      ImGui::SameLine(0, 0);
-      draw_separator();
-      file_list_.Update(file_list_width);
-    } else {
-      file_list_.Update(file_list_width);
-      ImGui::SameLine(0, 0);
-      draw_separator();
-      diff_content_.Update(diff_width, search_term);
-    }
-
-    // If the user clicked a file, scroll diff to that file's start line.
-    int clicked = file_list_.ConsumeClickedFile();
-    if (clicked >= 0) {
-      auto files = git_diff_.GetFileList();
-      if (clicked < static_cast<int>(files.size()))
-        diff_content_.ScrollToLine(static_cast<int>(files[clicked].start_line));
-    }
-
-    // If auto-select picked a new file from scrolling, update the file list.
-    // Skip when the user explicitly clicked a file this frame.
-    int auto_file = diff_content_.ConsumeAutoSelectedFile();
-    if (clicked < 0 && auto_file >= 0 &&
-        auto_file != file_list_.selected_file())
-      file_list_.SetSelectedFile(auto_file, true);
-
-    RenderOverlayControls();
+void CommitDiff::FinishFrame() {
+  // If the user clicked a file, scroll diff to that file's start line.
+  int clicked = file_list_.ConsumeClickedFile();
+  if (clicked >= 0) {
+    auto files = git_diff_.GetFileList();
+    if (clicked < static_cast<int>(files.size()))
+      diff_content_.ScrollToLine(static_cast<int>(files[clicked].start_line));
   }
-  ImGui::EndChild();
+
+  // If auto-select picked a new file from scrolling, update the file list.
+  // Skip when the user explicitly clicked a file this frame.
+  int auto_file = diff_content_.ConsumeAutoSelectedFile();
+  if (clicked < 0 && auto_file >= 0 && auto_file != file_list_.selected_file())
+    file_list_.SetSelectedFile(auto_file, true);
+
+  RenderOverlayControls();
 }

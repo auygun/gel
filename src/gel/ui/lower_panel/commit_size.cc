@@ -14,7 +14,6 @@
 #include "gel/ui/lower_panel/charts/donut_chart.h"
 #include "gel/ui/lower_panel/charts/treemap_chart.h"
 #include "gel/ui/overlay_toolbar.h"
-#include "gel/ui/style.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
 
@@ -309,104 +308,67 @@ void CommitSize::Update() {
     pending_entries_.clear();
     file_tree_.SetFiles(std::move(files));
   }
+}
 
-  ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                        ImGui::GetColorU32(ImGuiCol_WindowBg));
-  bool visible = ImGui::BeginChild("lower_part", ImVec2(-FLT_MIN, -FLT_MIN));
-  ImGui::PopStyleColor();
-  if (visible) {
-    bool has_tree_data = !commit_.empty() && file_tree_.HasData();
+bool CommitSize::HasTreeData() const {
+  return !commit_.empty() && file_tree_.HasData();
+}
 
-    float available = ImGui::GetContentRegionAvail().x;
-    float thickness = GetSeparatorThickness() * ImGui::GetStyle()._MainScale;
-    float max_tree = available - thickness - 50.0f;
-    if (max_tree >= 50.0f)
-      settings_.size_tree_width =
-          std::clamp(settings_.size_tree_width, 50.0f, max_tree);
-
-    // Draggable vertical separator (same pattern as CommitDiff).
-    auto draw_separator = [&]() {
-      ImVec2 pos = ImGui::GetCursorScreenPos();
-      float height = ImGui::GetContentRegionAvail().y;
-      ImGui::InvisibleButton("##size_sep", ImVec2(thickness, height));
-      bool hovered = ImGui::IsItemHovered();
-      if (hovered)
-        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-      ImU32 color = (hovered || ImGui::IsItemActive())
-                        ? ImGui::GetColorU32(ImGuiCol_SeparatorHovered)
-                        : ImGui::GetColorU32(ImGuiCol_WindowBg);
-      float rounding = ImGui::GetStyle().ChildRounding;
-      ImGui::GetWindowDrawList()->AddRectFilled(
-          ImVec2(pos.x, pos.y + rounding),
-          ImVec2(pos.x + thickness, pos.y + height - rounding), color);
-      if (ImGui::IsItemActive()) {
-        settings_.size_tree_width += ImGui::GetIO().MouseDelta.x;
-        settings_.size_tree_width =
-            std::clamp(settings_.size_tree_width, 50.0f, available - 50.0f);
-      }
-      ImGui::SameLine(0, 0);
-    };
-
-    // Left: file tree.
-    if (ImGui::BeginChild(
-            "size_tree", ImVec2(settings_.size_tree_width, -FLT_MIN),
-            ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar)) {
-      if (has_tree_data)
-        file_tree_.Update();
-      else if (commit_.empty())
-        ImGui::TextDisabled("No commit selected");
-      else if (git_diff_tree_.busy() || git_cat_file_.busy())
-        ImGui::TextDisabled("Loading...");
-      else {
-        ImGui::TextDisabled("No changed files");
-      }
-    }
-    ImGui::EndChild();
-    ImGui::SameLine(0, 0);
-
-    draw_separator();
-
-    // Right: chart view.
-    bool chart_visible = false;
-    ImVec2 chart_anchor;
-    if (ImGui::BeginChild("size_chart", ImVec2(-FLT_MIN, -FLT_MIN),
-                          ImGuiChildFlags_Borders)) {
-      if (has_tree_data) {
-        auto* dir = file_tree_.GetSelectedDirectory();
-        if (!dir || dir->children.empty()) {
-          ImGui::TextDisabled("Select a directory");
-        } else if (dir->size <= 0) {
-          ImGui::TextDisabled("Empty directory");
-        } else {
-          RenderBreadcrumb();
-          ImGui::Spacing();
-
-          auto slices = ComputeSlices();
-
-          switch (settings_.chart_style) {
-            case ChartStyle::kDonut:
-              donut_chart_->Render(slices);
-              break;
-            case ChartStyle::kBar:
-              bar_chart_->Render(slices);
-              break;
-            case ChartStyle::kTreemap:
-              treemap_chart_->Render(slices);
-              break;
-            case ChartStyle::kCount:
-              break;
-          }
-        }
-      }
-      chart_visible = true;
-      chart_anchor = OverlayToolbar::WindowAnchor();
-    }
-    ImGui::EndChild();
-
-    // Over the chart, after its window, like the diff view's overlay over the
-    // diff.
-    if (chart_visible && has_tree_data)
-      RenderOverlay(chart_anchor);
+void CommitSize::RenderSidePane(float width) {
+  if (ImGui::BeginChild("size_tree", ImVec2(width, -FLT_MIN),
+                        ImGuiChildFlags_Borders,
+                        ImGuiWindowFlags_HorizontalScrollbar)) {
+    if (HasTreeData())
+      file_tree_.Update();
+    else if (commit_.empty())
+      ImGui::TextDisabled("No commit selected");
+    else if (git_diff_tree_.busy() || git_cat_file_.busy())
+      ImGui::TextDisabled("Loading...");
+    else
+      ImGui::TextDisabled("No changed files");
   }
   ImGui::EndChild();
+}
+
+void CommitSize::RenderMainPane(float width) {
+  overlay_anchor_.reset();
+  if (ImGui::BeginChild("size_chart", ImVec2(width, -FLT_MIN),
+                        ImGuiChildFlags_Borders)) {
+    if (HasTreeData()) {
+      auto* dir = file_tree_.GetSelectedDirectory();
+      if (!dir || dir->children.empty()) {
+        ImGui::TextDisabled("Select a directory");
+      } else if (dir->size <= 0) {
+        ImGui::TextDisabled("Empty directory");
+      } else {
+        RenderBreadcrumb();
+        ImGui::Spacing();
+
+        auto slices = ComputeSlices();
+
+        switch (settings_.chart_style) {
+          case ChartStyle::kDonut:
+            donut_chart_->Render(slices);
+            break;
+          case ChartStyle::kBar:
+            bar_chart_->Render(slices);
+            break;
+          case ChartStyle::kTreemap:
+            treemap_chart_->Render(slices);
+            break;
+          case ChartStyle::kCount:
+            break;
+        }
+      }
+      overlay_anchor_ = OverlayToolbar::WindowAnchor();
+    }
+  }
+  ImGui::EndChild();
+}
+
+void CommitSize::FinishFrame() {
+  // Over the chart, after its window, like the diff view's overlay over the
+  // diff.
+  if (overlay_anchor_)
+    RenderOverlay(*overlay_anchor_);
 }

@@ -57,7 +57,7 @@ void SettingsModal::Open(PersistentSettings& settings,
   settings_ext_mappings_ = settings.ext_mappings;
   new_ext_input_[0] = '\0';
   new_ext_lang_index_ = 1;
-  settings_file_list_on_right_ = settings.file_list_on_right;
+  settings_side_pane_on_right_ = settings.side_pane_on_right;
   settings_show_line_numbers_ = settings.show_line_numbers;
   settings_show_commit_graph_ = settings.show_commit_graph;
   settings_csd_ = settings.client_side_decorations;
@@ -439,13 +439,13 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
     ImGui::InputTextWithHint("Diff tool", "Default", settings_diff_tool_,
                              sizeof(settings_diff_tool_));
     {
-      const char* file_list_names[] = {"Left", "Right"};
-      int file_list_index = settings_file_list_on_right_ ? 1 : 0;
-      if (ImGui::BeginCombo("File list", file_list_names[file_list_index])) {
+      const char* side_pane_names[] = {"Left", "Right"};
+      int side_pane_index = settings_side_pane_on_right_ ? 1 : 0;
+      if (ImGui::BeginCombo("Side pane", side_pane_names[side_pane_index])) {
         for (int i = 0; i < 2; i++) {
-          bool selected = (file_list_index == i);
-          if (ImGui::Selectable(file_list_names[i], selected))
-            settings_file_list_on_right_ = (i == 1);
+          bool selected = (side_pane_index == i);
+          if (ImGui::Selectable(side_pane_names[i], selected))
+            settings_side_pane_on_right_ = (i == 1);
           if (selected)
             ImGui::SetItemDefaultFocus();
         }
@@ -584,7 +584,7 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
       settings.show_commit_graph = settings_show_commit_graph_;
       settings.table_columns = settings_table_columns_;
       settings.ext_mappings = settings_ext_mappings_;
-      settings.file_list_on_right = settings_file_list_on_right_;
+      settings.side_pane_on_right = settings_side_pane_on_right_;
 #if defined(OS_LINUX)
       settings.client_side_decorations = settings_csd_;
 #endif

@@ -201,10 +201,11 @@ void PersistentSettings::Load() {
     console_window_collapsed = j["console_window_collapsed"].get<bool>();
   if (j.contains("upper_panel_height") && j["upper_panel_height"].is_number())
     upper_panel_height = j["upper_panel_height"].get<float>();
-  if (j.contains("file_list_width") && j["file_list_width"].is_number())
-    file_list_width = j["file_list_width"].get<float>();
-  if (j.contains("size_tree_width") && j["size_tree_width"].is_number())
-    size_tree_width = j["size_tree_width"].get<float>();
+  // Before the views shared the side pane, it was the diff view's file list.
+  if (j.contains("side_pane_width") && j["side_pane_width"].is_number())
+    side_pane_width = j["side_pane_width"].get<float>();
+  else if (j.contains("file_list_width") && j["file_list_width"].is_number())
+    side_pane_width = j["file_list_width"].get<float>();
 
   if (j.contains("table_columns") && j["table_columns"].is_array()) {
     table_columns.clear();
@@ -232,8 +233,11 @@ void PersistentSettings::Load() {
     }
   }
 
-  if (j.contains("file_list_on_right") && j["file_list_on_right"].is_boolean())
-    file_list_on_right = j["file_list_on_right"].get<bool>();
+  if (j.contains("side_pane_on_right") && j["side_pane_on_right"].is_boolean())
+    side_pane_on_right = j["side_pane_on_right"].get<bool>();
+  else if (j.contains("file_list_on_right") &&
+           j["file_list_on_right"].is_boolean())
+    side_pane_on_right = j["file_list_on_right"].get<bool>();
   if (j.contains("file_list_tree") && j["file_list_tree"].is_boolean())
     file_list_tree = j["file_list_tree"].get<bool>();
   if (j.contains("renderer")) {
@@ -404,9 +408,8 @@ void PersistentSettings::Save() {
   j["context_lines"] = context_lines;
   j["merge_diff_mode"] = GetMergeDiffModeName(merge_diff_mode);
   j["upper_panel_height"] = upper_panel_height;
-  j["file_list_width"] = file_list_width;
-  j["size_tree_width"] = size_tree_width;
-  j["file_list_on_right"] = file_list_on_right;
+  j["side_pane_width"] = side_pane_width;
+  j["side_pane_on_right"] = side_pane_on_right;
   j["file_list_tree"] = file_list_tree;
   j["display_backend"] = GetDisplayBackendName(display_backend);
   j["client_side_decorations"] = client_side_decorations;
@@ -454,6 +457,5 @@ void PersistentSettings::SanitizeLayoutValues(int width, int height) {
     return;
   upper_panel_height =
       std::clamp(upper_panel_height, 50.0f, (float)height - 55.0f);
-  file_list_width = std::clamp(file_list_width, 50.0f, (float)width - 55.0f);
-  size_tree_width = std::clamp(size_tree_width, 50.0f, (float)width - 55.0f);
+  side_pane_width = std::clamp(side_pane_width, 50.0f, (float)width - 55.0f);
 }

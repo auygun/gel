@@ -89,6 +89,7 @@ MainWindow::MainWindow(Platform& platform,
           },
           main_thread_busy_),
       commit_size_(settings_, [this](bool b) { on_busy_changed_(b); }),
+      lower_panel_(settings_),
       toolbar_(*this, runner_, git_repo_, settings_),
       console_window_(runner_, settings_),
       blame_lookup_(
@@ -388,13 +389,15 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
         [this](int ci) { return commit_search_.IsMatch(ci); });
     if (settings_.show_size_panel) {
       commit_size_.Update();
+      lower_panel_.Update(commit_size_);
     } else {
       // Only Containing matches the commit message, which is where the diff
       // panel highlights the term. The other modes match the changes, so
       // they highlight nothing there.
       bool containing = toolbar_.search_mode() == CommitSearchMode::kContaining;
-      commit_diff_.Update(containing ? toolbar_.search_term()
-                                     : kEmptySearchTerm);
+      commit_diff_.SetSearchTerm(containing ? toolbar_.search_term()
+                                            : kEmptySearchTerm);
+      lower_panel_.Update(commit_diff_);
     }
 
     popup_modal_.Render(window_focused_);

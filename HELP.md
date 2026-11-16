@@ -36,8 +36,8 @@ merging.
   - [Diff Viewer](#diff-viewer)
   - [Diff Overlay Controls](#diff-overlay-controls)
 - [Size View (Lower Panel)](#size-view-lower-panel)
-  - [File Tree](#file-tree-left-side)
-  - [Chart View](#chart-view-right-side)
+  - [File Tree](#file-tree-side-pane)
+  - [Chart View](#chart-view-main-pane)
   - [Size Overlay Controls](#size-overlay-controls)
   - [Chart Interaction](#chart-interaction)
 - [Directory Browser](#directory-browser)
@@ -79,8 +79,11 @@ The window is divided into two main panels:
 - **Lower panel** -- Diff view (file list + diff viewer) or size view (file
   tree + chart), toggled with F6
 
-Both panel dividers can be dragged to resize. The file list can be placed on
-the left (default) or right side via Settings.
+Both panel dividers can be dragged to resize. Every lower panel view has the
+same layout: a side pane (the file list, the file tree) and a main pane (the
+diff, the chart), split by a divider. The side pane keeps its width when
+switching views, and can be placed on the left (default) or right side via
+Settings.
 
 All dialog windows (help, settings, console, image diff, commit) are
 movable and resizable. Message and error popups support text selection and
@@ -618,7 +621,7 @@ selected commit, organized in a file tree with sizes, alongside an interactive
 chart. For a merge commit, these are the files the merge brought in relative to
 its first parent.
 
-### File Tree (Left Side)
+### File Tree (Side Pane)
 
 A hierarchical tree of directories and files changed in the selected commit,
 with sizes displayed next to each entry.
@@ -626,7 +629,7 @@ with sizes displayed next to each entry.
 - Click a directory to select it and update the chart.
 - The tree is controlled from the [size overlay](#size-overlay-controls).
 
-### Chart View (Right Side)
+### Chart View (Main Pane)
 
 Visualizes the size breakdown of the selected directory. A breadcrumb path at
 the top shows the current directory with clickable components for navigation.
@@ -700,7 +703,8 @@ Open the settings modal via the gear button in the toolbar.
   Committer Date
 - **Diff tool** -- Text field for the diff tool name (passed as --tool= to
   `git difftool`). Leave empty to use git's configured default
-- **File list** -- Position the file list on the Left or Right side
+- **Side pane** -- Position the lower panel's side pane (the file list, the
+  file tree) on the Left or Right side
 - **Diff colors** -- Controls how diff content is colored:
   - **Syntax highlighting** (default) -- Per-language syntax colors with tinted
     backgrounds. Supports C-like, Python, Shell, Ruby, HTML/XML, JSON, GN, and

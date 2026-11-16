@@ -11,6 +11,7 @@
 #include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/lower_panel/diff_content.h"
 #include "gel/ui/lower_panel/file_list.h"
+#include "gel/ui/lower_panel/lower_panel.h"
 #include "gel/ui/overlay_toolbar.h"
 
 class GitCmdRunner;
@@ -19,7 +20,9 @@ class GitLog;
 class PersistentSettings;
 
 // Lower panel: file list and colored diff output for the selected commit.
-class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
+class CommitDiff : public LowerPanel::View,
+                   public FileList::Delegate,
+                   public DiffContent::Delegate {
  public:
   class Delegate {
    public:
@@ -61,8 +64,13 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
              FileList::ConfirmCallback on_confirm,
              std::function<void()> main_thread_busy);
 
-  // Renders the file list and diff content panels.
-  void Update(const std::string& search_term);
+  // Sets the term to highlight in the diff, for the next frames.
+  void SetSearchTerm(const std::string& search_term);
+
+  // LowerPanel::View implementation: the file list and the diff.
+  void RenderSidePane(float width) final;
+  void RenderMainPane(float width) final;
+  void FinishFrame() final;
 
   // Resets the panel state (called when new diff data arrives).
   void Reset();
@@ -128,6 +136,8 @@ class CommitDiff : public FileList::Delegate, public DiffContent::Delegate {
 
   FileList file_list_;
   DiffContent diff_content_;
+
+  std::string search_term_;
 
   OverlayToolbar overlay_;
 };

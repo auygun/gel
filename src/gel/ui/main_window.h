@@ -29,6 +29,7 @@
 #include "gel/ui/lower_panel/blame_lookup.h"
 #include "gel/ui/lower_panel/commit_diff.h"
 #include "gel/ui/lower_panel/commit_size.h"
+#include "gel/ui/lower_panel/lower_panel.h"
 #include "gel/ui/popup_modal.h"
 #include "gel/ui/settings_modal.h"
 #include "gel/ui/style.h"
@@ -111,6 +112,8 @@ class MainWindow final : public CommitHistory::Delegate,
   CommitHistory commit_history_;
   CommitDiff commit_diff_;
   CommitSize commit_size_;
+  // Lays out whichever of the views above is active.
+  LowerPanel lower_panel_;
   Toolbar toolbar_;
   SettingsModal settings_modal_;
   HelpModal help_modal_;

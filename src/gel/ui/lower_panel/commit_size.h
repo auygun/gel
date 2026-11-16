@@ -8,14 +8,17 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "gel/commands/git_cat_file.h"
 #include "gel/commands/git_diff_tree.h"
 #include "gel/ui/lower_panel/charts/chart_renderer.h"
+#include "gel/ui/lower_panel/lower_panel.h"
 #include "gel/ui/lower_panel/size_file_tree.h"
 #include "gel/ui/overlay_toolbar.h"
+#include "third_party/imgui/imgui/imgui.h"
 
 class BarChart;
 class DonutChart;
@@ -26,14 +29,22 @@ class TreemapChart;
 // The tree shows all files touched by the selected commit. Clicking a
 // directory in the tree updates the pie chart to show that directory's
 // breakdown.
-class CommitSize : public ChartRenderer::Delegate,
+class CommitSize : public LowerPanel::View,
+                   public ChartRenderer::Delegate,
                    public SizeFileTree::Delegate {
  public:
   CommitSize(PersistentSettings& settings,
              std::function<void(bool)> busy_callback);
   ~CommitSize();
 
+  // Feeds the git results in. Call once per frame, before the panel renders
+  // the view.
   void Update();
+
+  // LowerPanel::View implementation: the size tree and the chart.
+  void RenderSidePane(float width) final;
+  void RenderMainPane(float width) final;
+  void FinishFrame() final;
 
   void SetCommit(const std::string& commit_hash);
 
@@ -49,6 +60,9 @@ class CommitSize : public ChartRenderer::Delegate,
 
   // SizeFileTree::Delegate implementation.
   void OnDirectorySelected(SizeFileTree::TreeNode* node) override;
+
+  // Whether the tree has the selected commit's files to show.
+  bool HasTreeData() const;
 
   static float OverlayContentWidth();
   // Renders the overlay toolbar with the tree's and the chart's controls over
@@ -75,6 +89,9 @@ class CommitSize : public ChartRenderer::Delegate,
   std::unique_ptr<TreemapChart> treemap_chart_;
 
   OverlayToolbar overlay_;
+  // Where the chart's window was this frame, for the overlay over it; unset
+  // while the chart shows nothing to control.
+  std::optional<ImVec2> overlay_anchor_;
 };
 
 #endif  // GEL_UI_LOWER_PANEL_COMMIT_SIZE_H

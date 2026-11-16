@@ -62,7 +62,7 @@ class SettingsModal {
   eng::RendererType settings_renderer_type_ = eng::RendererType::kVulkan;
   eng::RendererType current_renderer_ = eng::RendererType::kVulkan;
   DiffColorMode settings_diff_color_mode_ = DiffColorMode::kAnsi;
-  bool settings_file_list_on_right_ = false;
+  bool settings_side_pane_on_right_ = false;
   bool settings_show_line_numbers_ = true;
   bool settings_show_commit_graph_ = true;
   bool settings_csd_ = false;

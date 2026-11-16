@@ -76,9 +76,10 @@ class PersistentSettings {
   int context_lines = 3;
   MergeDiffMode merge_diff_mode = MergeDiffMode::kCombined;
   float upper_panel_height = 300.0f;
-  float file_list_width = 200.0f;
-  float size_tree_width = 250.0f;
-  bool file_list_on_right = false;
+  // The lower panel's side pane (file list, size tree, ...), shared by all
+  // its views.
+  float side_pane_width = 200.0f;
+  bool side_pane_on_right = false;
   // Show the changed files as a directory tree instead of a flat list.
   bool file_list_tree = false;
   bool client_side_decorations = false;
