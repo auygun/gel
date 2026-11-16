@@ -345,8 +345,9 @@ Right-click a tag label to access:
 - **Reset** -- Reset the current branch (Soft, Mixed, or Hard).
 - **Copy tag name** -- Copy the tag name to the clipboard.
 - **Open in new window** -- Open a new Gel instance at that tag.
-- **Create/Move tag** -- Create a new tag at the same commit (inline input
-  field). If the tag already exists, a confirmation dialog offers to move it.
+- **Create tag** -- Create a new tag at the same commit (inline input field).
+  If it fails (e.g. the tag already exists), a confirmation dialog shows git's
+  error and offers to force create it (`git tag -f`).
 - **Delete tag** -- Delete the tag.
 
 #### Branch Context Menu
@@ -378,8 +379,9 @@ Right-click a commit row to access:
   commit (Autosquash or No-autosquash).
 - **Reset** -- Reset the current branch to the selected commit (Soft, Mixed,
   or Hard).
-- **Create/Move tag** -- Create a tag at the selected commit (inline input
-  field). If the tag already exists, a confirmation dialog offers to move it.
+- **Create tag** -- Create a tag at the selected commit (inline input field).
+  If it fails (e.g. the tag already exists), a confirmation dialog shows git's
+  error and offers to force create it (`git tag -f`).
 - **Copy commit subject** -- Copy the commit's subject line to the clipboard.
 - **Create branch** -- Create a branch at the selected commit (inline input
   field).

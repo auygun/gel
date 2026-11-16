@@ -15,7 +15,7 @@ struct ImVec2;
 // Renders the standard set of tag context menu items (checkout, reset, copy,
 // open in new window, delete). Used by both single and collapsed tag menus.
 // When tag creation is triggered, |pending_tag_name| and |pending_tag_commit|
-// are set so the caller can offer a "move" retry on failure.
+// are set so the caller can offer a "force create" retry on failure.
 void RenderTagMenuItems(
     GitCmdRunner& runner,
     const std::string& tag_name,
@@ -74,7 +74,14 @@ class CommitContextMenu {
                         const ImVec2& window_padding,
                         const ImVec2& item_spacing);
 
-  bool ConsumePendingTagMove(std::string& name, std::string& commit);
+  // Takes the name and commit of the last "Create tag" request. Called
+  // when a "git tag" command fails, to offer forcing it with "git tag -f".
+  bool ConsumePendingTagCreate(std::string& name, std::string& commit);
+
+  // Forgets the last "Create tag" request. Called whenever a command in
+  // the serialized slot finishes, so a stale request can't be picked up by a
+  // later, unrelated "git tag" failure.
+  void ClearPendingTagCreate();
 
  private:
   GitCmdRunner& runner_;

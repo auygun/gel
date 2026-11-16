@@ -8,6 +8,26 @@
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
 
+namespace {
+
+// Runs "git tag <name> <commit>". Once the command has started, the input is
+// cleared, the popup closes, and the name/commit are remembered so that a
+// failure (tag already exists) can be turned into a "force create" prompt.
+void CreateTag(GitCmdRunner& runner,
+               char* buf,
+               const std::string& commit,
+               std::string& pending_tag_name,
+               std::string& pending_tag_commit) {
+  if (buf[0] == '\0' || !runner.Run({"tag", buf, commit}, RefreshScope::kRefs))
+    return;
+  pending_tag_name = buf;
+  pending_tag_commit = commit;
+  buf[0] = '\0';
+  ImGui::CloseCurrentPopup();
+}
+
+}  // namespace
+
 CommitContextMenu::CommitContextMenu(
     GitCmdRunner& runner,
     std::function<void(const std::string&)> open_in_new_window)
@@ -76,21 +96,13 @@ bool CommitContextMenu::RenderCommitMenu(const std::string& commit,
     if (ImGui::InputTextWithHint("##create_tag", "New tag name",
                                  tag_create_input_, sizeof(tag_create_input_),
                                  ImGuiInputTextFlags_EnterReturnsTrue)) {
-      if (tag_create_input_[0] != '\0') {
-        pending_tag_name_ = tag_create_input_;
-        pending_tag_commit_ = commit;
-        runner_.Run({"tag", tag_create_input_, commit}, RefreshScope::kRefs);
-        tag_create_input_[0] = '\0';
-        ImGui::CloseCurrentPopup();
-      }
+      CreateTag(runner_, tag_create_input_, commit, pending_tag_name_,
+                pending_tag_commit_);
     }
     ImGui::SameLine();
-    if (ImGui::Button("Create/Move tag") && tag_create_input_[0] != '\0') {
-      pending_tag_name_ = tag_create_input_;
-      pending_tag_commit_ = commit;
-      runner_.Run({"tag", tag_create_input_, commit}, RefreshScope::kRefs);
-      tag_create_input_[0] = '\0';
-      ImGui::CloseCurrentPopup();
+    if (ImGui::Button("Create tag")) {
+      CreateTag(runner_, tag_create_input_, commit, pending_tag_name_,
+                pending_tag_commit_);
     }
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
     if (ImGui::InputTextWithHint("##create_branch", "New branch name",
@@ -172,22 +184,11 @@ void RenderTagMenuItems(
   if (ImGui::InputTextWithHint("##create_tag", "New tag name", create_buf,
                                create_buf_size,
                                ImGuiInputTextFlags_EnterReturnsTrue)) {
-    if (create_buf[0] != '\0') {
-      pending_tag_name = create_buf;
-      pending_tag_commit = commit;
-      runner.Run({"tag", create_buf, commit}, RefreshScope::kRefs);
-      create_buf[0] = '\0';
-      ImGui::CloseCurrentPopup();
-    }
+    CreateTag(runner, create_buf, commit, pending_tag_name, pending_tag_commit);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Create/Move tag") && create_buf[0] != '\0') {
-    pending_tag_name = create_buf;
-    pending_tag_commit = commit;
-    runner.Run({"tag", create_buf, commit}, RefreshScope::kRefs);
-    create_buf[0] = '\0';
-    ImGui::CloseCurrentPopup();
-  }
+  if (ImGui::Button("Create tag"))
+    CreateTag(runner, create_buf, commit, pending_tag_name, pending_tag_commit);
   ImGui::EndDisabled();
   {
     int level = g.BeginPopupStack.Size;
@@ -384,8 +385,8 @@ void CommitContextMenu::RenderBranchMenu(int index,
   ImGui::PopStyleVar(2);
 }
 
-bool CommitContextMenu::ConsumePendingTagMove(std::string& name,
-                                              std::string& commit) {
+bool CommitContextMenu::ConsumePendingTagCreate(std::string& name,
+                                                std::string& commit) {
   if (pending_tag_name_.empty())
     return false;
   name = std::move(pending_tag_name_);
@@ -393,4 +394,9 @@ bool CommitContextMenu::ConsumePendingTagMove(std::string& name,
   pending_tag_name_.clear();
   pending_tag_commit_.clear();
   return true;
+}
+
+void CommitContextMenu::ClearPendingTagCreate() {
+  pending_tag_name_.clear();
+  pending_tag_commit_.clear();
 }
