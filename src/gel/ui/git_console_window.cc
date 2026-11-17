@@ -179,8 +179,9 @@ void GitConsoleWindow::Update(bool window_focused) {
     text_viewer_.Update(0, lines_, &search_options_);
     ImGui::EndChild();
 
-    // Auto-scroll to the last line when new output arrives.
-    if (output_changed && !lines_.empty())
+    // Auto-scroll to the last line when new output arrives, unless the user
+    // is holding the scrollbar to look at earlier output.
+    if (output_changed && !lines_.empty() && !text_viewer_.scrollbar_held())
       text_viewer_.ScrollToLine(static_cast<int>(lines_.size()) - 1);
 
     last_state_ = state;

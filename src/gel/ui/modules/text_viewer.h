@@ -110,6 +110,10 @@ class TextViewer {
   // over. Scrolls the caller itself requested do not count.
   bool user_moved_view() const { return user_moved_view_; }
 
+  // Returns true while the user holds the vertical scrollbar. Valid after
+  // Update().
+  bool scrollbar_held() const { return scrollbar_held_; }
+
   void Reset();
   void CancelSearch();
 
@@ -153,6 +157,7 @@ class TextViewer {
   bool track_top_line_ = true;
   int top_visible_line_ = -1;
   bool user_moved_view_ = false;
+  bool scrollbar_held_ = false;
 
   // Character-level text selection state.
   int sel_start_line_ = -1;

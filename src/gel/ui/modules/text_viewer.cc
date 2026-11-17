@@ -393,6 +393,7 @@ void TextViewer::Update(float width,
     ImGuiID scrollbar_id =
         ImGui::GetWindowScrollbarID(ImGui::GetCurrentWindowRead(), ImGuiAxis_Y);
     bool scrollbar_active = active_id && active_id == scrollbar_id;
+    scrollbar_held_ = scrollbar_active;
     if (scrollbar_active)
       user_moved_view_ = true;
 
