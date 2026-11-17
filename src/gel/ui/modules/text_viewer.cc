@@ -174,24 +174,14 @@ void TextViewer::Update(float width,
 
   // Use SetNextWindowScroll (before BeginChild) so the scroll takes effect on
   // the same frame, avoiding a 1-frame delay.
+  // ImGui clamps the scroll to its own limit; the exact target is clamped to
+  // the same limit inside the child, once the inner rect is known.
   if (scroll_to_line_ >= 0) {
     scroll_exact_target_ =
         static_cast<double>(scroll_to_line_) * static_cast<double>(line_height);
-    float outer_height = ImGui::GetContentRegionAvail().y;
-    float inner_height = outer_height -
-                         ImGui::GetStyle().ChildBorderSize * 2.0f -
-                         ImGui::GetStyle().WindowPadding.y * 2.0f -
-                         ImGui::GetStyle().ScrollbarSize;
-    double max_scroll = precise_height - static_cast<double>(inner_height);
-    if (max_scroll <= 0) {
-      scroll_exact_target_ = -1;
-    } else {
-      if (scroll_exact_target_ > max_scroll)
-        scroll_exact_target_ = max_scroll;
-      ImGui::SetNextWindowScroll(
-          ImVec2(-1.0f, static_cast<float>(scroll_exact_target_)));
-      suppress_scroll_report_ = 2;
-    }
+    ImGui::SetNextWindowScroll(
+        ImVec2(-1.0f, static_cast<float>(scroll_exact_target_)));
+    suppress_scroll_report_ = 2;
     scroll_to_line_ = -1;
   }
   if (ImGui::BeginChild("text_viewer_content", ImVec2(width, -FLT_MIN),
@@ -292,6 +282,12 @@ void TextViewer::Update(float width,
                             2.0 * static_cast<double>(win->WindowPadding.y) -
                             static_cast<double>(win->InnerRect.GetHeight()));
     }
+
+    // A target past the limit (e.g. ScrollToLine near the end) would leave the
+    // compensation below shifting the lines by the overshoot until the bottom
+    // pin catches up, making repeated scrolls to the last line jitter.
+    if (scroll_exact_target_ > max_scroll_exact)
+      scroll_exact_target_ = max_scroll_exact;
 
     // Pin the content to the exact bottom offset once ImGui has run out of
     // scroll, otherwise the last line lands short of or past the bottom edge.
