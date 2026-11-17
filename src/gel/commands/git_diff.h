@@ -120,6 +120,10 @@ class GitDiff final : public Git {
 
   bool DidClear() const { return did_clear_; }
 
+  // Main thread: drops the diff shown, without waiting for the next run to
+  // replace it.
+  void Clear() { buffers_.Clear(); }
+
   const std::string& GetLastRunCommitHash() const {
     return last_run_commit_hash_;
   }

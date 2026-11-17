@@ -147,6 +147,8 @@ class MainWindow final : public CommitHistory::Delegate,
   // diff panel keeps showing the same content across the reload, for re-runs
   // that only change how the same diff is rendered (e.g. lines of context).
   void RerunDiff(bool preserve_scroll = false);
+  // Whether the diff's last run was for the selected row.
+  bool IsDiffForSelection() const;
   void UpdateWindowTitle(const std::vector<std::string>& extra_args);
   void MergeWorkerData();
   void HandleCSDResize();

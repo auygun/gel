@@ -73,6 +73,13 @@ class DoubleBuffer {
     return did_clear;
   }
 
+  // Main thread: clear [0] now, e.g. to stop showing outdated data before the
+  // worker's next Reset() is merged. [1] is left alone, as it may already hold
+  // the next run's data.
+  void Clear() {
+    std::apply([](auto&... s) { (s.MergeClear(), ...); }, slots_);
+  }
+
   // Worker thread: append a single item to the buffer for type T.
   template <typename T = std::tuple_element_t<0, std::tuple<Ts...>>>
   void Push(T item) {

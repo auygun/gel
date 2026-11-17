@@ -249,6 +249,14 @@ void MainWindow::RerunDiff(bool preserve_scroll) {
     git_diff_.RunTree({commit_history_.GetSelectedCommit()});
 }
 
+bool MainWindow::IsDiffForSelection() const {
+  return git_diff_.GetLastRunCommitHash() ==
+             commit_history_.GetSelectedCommit() &&
+         git_diff_.IsLastRunUnstaged() ==
+             commit_history_.IsUnstagedSelected() &&
+         git_diff_.IsLastRunStaged() == commit_history_.IsStagedSelected();
+}
+
 void MainWindow::UpdateWindowTitle(const std::vector<std::string>& extra_args) {
   std::string revision_range;
   for (auto& arg : extra_args) {
@@ -297,11 +305,8 @@ void MainWindow::MergeWorkerData() {
 
   // Self-heal the diff panel on every frame by comparing GitDiff's last run
   // state against the current selection.
-  if (git_diff_.GetLastRunCommitHash() != commit_history_.GetSelectedCommit() ||
-      git_diff_.IsLastRunUnstaged() != commit_history_.IsUnstagedSelected() ||
-      git_diff_.IsLastRunStaged() != commit_history_.IsStagedSelected()) {
+  if (!IsDiffForSelection())
     RerunDiff();
-  }
 
   blame_lookup_.PollBlame();
   blame_lookup_.ScanDiffContent();
@@ -761,9 +766,19 @@ void MainWindow::OnToggleLowerPanel() {
         commit = commits[idx].commit;
     }
     commit_size_.SetCommit(commit);
-  } else if (diff_stale_) {
-    diff_stale_ = false;
-    RerunDiff();
+  } else {
+    // Selections made in the size view never reached the diff, which still
+    // holds what was shown before switching. Drop it rather than show it until
+    // the rerun's output replaces it.
+    if (!IsDiffForSelection()) {
+      git_diff_.Clear();
+      commit_diff_.Reset();
+      blame_lookup_.OnDiffCleared();
+    }
+    if (diff_stale_) {
+      diff_stale_ = false;
+      RerunDiff();
+    }
   }
 }
 
