@@ -8,6 +8,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 
 namespace {
 
@@ -15,12 +16,25 @@ namespace {
 // change-based mode starts.
 constexpr double kSettleSeconds = 0.3;
 
-// Commits per git diff-tree run. Small enough that a run over the visible
-// rows finishes quickly, large enough that process startup is amortized.
-constexpr int kChunkSize = 1024;
+// How much work each git diff-tree process is given ahead, in seconds of
+// checking at the rate it has been going. Enough to keep it busy between
+// frames, little enough that the search changes course soon after stepping
+// or scrolling: commits already given to git can't be taken back.
+constexpr double kQueueAheadSeconds = 0.25;
+
+// Bounds on the commits each process is given ahead.
+constexpr int kMinQueued = 2;
+constexpr int kMaxQueued = 256;
+
+// Floor for the measured time per commit, so a run of instant results
+// doesn't make it hand out an unbounded amount at once.
+constexpr double kMinSecondsPerCommit = 0.001;
+
+// What a process assumes before it has measured anything.
+constexpr double kInitialSecondsPerCommit = 0.05;
 
 // git diff-tree processes run at once for the change-based modes, at most.
-constexpr unsigned kMaxChunkSlots = 4;
+constexpr unsigned kMaxSearchProcesses = 4;
 
 // Time budget per frame for the main-thread kContaining search.
 constexpr double kBudgetSeconds = 0.008;
@@ -128,9 +142,9 @@ CommitSearch::CommitSearch(GitLog& git_log,
   // git diff-tree is single-threaded and the change-based modes are bound by
   // it, so run a few at once. Leave cores for the UI and everything else.
   unsigned cores = std::max(1u, std::thread::hardware_concurrency());
-  int count = static_cast<int>(std::clamp(cores / 2, 1u, kMaxChunkSlots));
+  int count = static_cast<int>(std::clamp(cores / 2, 1u, kMaxSearchProcesses));
   for (int i = 0; i < count; ++i)
-    slots_.push_back(std::make_unique<ChunkSlot>(busy_callback));
+    slots_.push_back(std::make_unique<SearchProcess>(busy_callback));
 }
 
 CommitSearch::~CommitSearch() = default;
@@ -174,7 +188,7 @@ void CommitSearch::ApplyQuery() {
 }
 
 void CommitSearch::ResetResults() {
-  StopAllChunks();
+  StopAllSlots();
   states_.assign(states_.size(), State::kUnknown);
   known_ = 0;
   matches_ = 0;
@@ -288,6 +302,7 @@ void CommitSearch::Search(int start, int direction) {
   direction_ = direction;
   search_offset_ = 0;
   result_ = -1;
+  step_may_clear_ = true;
 
   // A query whose search failed in the background is run again, so the
   // failure is reported this time.
@@ -395,9 +410,15 @@ void CommitSearch::UpdateNavigation() {
       return;
     }
     if (!IsKnown(state)) {
-      // Never walk past a commit whose result is not known: a chunk further
+      // Never walk past a commit whose result is not known: a commit further
       // along may finish first, but the next match can only be here or
       // later in the walk.
+      if (step_may_clear_ && ClearPathForStep(i, direction_)) {
+        // The stopped processes take the step's commits next.
+        step_may_clear_ = false;
+        RestartScan(i, direction_);
+        return;
+      }
       EnsureChecked(i, direction_);
       return;
     }
@@ -412,59 +433,89 @@ void CommitSearch::FinishNavigation(int result) {
 }
 
 void CommitSearch::EnsureChecked(int index, int direction) {
-  // Fine if a running chunk is about to check it.
-  for (const auto& slot : slots_) {
-    if (!slot->running)
-      continue;
-    auto begin = slot->chunk.begin() + slot->done;
-    auto it = std::find(begin, slot->chunk.end(), index);
-    if (it != slot->chunk.end() && it - begin < kChunkSize / 2)
-      return;
+  // Fine if it is with git already, or the scan continues right there.
+  if (index < static_cast<int>(states_.size()) &&
+      states_[index] == State::kChecking) {
+    return;
   }
-  // Fine if the scan continues right there and nothing is running ahead of
-  // it, which happens in Containing mode and between chunks.
-  if (!any_chunk_running() && scan_cursor_ == index &&
-      scan_direction_ == direction &&
+  if (scan_cursor_ == index && scan_direction_ == direction &&
       scan_walked_ < static_cast<int>(states_.size())) {
     return;
   }
   RestartScan(index, direction);
 }
 
+bool CommitSearch::ClearPathForStep(int index, int direction) {
+  // Fine if git is already checking it.
+  for (const auto& slot : slots_) {
+    if (slot->running && !slot->queued.empty() &&
+        slot->queued.front() == index) {
+      return false;
+    }
+  }
+  // The commits the step needs next: the first few unknown ones from |index|
+  // on, one per process.
+  int n = static_cast<int>(states_.size());
+  std::vector<int> needed;
+  for (int walked = 0; walked < n && needed.size() < slots_.size(); ++walked) {
+    int ci = Wrap(index + direction * walked, n);
+    if (!IsKnown(states_[ci]))
+      needed.push_back(ci);
+  }
+  // A process busy with a commit the step doesn't need next is in its way,
+  // along with whatever was queued behind that commit for the search's old
+  // position: stop it, losing the commit it is in the middle of, and let the
+  // scan hand it the step's commits instead. Only stepping does this; the
+  // user is waiting for its answer.
+  bool stopped = false;
+  for (auto& slot : slots_) {
+    if (slot->running && !slot->queued.empty() &&
+        std::find(needed.begin(), needed.end(), slot->queued.front()) ==
+            needed.end()) {
+      StopSlot(*slot);
+      stopped = true;
+    }
+  }
+  return stopped;
+}
+
 void CommitSearch::RestartScan(int index, int direction) {
-  // Commits the stopped chunks didn't get to are unchecked again; restarting
-  // the walk from |index| picks them up. What they finished stays known.
-  StopAllChunks();
+  // The commits already with git are checked as they are, wherever the scan
+  // goes: they come back soon, and are known from then on. Only what is
+  // handed out next changes.
   scan_cursor_ = index;
   scan_direction_ = direction;
   scan_walked_ = 0;
   CheckMore();
 }
 
-void CommitSearch::StopChunk(ChunkSlot& slot) {
+void CommitSearch::StopSlot(SearchProcess& slot) {
   // Superseding the run id drops events of a run still in flight.
   slot.run_id = ++next_run_id_;
   if (slot.running)
     slot.search.Kill();
-  // Commits it didn't get to are up for grabs again.
-  for (size_t p = slot.done; p < slot.chunk.size(); ++p) {
-    int ci = slot.chunk[p];
+  // Commits it didn't get to are up for grabs again. Let a scan that already
+  // went past them come back for them.
+  for (int ci : slot.queued) {
     if (ci < static_cast<int>(states_.size()) &&
         states_[ci] == State::kChecking) {
       SetState(ci, State::kUnknown);
+      scan_walked_ = 0;
     }
   }
+  slot.queued.clear();
   slot.running = false;
-  slot.chunk.clear();
-  slot.done = 0;
+  slot.finishing = false;
+  slot.search.DropUnsent();
+  slot.search.ClearEvents();
 }
 
-void CommitSearch::StopAllChunks() {
+void CommitSearch::StopAllSlots() {
   for (auto& slot : slots_)
-    StopChunk(*slot);
+    StopSlot(*slot);
 }
 
-bool CommitSearch::any_chunk_running() const {
+bool CommitSearch::any_slot_running() const {
   for (const auto& slot : slots_) {
     if (slot->running)
       return true;
@@ -472,58 +523,119 @@ bool CommitSearch::any_chunk_running() const {
   return false;
 }
 
-void CommitSearch::FillSlots() {
-  for (auto& slot : slots_) {
-    if (!slot->running && (!active_ || !StartChunk(*slot)))
-      break;
+int CommitSearch::NextUnchecked() {
+  int n = static_cast<int>(states_.size());
+  // Commits loaded after the walk covered the list start a new walk.
+  if (scan_walked_ >= n)
+    scan_walked_ = 0;
+  while (scan_walked_ < n) {
+    int ci = Wrap(scan_cursor_, n);
+    scan_cursor_ = Wrap(ci + scan_direction_, n);
+    ++scan_walked_;
+    if (states_[ci] == State::kUnknown)
+      return ci;
   }
+  return -1;
 }
 
-bool CommitSearch::StartChunk(ChunkSlot& slot) {
+void CommitSearch::FillSlots() {
+  if (!active_)
+    return;
   auto commits = git_log_.GetCommits();
   int n = static_cast<int>(commits.size());
   SyncStateSize(n);
-  if (n == 0 || known_ >= n)
-    return false;
+  if (n == 0)
+    return;
 
-  // Collect the next unchecked commits that no other chunk holds, wrapping
-  // around once. The walk only moves forward, so chunks never overlap.
-  // Commits loaded after the walk covered the list start a new walk.
-  int walked = scan_walked_ >= n ? 0 : scan_walked_;
-  int cursor = Wrap(scan_cursor_, n);
-  std::vector<int>& chunk = slot.chunk;
-  chunk.clear();
-  while (walked < n && static_cast<int>(chunk.size()) < kChunkSize) {
-    if (states_[cursor] == State::kUnknown)
-      chunk.push_back(cursor);
-    cursor = Wrap(cursor + scan_direction_, n);
-    ++walked;
+  // Hand the next commits out in turn, one at a time, to whichever process
+  // has the least work ahead, so all of them work through the same stretch
+  // of the list side by side: the commits nearest the scan start (the
+  // visible rows, or where stepping to a match is) are checked first, by all
+  // of them, and a run of slow commits is shared out.
+  //
+  // Near the end, a process is given no more than its share of what is left
+  // (once the log is loaded): commits given to git can't be taken back, so
+  // one that got through its own quickly would otherwise sit idle while
+  // another works through a queue of slow commits.
+  int slot_count = static_cast<int>(slots_.size());
+  int checking = 0;
+  for (const auto& slot : slots_)
+    checking += static_cast<int>(slot->queued.size());
+  int unknown = n - known_ - checking;
+  bool out_of_commits = unknown <= 0;
+  while (!out_of_commits) {
+    int share =
+        git_log_.busy() ? kMaxQueued : std::max(1, unknown / slot_count);
+    SearchProcess* best = nullptr;
+    double best_ahead = 0;
+    for (auto& slot : slots_) {
+      if (slot->finishing)
+        continue;
+      int queued = static_cast<int>(slot->queued.size());
+      int target = std::clamp(
+          static_cast<int>(kQueueAheadSeconds / slot->seconds_per_commit),
+          kMinQueued, kMaxQueued);
+      target = std::max(1, std::min(target, share + 1));
+      if (queued >= target)
+        continue;
+      double ahead = queued * slot->seconds_per_commit;
+      if (!best || ahead < best_ahead) {
+        best = slot.get();
+        best_ahead = ahead;
+      }
+    }
+    if (!best)
+      break;
+    int ci = NextUnchecked();
+    if (ci < 0) {
+      out_of_commits = true;
+      break;
+    }
+    if (!best->running && !StartSlot(*best))
+      return;
+    if (best->queued.empty())
+      best->check_timer = {};
+    best->queued.push_back(ci);
+    best->search.Check(ci, commits[ci].commit);
+    SetState(ci, State::kChecking);
+    --unknown;
   }
-  // While the log is still loading, wait for a full chunk rather than start a
-  // process per frame for the few commits that arrived. The first chunk and
-  // stepping to a match don't wait, since someone is looking at those.
-  bool partial = static_cast<int>(chunk.size()) < kChunkSize;
-  if (chunk.empty() ||
-      (partial && git_log_.busy() && known_ > 0 && !searching_)) {
-    chunk.clear();
-    return false;
+  for (auto& slot : slots_) {
+    if (slot->running)
+      slot->search.Flush();
   }
-  scan_cursor_ = cursor;
-  scan_walked_ = walked;
 
-  slot.done = 0;
-  slot.events_seen = 0;
+  // Once every commit is with git or known, and no more are coming, let the
+  // processes end when they are done, so nothing keeps running for nothing.
+  // New commits loaded or the scan coming back for a commit restart them.
+  if (out_of_commits && !git_log_.busy()) {
+    for (auto& slot : slots_) {
+      if (slot->running && !slot->finishing) {
+        slot->finishing = true;
+        slot->search.Finish();
+      }
+    }
+  }
+}
+
+bool CommitSearch::StartSlot(SearchProcess& slot) {
   slot.run_id = ++next_run_id_;
-  slot.running = slot.search.Run(slot.run_id, query_, commits, chunk);
-  if (slot.running) {
-    for (int ci : chunk)
-      SetState(ci, State::kChecking);
-  }
+  slot.queued.clear();
+  slot.finishing = false;
+  // A new process may be for a new query, which can be far slower or faster
+  // than the last one. Its first commit, which includes starting git, isn't
+  // measured.
+  slot.seconds_per_commit = kInitialSecondsPerCommit;
+  slot.timed = false;
+  slot.search.DropUnsent();
+  slot.search.ClearEvents();
+  slot.events_seen = 0;
+  slot.running = slot.search.Start(slot.run_id, query_);
   if (!slot.running) {
     // git could not be started at all.
     active_ = false;
     scan_enabled_ = false;
-    StopAllChunks();
+    StopAllSlots();
     return false;
   }
   return true;
@@ -534,70 +646,54 @@ void CommitSearch::ProcessEvents() {
     ProcessSlotEvents(*slot);
 }
 
-void CommitSearch::ProcessSlotEvents(ChunkSlot& slot) {
+void CommitSearch::ProcessSlotEvents(SearchProcess& slot) {
   slot.search.Update();
-  if (slot.search.DidClear())
-    slot.events_seen = 0;
   auto events = slot.search.GetEvents();
   for (; slot.events_seen < events.size(); ++slot.events_seen) {
     const auto& event = events[slot.events_seen];
     if (event.run_id != slot.run_id || !slot.running)
       continue;
-    std::vector<int>& chunk = slot.chunk;
     switch (event.kind) {
-      case GitChangeSearch::Event::Kind::kMatch: {
-        // The match is one of the commits after the last marker. Search them
-        // for it rather than trusting the order, which diff-tree keeps but
-        // doesn't promise.
-        int from = std::clamp(event.position, 0, (int)chunk.size());
-        int to = std::min(from + GitChangeSearch::kMarkerInterval,
-                          (int)chunk.size());
-        auto commits = git_log_.GetCommits();
-        for (int p = from; p < to; ++p) {
-          int ci = chunk[p];
-          if (ci < static_cast<int>(commits.size()) &&
-              commits[ci].commit == event.text) {
-            SetState(ci, State::kMatch);
-            break;
-          }
+      case GitChangeSearch::Event::Kind::kChecked: {
+        // Commits come back in the order they were passed.
+        if (slot.queued.empty() || slot.queued.front() != event.index)
+          break;
+        slot.queued.pop_front();
+        // How long checking a commit takes, smoothed, to size the work it
+        // is given ahead. Measured from when the commit got to the front.
+        double seconds = slot.check_timer.Elapsed();
+        slot.check_timer = {};
+        if (std::exchange(slot.timed, true)) {
+          slot.seconds_per_commit =
+              std::max(kMinSecondsPerCommit,
+                       slot.seconds_per_commit * 0.75 + seconds * 0.25);
+        }
+        if (event.index < static_cast<int>(states_.size()) &&
+            states_[event.index] == State::kChecking) {
+          SetState(event.index, event.match ? State::kMatch : State::kNoMatch);
         }
         break;
       }
-      case GitChangeSearch::Event::Kind::kProgress: {
-        // Everything before the marker is checked. Whatever did not match
-        // doesn't: diff-tree prints a commit's match before the marker that
-        // follows it, so no match can still be on its way.
-        int to = std::clamp(event.position, 0, (int)chunk.size());
-        for (int p = slot.done; p < to; ++p) {
-          int ci = chunk[p];
-          if (ci < static_cast<int>(states_.size()) && !IsKnown(states_[ci])) {
-            SetState(ci, State::kNoMatch);
+      case GitChangeSearch::Event::Kind::kFinished: {
+        // Anything still queued means git stopped short of it (or was told
+        // to finish early). Hand those out again rather than leave stepping
+        // waiting for them.
+        for (int ci : slot.queued) {
+          if (ci < static_cast<int>(states_.size()) &&
+              states_[ci] == State::kChecking) {
+            SetState(ci, State::kUnknown);
+            scan_walked_ = 0;
           }
         }
-        slot.done = std::max(slot.done, to);
-        break;
-      }
-      case GitChangeSearch::Event::Kind::kFinished:
-        if (!event.failed) {
-          // The last marker settles every commit; anything still held means
-          // git stopped short of it. Hand those out again rather than leave
-          // stepping waiting for them.
-          for (size_t p = slot.done; p < chunk.size(); ++p) {
-            int ci = chunk[p];
-            if (ci < static_cast<int>(states_.size()) &&
-                states_[ci] == State::kChecking) {
-              SetState(ci, State::kUnknown);
-              scan_walked_ = 0;
-            }
-          }
-        }
+        slot.queued.clear();
         slot.running = false;
+        slot.finishing = false;
         if (event.failed) {
           // Nothing more can be found for this query (e.g. invalid regex).
-          // The other chunks fail the same way: stop them and report once.
+          // The other processes fail the same way: stop them and report once.
           active_ = false;
           scan_enabled_ = false;
-          StopAllChunks();
+          StopAllSlots();
           if (searching_) {
             error_ = event.text.empty() ? "git diff-tree failed." : event.text;
             has_error_ = true;
@@ -606,7 +702,14 @@ void CommitSearch::ProcessSlotEvents(ChunkSlot& slot) {
           return;
         }
         break;
+      }
     }
+  }
+  // Events are only needed once; dropping them keeps the buffer small over a
+  // long search.
+  if (slot.events_seen > 0 && slot.events_seen == events.size()) {
+    slot.search.ClearEvents();
+    slot.events_seen = 0;
   }
 }
 
@@ -659,7 +762,7 @@ float CommitSearch::progress() const {
   // of it has been checked. It only grows, so the bar doesn't jump back when
   // a step starts mid-scan.
   int n = static_cast<int>(states_.size());
-  bool checking = scan_enabled_ && (any_chunk_running() || !is_change_mode());
+  bool checking = scan_enabled_ && (any_slot_running() || !is_change_mode());
   if (!(searching_ || checking) || n == 0 || known_ >= n)
     return -1.0f;
   return static_cast<float>(known_) / n;

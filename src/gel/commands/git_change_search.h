@@ -8,20 +8,22 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/double_buffer.h"
 #include "gel/commands/git.h"
-#include "gel/commands/git_log.h"
 
-// Runs "git diff-tree --stdin" over a list of commits to find the ones whose
-// changes match, for the commit search modes that look at what a commit
-// changed rather than at its metadata: pickaxe (-S / -G) and touched paths.
+// Runs "git diff-tree --stdin" to find the commits whose changes match, for
+// the commit search modes that look at what a commit changed rather than at
+// its metadata: pickaxe (-S / -G) and touched paths.
 //
-// The commits are fed in order with a marker line before every
-// kMarkerInterval of them. diff-tree echoes lines that are not commits, so the
-// markers come back in order with the matches: they report progress and tell
-// which part of the list each matching commit came from.
+// The process is started once per query and fed commits as the search gets
+// to them, so it is not restarted for every few commits and the search can
+// change course without losing work. Each commit is followed by a marker line
+// carrying its index; diff-tree echoes lines that are not commits, flushing
+// its output, so the marker comes back as soon as the commit is checked,
+// right after the commit itself if it matched.
 class GitChangeSearch final : public Git {
  public:
   // What to match. An empty query matches nothing and must not be run.
@@ -34,26 +36,22 @@ class GitChangeSearch final : public Git {
     bool operator==(const Query& other) const = default;
   };
 
-  // Positions are indices into the list of commits passed to Run().
   struct Event {
     enum class Kind : uint8_t {
-      // Every commit before |position| has been checked.
-      kProgress,
-      // |text| is a matching commit. Its position is at or after |position|
-      // and less than |position| + kMarkerInterval.
-      kMatch,
-      // The run ended. |failed| is set if git failed, with its error output
-      // in |text|.
+      // The commit passed to Check() as |index| has been checked; |match| is
+      // set if it matched.
+      kChecked,
+      // The process ended. |failed| is set if git failed, with its error
+      // output in |text|.
       kFinished,
     };
     int run_id = 0;
-    Kind kind = Kind::kProgress;
+    Kind kind = Kind::kChecked;
     bool failed = false;
-    int position = 0;
+    bool match = false;
+    int index = 0;
     std::string text;
   };
-
-  static constexpr int kMarkerInterval = 64;
 
   explicit GitChangeSearch(std::function<void(bool)> busy_callback);
   ~GitChangeSearch() final;
@@ -61,27 +59,35 @@ class GitChangeSearch final : public Git {
   GitChangeSearch(GitChangeSearch const&) = delete;
   GitChangeSearch& operator=(GitChangeSearch const&) = delete;
 
-  // Checks the commits at |indices| in |commits| against |query|, in that
-  // order. Events of this run carry |run_id|. Any previous run is killed.
-  bool Run(int run_id,
-           const Query& query,
-           std::span<const GitLog::CommitInfo> commits,
-           std::span<const int> indices);
+  // Starts git for |query|, waiting for commits to check. Events of this run
+  // carry |run_id|. Any previous run is killed.
+  bool Start(int run_id, const Query& query);
 
-  void Update() { did_clear_ = events_.Merge(); }
+  // Checks |commit|, which is reported back as |index|. Commits are checked
+  // in the order they are passed. They are sent to git on Flush().
+  void Check(int index, std::string_view commit);
 
-  // True if a new run started since the previous Update(), in which case
-  // GetEvents() starts over with the events of the new run.
-  bool DidClear() const { return did_clear_; }
+  // Sends the commits passed to Check() since the last call to git.
+  void Flush();
 
+  // Drops the commits passed to Check() and not sent yet.
+  void DropUnsent() { input_.clear(); }
+
+  // Lets git end once it has checked the commits passed so far.
+  void Finish() { CloseStdin(); }
+
+  // Main thread: picks up the events that arrived since the last call. They
+  // are kept until ClearEvents().
+  void Update() { events_.Merge(); }
   std::span<const Event> GetEvents() const { return events_.data(); }
+  void ClearEvents() { events_.Clear(); }
 
  private:
   DoubleBuffer<Event> events_;
-  bool did_clear_ = false;
+  std::string input_;  // Commits passed to Check() and not sent yet.
 
   // Worker thread.
-  int marker_position_ = 0;
+  bool matched_ = false;  // A commit line came since the last marker.
   std::string err_;
 
   void OnStarted() final;

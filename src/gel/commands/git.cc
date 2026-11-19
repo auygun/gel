@@ -69,16 +69,21 @@ void Git::TerminateWorkerThread() {
 
 bool Git::RunWithArgs(std::vector<std::string> args,
                       std::string stdin_data,
-                      int run_id) {
+                      int run_id,
+                      bool keep_stdin_open) {
   // Start a new git process and hand it to the worker thread.
   args.insert(args.begin(), "git");
+  bool has_stdin = keep_stdin_open || !stdin_data.empty();
   Exec proc;
-  if (!proc.Start(args, !stdin_data.empty()))
+  if (!proc.Start(args, has_stdin))
     return false;
   {
     std::scoped_lock scoped_lock(lock_);
     new_procs_.push_front(std::move(proc));
     pending_stdin_ = std::move(stdin_data);
+    pending_has_stdin_ = has_stdin;
+    more_stdin_.clear();
+    close_stdin_ = !keep_stdin_open;
     pending_run_id_ = run_id;
     pending_label_ = CommandLabel(args);
     detach_requested_ = false;
@@ -87,12 +92,26 @@ bool Git::RunWithArgs(std::vector<std::string> args,
   return true;
 }
 
+// No need to wake the worker thread: it polls the running process until it
+// ends, picking these up as it goes, and there is nothing to write to once
+// the process has ended.
+void Git::WriteStdin(std::string_view data) {
+  std::scoped_lock scoped_lock(lock_);
+  more_stdin_ += data;
+}
+
+void Git::CloseStdin() {
+  std::scoped_lock scoped_lock(lock_);
+  close_stdin_ = true;
+}
+
 void Git::Kill() {
   // Pass an uninitialized Exec to the worker thread to kill the current
   // process.
   {
     std::scoped_lock scoped_lock(lock_);
     new_procs_.emplace_front();
+    more_stdin_.clear();
     detach_requested_ = false;
   }
   semaphore_.release();
@@ -126,17 +145,25 @@ void Git::WorkerMain() {
       // Pick up new processes queued by the main thread.
       std::list<Exec> procs;
       std::string stdin_data;
+      bool has_stdin = false;
       std::string label;
       int run_id = 0;
       bool detach = false;
+      // Taken together with the new processes, so that input added after
+      // starting a process never goes to the one it replaced.
+      std::string more_stdin;
+      bool close_stdin = false;
       {
         std::scoped_lock scoped_lock(lock_);
         procs.swap(new_procs_);
         stdin_data = std::move(pending_stdin_);
+        has_stdin = pending_has_stdin_;
         label = std::move(pending_label_);
         run_id = pending_run_id_;
         detach = detach_requested_;
         detach_requested_ = false;
+        more_stdin.swap(more_stdin_);
+        close_stdin = close_stdin_;
       }
 
       if (!procs.empty()) {
@@ -178,7 +205,7 @@ void Git::WorkerMain() {
           current_stdin_ = std::move(stdin_data);
           run_id_ = run_id;
           stdin_offset_ = 0;
-          stdin_open_ = !current_stdin_.empty();
+          stdin_open_ = has_stdin;
           out_splitter_.carryover.clear();
           out_splitter_.cr_line.reset();
           err_splitter_.carryover.clear();
@@ -187,10 +214,18 @@ void Git::WorkerMain() {
             BusyTracker::Get().Set(this, std::move(label));
           OnStarted();
           DLOG(0) << "Started - pid: " << curent_proc_.pid();
-        } else if (show_in_toolbar_) {
+        } else {
           // Killed or detached with nothing new to run.
-          BusyTracker::Get().Clear(this);
+          stdin_open_ = false;
+          current_stdin_.clear();
+          if (show_in_toolbar_)
+            BusyTracker::Get().Clear(this);
         }
+      }
+
+      if (stdin_open_) {
+        current_stdin_ += more_stdin;
+        stdin_close_ = close_stdin;
       }
 
       // Poll the current process and clear it when terminated.
@@ -244,10 +279,14 @@ bool Git::Poll(Exec& proc) {
         stdin_offset_ += static_cast<size_t>(written);
       else if (written < 0)
         stdin_open_ = false;
-    } else {
+    } else if (stdin_close_) {
       proc.CloseStdin();
       stdin_open_ = false;
       current_stdin_.clear();
+    } else if (stdin_offset_ > 0) {
+      // Everything so far is written; more may come.
+      current_stdin_.clear();
+      stdin_offset_ = 0;
     }
   }
 
