@@ -97,6 +97,11 @@ class CommitSearch {
   // Returns true if the commit at |index| is known to match, for highlighting.
   bool IsMatch(int index) const;
 
+  // What is known about the commit at |index|, for drawing its row: whether
+  // it matches, or, in the change-based modes, whether it is still waiting to
+  // be checked or being checked by a git process.
+  CommitSearchRowState GetRowState(int index) const;
+
   // Returns and clears a pending result index, or -1 if none.
   int ConsumeResult();
 

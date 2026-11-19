@@ -505,7 +505,7 @@ void CommitHistory::ResetScrollPos() {
   reset_scroll_pos_ = true;
 }
 
-void CommitHistory::Update(const SearchMatcher& is_search_match) {
+void CommitHistory::Update(const SearchRowStates& search_row_state) {
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     tag_tooltip_suppressed_ = true;
   bool any_tag_hovered = false;
@@ -977,7 +977,8 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
 
             const RefDecorations::Decoration* decoration =
                 ref_decorations_.Find(commit_history[ci].commit);
-            bool flagged = is_search_match(ci);
+            CommitSearchRowState search_state = search_row_state(ci);
+            bool flagged = search_state == CommitSearchRowState::kMatch;
 
             TagTooltipArgs tooltip_args{any_tag_hovered,
                                         tag_tooltip_suppressed_,
@@ -1004,6 +1005,20 @@ void CommitHistory::Update(const SearchMatcher& is_search_match) {
                   head_branch, &tooltip_args, &ctx_args);
             }
             ImGui::TextUnformatted(commit_history[ci].message[0].c_str());
+            // The change-based searches check commits in git processes:
+            // mark the ones not checked yet and the ones being checked. The
+            // table zeroes ItemSpacing, so space them from the subject with
+            // the default spacing.
+            if (search_state == CommitSearchRowState::kPending) {
+              ImGui::SameLine(0, default_item_spacing.x);
+              ImGui::TextDisabled("pending");
+            } else if (search_state == CommitSearchRowState::kChecking) {
+              ImGui::SameLine(0, default_item_spacing.x);
+              float h = ImGui::GetTextLineHeight();
+              ImVec2 p = ImGui::GetCursorScreenPos();
+              DrawBusySpinner(p, ImVec2(p.x + h, p.y + h));
+              ImGui::Dummy(ImVec2(h, h));
+            }
             if (labels.clicked)
               SelectCommit(row, false, true);
             // A hovered label takes the hover from the row's selectable, so

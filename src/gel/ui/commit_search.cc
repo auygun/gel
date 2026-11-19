@@ -722,6 +722,36 @@ bool CommitSearch::IsMatch(int index) const {
          states_[index] == State::kMatch;
 }
 
+CommitSearchRowState CommitSearch::GetRowState(int index) const {
+  if (index < 0 || index >= static_cast<int>(states_.size()))
+    return CommitSearchRowState::kNone;
+  switch (states_[index]) {
+    case State::kMatch:
+      return CommitSearchRowState::kMatch;
+    case State::kChecking:
+      // Each process checks its commits in order, so the front of its queue
+      // is the one git is working on; the rest wait behind it.
+      for (const auto& slot : slots_) {
+        if (slot->running && !slot->queued.empty() &&
+            slot->queued.front() == index) {
+          return CommitSearchRowState::kChecking;
+        }
+      }
+      return CommitSearchRowState::kPending;
+    case State::kUnknown:
+      // Not handed to git yet, but it will be while the search runs: it goes
+      // on until every commit is checked. Not before it starts, so rows don't
+      // flash while typing, nor once git has failed on the query. kContaining
+      // checks too fast to be worth marking.
+      if (is_change_mode() && scan_enabled_)
+        return CommitSearchRowState::kPending;
+      break;
+    case State::kNoMatch:
+      break;
+  }
+  return CommitSearchRowState::kNone;
+}
+
 int CommitSearch::ConsumeResult() {
   int r = result_;
   result_ = -1;

@@ -18,6 +18,14 @@ enum class CommitSearchMode {
   kCount
 };
 
+// What the commit search knows about a commit, to draw its row.
+enum class CommitSearchRowState {
+  kNone,      // Not a match, or nothing to search for.
+  kMatch,     // Known to match.
+  kPending,   // Change-based modes: not checked yet, waiting for its turn.
+  kChecking,  // Change-based modes: being checked by a git process right now.
+};
+
 inline const char* GetCommitSearchModeName(CommitSearchMode mode) {
   switch (mode) {
     case CommitSearchMode::kContaining:
