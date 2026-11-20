@@ -8,11 +8,9 @@
 #include <functional>
 #include <span>
 #include <string>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
+#include "gel/ui/modules/path_tree.h"
 #include "third_party/imgui/imgui/imgui.h"
 
 class GitCmdRunner;
@@ -85,39 +83,6 @@ class FileList {
   std::vector<std::string> GetCommitParents(const std::string& commit) const;
 
  private:
-  // A directory in the tree view.
-  struct TreeDir {
-    std::string path;  // Full path, empty for the root.
-    int parent = -1;   // -1 for the root.
-    // The row showing this directory: its own row, shared with the
-    // directories it is folded with, if |visible|. Otherwise the row of the
-    // collapsed directory hiding it. Unused for the root.
-    int row = -1;
-    bool visible = false;
-    bool open = true;
-    // Children in order of first appearance in the diff, so the tree reads
-    // top to bottom in diff order: file indices (>= 0) and directories
-    // encoded as ~dir_index (< 0).
-    std::vector<int> children;
-  };
-
-  // A visible row of the tree view.
-  struct TreeRow {
-    int item = 0;  // File index (>= 0) or ~dir_index (< 0).
-    int depth = 0;
-    // Directory rows only: where the label starts in the directory's path. A
-    // chain of directories that only contain a single directory is shown as
-    // one row labeled with the joined names.
-    int label_offset = 0;
-  };
-
-  struct StringHash {
-    using is_transparent = void;
-    size_t operator()(std::string_view s) const {
-      return std::hash<std::string_view>{}(s);
-    }
-  };
-
   // Flag marking the selection storage ID of a directory row in the tree
   // view. Directory rows are not multi-select items, but a range selection
   // spanning them adds them. They are removed from the selection right away.
@@ -136,7 +101,6 @@ class FileList {
                              bool is_multi,
                              bool is_unstaged,
                              bool is_staged);
-  void RenderDirRow(const TreeRow& row, bool selected);
 
   // Maps a tree row to a selection storage ID: the file index, or the row
   // with kDirRowIdFlag set for a directory row.
@@ -147,19 +111,6 @@ class FileList {
   // Adds files appended to the diff since the last call to the tree and
   // reflattens it if needed.
   void SyncTree(std::span<const FileEntry> files);
-  // Adds file |index| to the tree. Updates the rows in place when they only
-  // change at the end, which is the case when files arrive in git's sorted
-  // path order. Otherwise marks the tree dirty for a full reflatten.
-  void AddFileToTree(const FileEntry& entry, int index);
-  void ClearTree();
-  void FlattenTree();
-  void FlattenDir(int dir, int depth);
-  // Appends the rows of |child| of a directory, a file index or ~dir_index,
-  // and its subtree.
-  void FlattenChild(int child, int depth);
-  void HideSubtree(int dir, int row);
-  void HideChild(int child, int row);
-  void SetDirOpen(int dir, bool open);
 
   Delegate& delegate_;
   GitDiff& git_diff_;
@@ -183,21 +134,7 @@ class FileList {
   ImGuiSelectionBasicStorage multi_selection_;
 
   // Tree view state. Built lazily and incrementally while in tree view.
-  std::vector<TreeDir> tree_dirs_;  // [0] is the root.
-  std::unordered_map<std::string, int, StringHash, std::equal_to<>>
-      tree_dir_index_;
-  std::vector<TreeRow> tree_rows_;
-  // Row of each file, or of its collapsed ancestor if the file is hidden.
-  std::vector<int> file_row_;
-  int tree_file_count_ = 0;
-  bool tree_dirty_ = false;
-  // Whether directories are open, unless listed in |toggled_dirs_|. Set by
-  // expand all / collapse all. Both are kept across commits. Directories
-  // start expanded.
-  bool dirs_open_by_default_ = true;
-  // Paths of directories the user expanded or collapsed away from the
-  // default.
-  std::unordered_set<std::string, StringHash, std::equal_to<>> toggled_dirs_;
+  PathTree tree_;
 
   void PrepareRevert();
 };
