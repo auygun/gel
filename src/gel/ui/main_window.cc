@@ -363,7 +363,7 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
       // Last frame's search state, so the rows drawn this frame and the
       // query being searched agree.
       commit_search_.SetQuery(toolbar_.search_term(), toolbar_.search_mode(),
-                              settings_.search_options);
+                              settings_.search_options, settings_.search_regex);
       commit_search_.SetVisibleRange(commit_history_.visible_first(),
                                      commit_history_.visible_last());
       bool still_searching = commit_search_.Update();
@@ -863,7 +863,7 @@ void MainWindow::OnSearchRequested(int direction) {
     on_busy_changed_(true);
   }
   commit_search_.SetQuery(toolbar_.search_term(), toolbar_.search_mode(),
-                          settings_.search_options);
+                          settings_.search_options, settings_.search_regex);
   commit_search_.Search(commit_history_.GetSelectedCommitIndex(), direction);
 }
 

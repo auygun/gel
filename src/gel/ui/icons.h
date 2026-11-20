@@ -25,6 +25,9 @@ void DrawCaseSensitiveIcon();
 // between two boundary ticks.
 void DrawWholeWordIcon();
 
+// Draw a regex ".*" icon into the last item's rect.
+void DrawRegexIcon();
+
 // Draw a small up/down triangle into the last item's rect, for navigation
 // buttons. Draw list calls ignore ImGui's disabled alpha, so pass |enabled|
 // false to draw in the disabled text color.
@@ -36,7 +39,8 @@ void DrawArrowDownIcon(bool enabled);
 //   Containing:              lines of text.
 //   Touching paths:          a folder.
 //   Adding/removing string:  a plus over a minus.
-//   Changing lines matching: ".*", as the term is a regex.
+//   Changing lines matching: a diff hunk, a context line over "-" and "+"
+//                            lines.
 void DrawSearchModeIcon(CommitSearchMode mode,
                         ImVec2 min,
                         ImVec2 max,

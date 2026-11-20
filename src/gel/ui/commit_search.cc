@@ -64,6 +64,20 @@ std::vector<std::string> SplitWords(const std::string& text) {
   return words;
 }
 
+// Escapes the POSIX extended regex metacharacters in |text|, so the regex
+// matches it literally. ']' and '}' are literal on their own; a backslash in
+// front of them is undefined in POSIX, so they are left alone.
+std::string EscapeExtendedRegex(const std::string& text) {
+  std::string escaped;
+  escaped.reserve(text.size() * 2);
+  for (char c : text) {
+    if (std::string_view(".[\\()*+?{|^$").find(c) != std::string_view::npos)
+      escaped += '\\';
+    escaped += c;
+  }
+  return escaped;
+}
+
 }  // namespace
 
 bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
@@ -92,7 +106,8 @@ bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
 
 GitChangeSearch::Query BuildChangeSearchQuery(const std::string& term,
                                               CommitSearchMode mode,
-                                              base::MatchOptions options) {
+                                              base::MatchOptions options,
+                                              bool regex) {
   GitChangeSearch::Query query;
   switch (mode) {
     case CommitSearchMode::kContaining:
@@ -113,15 +128,20 @@ GitChangeSearch::Query BuildChangeSearchQuery(const std::string& term,
       break;
 
     case CommitSearchMode::kAddingRemoving:
-      // A literal string, as for -S.
-      if (!term.empty())
+      // -S takes a literal string, or a regex with --pickaxe-regex.
+      if (!term.empty()) {
         query.diff_options.push_back("-S" + term);
+        if (regex)
+          query.diff_options.push_back("--pickaxe-regex");
+      }
       break;
 
     case CommitSearchMode::kChangingLines:
-      // A regex, as for -G.
+      // -G takes a regex. git has no fixed-string -G, so a literal term is
+      // escaped into a regex matching it.
       if (!term.empty())
-        query.diff_options.push_back("-G" + term);
+        query.diff_options.push_back(
+            "-G" + (regex ? term : EscapeExtendedRegex(term)));
       break;
   }
   if (!query.diff_options.empty()) {
@@ -151,13 +171,16 @@ CommitSearch::~CommitSearch() = default;
 
 void CommitSearch::SetQuery(const std::string& term,
                             CommitSearchMode mode,
-                            base::MatchOptions options) {
-  if (has_query_ && term == term_text_ && mode == mode_ && options == options_)
+                            base::MatchOptions options,
+                            bool regex) {
+  if (has_query_ && term == term_text_ && mode == mode_ &&
+      options == options_ && regex == regex_)
     return;
   has_query_ = true;
   term_text_ = term;
   mode_ = mode;
   options_ = options;
+  regex_ = regex;
 
   // Matches of the previous query are dropped right away so the rows don't
   // show stale highlights.
@@ -165,7 +188,7 @@ void CommitSearch::SetQuery(const std::string& term,
   ResetResults();
   if (is_change_mode()) {
     term_ = {};
-    query_ = BuildChangeSearchQuery(term_text_, mode_, options_);
+    query_ = BuildChangeSearchQuery(term_text_, mode_, options_, regex_);
     active_ = !query_.empty();
   } else {
     term_ = base::SearchTerm(term_text_, options_);

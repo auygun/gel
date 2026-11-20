@@ -197,6 +197,31 @@ void DrawWholeWordIcon() {
                     size * 0.05f);
 }
 
+void DrawRegexIcon() {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 btn_min = ImGui::GetItemRectMin();
+  ImVec2 btn_max = ImGui::GetItemRectMax();
+  float size = std::min(btn_max.x - btn_min.x, btn_max.y - btn_min.y);
+  float thickness = std::max(1.5f, size * 0.08f);
+  ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  float cx = (btn_min.x + btn_max.x) * 0.5f;
+  float cy = (btn_min.y + btn_max.y) * 0.5f;
+
+  // ".*", the regex every user knows.
+  float dot_r = std::max(1.2f, size * 0.06f);
+  float base_y = cy + size * 0.22f;
+  dl->AddCircleFilled(ImVec2(cx - size * 0.2f, base_y), dot_r, color);
+  // Asterisk: three strokes through one center.
+  ImVec2 star(cx + size * 0.1f, cy - size * 0.06f);
+  float r = size * 0.19f;
+  for (int i = 0; i < 3; ++i) {
+    float a = kPi * 0.5f + i * kPi / 3.0f;
+    ImVec2 d(r * cosf(a), r * sinf(a));
+    dl->AddLine(ImVec2(star.x - d.x, star.y - d.y),
+                ImVec2(star.x + d.x, star.y + d.y), color, thickness);
+  }
+}
+
 void DrawSearchModeIcon(CommitSearchMode mode,
                         ImVec2 min,
                         ImVec2 max,
@@ -257,19 +282,29 @@ void DrawSearchModeIcon(CommitSearchMode mode,
       break;
     }
     case CommitSearchMode::kChangingLines: {
-      // Changing lines matching: ".*", the regex every user knows.
-      float dot_r = std::max(1.2f, size * 0.06f);
-      float base_y = cy + size * 0.22f;
-      dl->AddCircleFilled(ImVec2(cx - size * 0.2f, base_y), dot_r, color);
-      // Asterisk: three strokes through one center.
-      ImVec2 star(cx + size * 0.1f, cy - size * 0.06f);
-      float r = size * 0.19f;
-      for (int i = 0; i < 3; ++i) {
-        float a = kPi * 0.5f + i * kPi / 3.0f;
-        ImVec2 d(r * cosf(a), r * sinf(a));
-        dl->AddLine(ImVec2(star.x - d.x, star.y - d.y),
-                    ImVec2(star.x + d.x, star.y + d.y), color, thickness);
-      }
+      // Changing lines matching: a diff hunk. A context line, then a removed
+      // and an added line behind "-" and "+" markers in a gutter. The last
+      // line is shorter, like Containing's, to leave room for the menu caret.
+      float marker_half = size * 0.07f;
+      float marker_x = cx - size * 0.23f;
+      float text_left = cx - size * 0.08f;
+      float right = cx + size * 0.3f;
+      float step = size * 0.2f;
+      float context_y = cy - step;
+      float removed_y = cy;
+      float added_y = cy + step;
+      dl->AddLine(ImVec2(text_left, context_y), ImVec2(right, context_y), color,
+                  thickness);
+      dl->AddLine(ImVec2(marker_x - marker_half, removed_y),
+                  ImVec2(marker_x + marker_half, removed_y), color, thickness);
+      dl->AddLine(ImVec2(text_left, removed_y), ImVec2(right, removed_y), color,
+                  thickness);
+      dl->AddLine(ImVec2(marker_x - marker_half, added_y),
+                  ImVec2(marker_x + marker_half, added_y), color, thickness);
+      dl->AddLine(ImVec2(marker_x, added_y - marker_half),
+                  ImVec2(marker_x, added_y + marker_half), color, thickness);
+      dl->AddLine(ImVec2(text_left, added_y),
+                  ImVec2(cx + size * 0.14f, added_y), color, thickness);
       break;
     }
     case CommitSearchMode::kCount:

@@ -328,15 +328,25 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
   search_opts.progress = search_progress;
   search_opts.arrow_shortcuts = !modal_open;
   search_opts.whole_word_disabled = !containing;
+  // Shown in every mode, like whole word, so the buttons after it don't move
+  // when switching modes.
+  search_opts.regex = &settings_.search_regex;
+  search_opts.regex_disabled =
+      search_mode_ != CommitSearchMode::kAddingRemoving &&
+      search_mode_ != CommitSearchMode::kChangingLines;
   switch (search_mode_) {
     case CommitSearchMode::kTouchingPaths:
       search_opts.input_tooltip = "Paths or globs, separated by spaces";
       break;
     case CommitSearchMode::kAddingRemoving:
-      search_opts.input_tooltip = "String whose occurrences a commit changes";
+      search_opts.input_tooltip =
+          settings_.search_regex ? "Regex whose matches a commit changes"
+                                 : "String whose occurrences a commit changes";
       break;
     case CommitSearchMode::kChangingLines:
-      search_opts.input_tooltip = "Regex matching an added or removed line";
+      search_opts.input_tooltip =
+          settings_.search_regex ? "Regex matching an added or removed line"
+                                 : "String in an added or removed line";
       break;
     default:
       search_opts.input_tooltip = "Search in commits";

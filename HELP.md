@@ -153,6 +153,8 @@ The toolbar spans the top of the window and contains the following controls
 - **Case toggle** -- Toggle case-sensitive / case-insensitive commit search
 - **Whole word toggle** -- Match complete words only; letters, digits and `_`
   count as part of a word
+- **Regex toggle** -- In the Adding/removing string and Changing lines
+  matching modes, match the term as a regex instead of a literal string
 - **Search arrows** -- Navigate forward/backward through search matches
 - **Match counter** -- While there is a search term: which match the selected
   commit is and how many commits match (e.g. "3 of 20"), with a "+" while
@@ -229,10 +231,13 @@ mode's name under the button. Gel always starts in Containing mode.
 - **Adding/removing string** (±) -- Commits that change the number of occurrences
   of the string (`git log -S`): typically the commit that introduced it and
   the one that removed it. Editing a line that contains the string, or moving
-  it, does not count.
-- **Changing lines matching** (`.*`) -- Commits that add or remove a line matching
-  the regex (`git log -G`). Unlike the previous mode this includes commits
-  that only edit or move such lines.
+  it, does not count. With the regex toggle on, the term is a regex and the
+  number of its matches is compared instead (`--pickaxe-regex`).
+- **Changing lines matching** (diff lines) -- Commits that add or remove a line
+  containing the string (`git log -G`). Unlike the previous mode this includes
+  commits that only edit or move such lines. Turn on the regex toggle (`.*`)
+  after the whole word toggle to match the term as a POSIX extended regex
+  instead.
 
 Every mode finds all matching commits, starting with the rows on screen, and
 highlights them as they are found; the rest of the history is searched once

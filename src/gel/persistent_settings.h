@@ -85,6 +85,9 @@ class PersistentSettings {
   bool client_side_decorations = false;
   base::MatchOptions search_options;
   base::MatchOptions diff_search_options;
+  // Adding/removing string and changing lines matching commit search: the
+  // term is a regex rather than a literal string.
+  bool search_regex = false;
   // Past commit and diff search terms, most recent first.
   std::vector<std::string> search_history;
   std::vector<std::string> diff_search_history;

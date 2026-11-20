@@ -13,10 +13,11 @@
 
 struct ImGuiInputTextCallbackData;
 
-// A reusable search input row: text field, case-sensitivity toggle, stacked
-// previous/next buttons, match counter and close button. Owns the input buffer
-// and the keyboard focus handling; the caller owns the actual searching and
-// feeds the resulting match state back in through Options::matches.
+// A reusable search input row: text field, case-sensitivity, whole word and
+// (optionally) regex toggles, stacked previous/next buttons, match counter
+// and close button. Owns the input buffer and the keyboard focus handling; the
+// caller owns the actual searching and feeds the resulting match state back in
+// through Options::matches.
 //
 // The bar only reports intent. Navigation, closing and re-running the search
 // are all up to the caller, which keeps the widget independent of the search
@@ -47,6 +48,12 @@ class SearchBar {
     // Shows the whole word toggle disabled, for a backend that can't honor
     // it right now. Its setting is kept.
     bool whole_word_disabled = false;
+    // Shows a toggle after the whole word toggle, bound to |*regex|: match
+    // the term as a regex rather than as a literal string. Null hides it.
+    bool* regex = nullptr;
+    // Shows the regex toggle disabled, for a backend that doesn't take a
+    // regex right now. Its setting is kept.
+    bool regex_disabled = false;
     bool nav_buttons = true;
     bool match_counter = false;
     bool close_button = false;

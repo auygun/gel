@@ -276,6 +276,8 @@ void PersistentSettings::Load() {
     search_options.case_sensitive = j["search_case_sensitive"].get<bool>();
   if (j.contains("search_whole_word") && j["search_whole_word"].is_boolean())
     search_options.whole_word = j["search_whole_word"].get<bool>();
+  if (j.contains("search_regex") && j["search_regex"].is_boolean())
+    search_regex = j["search_regex"].get<bool>();
   if (j.contains("diff_search_case_sensitive") &&
       j["diff_search_case_sensitive"].is_boolean())
     diff_search_options.case_sensitive =
@@ -415,6 +417,7 @@ void PersistentSettings::Save() {
   j["client_side_decorations"] = client_side_decorations;
   j["search_case_sensitive"] = search_options.case_sensitive;
   j["search_whole_word"] = search_options.whole_word;
+  j["search_regex"] = search_regex;
   j["diff_search_case_sensitive"] = diff_search_options.case_sensitive;
   j["diff_search_whole_word"] = diff_search_options.whole_word;
   j["search_history"] = search_history;

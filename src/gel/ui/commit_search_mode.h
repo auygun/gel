@@ -11,9 +11,11 @@ enum class CommitSearchMode {
   kContaining,
   // Space-separated paths or globs the commit changes.
   kTouchingPaths,
-  // A string whose number of occurrences the commit changes (git log -S).
+  // A string, or with the regex toggle a regex, whose number of occurrences
+  // the commit changes (git log -S).
   kAddingRemoving,
-  // A regex matching a line the commit adds or removes (git log -G).
+  // A string, or with the regex toggle a regex, matching a line the commit
+  // adds or removes (git log -G).
   kChangingLines,
   kCount
 };
@@ -52,11 +54,11 @@ inline const char* GetCommitSearchModeDescription(CommitSearchMode mode) {
       return "Commits that change any of the given paths\n"
              "(space-separated, globs allowed)";
     case CommitSearchMode::kAddingRemoving:
-      return "Commits that change the number of occurrences of the string\n"
-             "(git log -S)";
+      return "Commits that change the number of occurrences of the string,\n"
+             "or of matches of the regex with the regex toggle on (git log -S)";
     case CommitSearchMode::kChangingLines:
-      return "Commits that add or remove a line matching the regex\n"
-             "(git log -G)";
+      return "Commits that add or remove a line containing the string,\n"
+             "or matching the regex with the regex toggle on (git log -G)";
     case CommitSearchMode::kCount:
       break;
   }

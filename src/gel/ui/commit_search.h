@@ -28,10 +28,13 @@ bool CommitMatchesSearch(const GitLog::CommitInfo& commit,
                          const base::SearchTerm& term);
 
 // Builds the diff-tree query for a change-based search |mode|. Returns an
-// empty query for kContaining or a term with nothing to search for.
+// empty query for kContaining or a term with nothing to search for. |regex|
+// makes kAddingRemoving and kChangingLines match the term as a regex, not a
+// literal string.
 GitChangeSearch::Query BuildChangeSearchQuery(const std::string& term,
                                               CommitSearchMode mode,
-                                              base::MatchOptions options);
+                                              base::MatchOptions options,
+                                              bool regex);
 
 // The toolbar commit search: finds the commits matching a term, to highlight
 // them in the commit history and to step through them.
@@ -65,9 +68,12 @@ class CommitSearch {
   // toolbar state; a change starts over. Searching beyond the visible rows
   // starts once the query has stayed the same for a moment, so typing does not
   // start a search of the whole list (or a git process) per keystroke.
+  // |regex| applies to kAddingRemoving and kChangingLines; see
+  // BuildChangeSearchQuery().
   void SetQuery(const std::string& term,
                 CommitSearchMode mode,
-                base::MatchOptions options);
+                base::MatchOptions options,
+                bool regex);
 
   // Starts stepping from commit index |start| (-1 for none) to the next match
   // in |direction| (1 or -1), wrapping around. The result is picked up with
@@ -143,6 +149,7 @@ class CommitSearch {
   std::string term_text_;
   CommitSearchMode mode_ = CommitSearchMode::kContaining;
   base::MatchOptions options_;
+  bool regex_ = false;
   bool has_query_ = false;
   base::SearchTerm term_;         // kContaining.
   GitChangeSearch::Query query_;  // Change-based modes.
