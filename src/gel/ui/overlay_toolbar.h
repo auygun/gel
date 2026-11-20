@@ -29,7 +29,9 @@ class OverlayToolbar {
   // aligning content beside it.
   static float CenterOffset();
 
-  // The top-right corner of the current window, to pass to Begin() after the
+  // The top-right corner of the current window, inset by the scrollbar width
+  // whether or not the window has one, as the diff view's text viewer does, so
+  // that the toolbars line up across panels. To pass to Begin() after the
   // window ends.
   static ImVec2 WindowAnchor();
 

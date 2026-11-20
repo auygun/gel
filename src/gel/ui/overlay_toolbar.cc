@@ -46,7 +46,9 @@ float OverlayToolbar::CenterOffset() {
 
 ImVec2 OverlayToolbar::WindowAnchor() {
   ImVec2 pos = ImGui::GetWindowPos();
-  return ImVec2(pos.x + ImGui::GetWindowSize().x, pos.y);
+  return ImVec2(
+      pos.x + ImGui::GetWindowSize().x - ImGui::GetStyle().ScrollbarSize,
+      pos.y);
 }
 
 float OverlayToolbar::Width(float content_width) {
