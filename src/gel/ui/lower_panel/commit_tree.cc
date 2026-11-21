@@ -9,6 +9,7 @@
 
 #include "gel/git_repo.h"
 #include "gel/persistent_settings.h"
+#include "gel/ui/icons.h"
 #include "gel/ui/style.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -442,16 +443,38 @@ void CommitTree::RenderMainPane(float width) {
 void CommitTree::RenderOverlay() {
   if (overlay_anchor_.x == 0 && overlay_anchor_.y == 0)
     return;
+  float btn_size = OverlayToolbar::ButtonSize();
+  float spacing = OverlayToolbar::Spacing();
+  // The tree's controls, then, for an image, a separator and the image's.
   float content_width = OverlayToolbar::HalfButtonWidth();
+  if (showing_image_)
+    content_width +=
+        spacing + OverlayToolbar::SeparatorWidth() + spacing + btn_size;
   overlay_.Begin("##tree_overlay", overlay_anchor_, content_width);
   bool expand_all_requested = false;
   bool collapse_all_requested = false;
   overlay_.ExpandCollapseButtons(expand_all_requested, collapse_all_requested);
+
+  bool full_size_toggled = false;
+  bool full_size = image_view_.scale_mode() == ImageView::ScaleMode::kFullSize;
+  if (showing_image_) {
+    ImGui::SameLine();
+    overlay_.Separator();
+    ImGui::SameLine();
+    full_size_toggled = ToggleButton("##image_full_size", full_size,
+                                     ImVec2(btn_size, btn_size));
+    DrawActualSizeIcon();
+    overlay_.Tooltip(full_size ? "Image: full size" : "Image: stretch to fill");
+  }
   overlay_.End();
 
   if (expand_all_requested || collapse_all_requested) {
     tree_.SetAllDirsOpen(expand_all_requested);
     scroll_tree_to_selected_ = true;
+  }
+  if (full_size_toggled) {
+    image_view_.SetScaleMode(full_size ? ImageView::ScaleMode::kFill
+                                       : ImageView::ScaleMode::kFullSize);
   }
 }
 

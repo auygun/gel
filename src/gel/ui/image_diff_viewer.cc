@@ -7,6 +7,8 @@
 #include <cstdio>
 
 #include "gel/git_repo.h"
+#include "gel/ui/icons.h"
+#include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
 
 namespace {
@@ -59,7 +61,7 @@ void ImageDiffViewer::Update(bool window_focused) {
     ImGui::PushStyleColor(ImGuiCol_TitleBgActive,
                           ImGui::GetStyleColorVec4(ImGuiCol_TitleBg));
   if (ImGui::Begin(title_.c_str(), &open_)) {
-    ImGui::TextUnformatted(path_.c_str());
+    RenderHeader();
     float half_w =
         (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) *
         0.5f;
@@ -70,6 +72,44 @@ void ImageDiffViewer::Update(bool window_focused) {
   ImGui::End();
   if (!window_focused)
     ImGui::PopStyleColor();
+}
+
+void ImageDiffViewer::RenderHeader() {
+  float btn_size = ImGui::GetFrameHeight();
+  ImVec2 pos = ImGui::GetCursorScreenPos();
+  float right = pos.x + ImGui::GetContentRegionAvail().x;
+
+  // The path, clipped short of the button.
+  ImGui::AlignTextToFramePadding();
+  ImGui::PushClipRect(pos,
+                      ImVec2(right - btn_size - ImGui::GetStyle().ItemSpacing.x,
+                             pos.y + btn_size),
+                      true);
+  ImGui::TextUnformatted(path_.c_str());
+  ImGui::PopClipRect();
+
+  // The toggle between full size and stretch to fill for both sides, at the
+  // right edge.
+  ImGui::SameLine();
+  ImGui::SetCursorScreenPos(ImVec2(right - btn_size, pos.y));
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    tooltip_suppressed_ = true;
+  bool full_size = new_view_.scale_mode() == ImageView::ScaleMode::kFullSize;
+  bool full_size_toggled =
+      ToggleButton("##image_full_size", full_size, ImVec2(btn_size, btn_size));
+  DrawActualSizeIcon();
+  bool hovered = false;
+  ItemTooltip(full_size ? "Images: full size" : "Images: stretch to fill",
+              hovered, tooltip_suppressed_);
+  if (!hovered)
+    tooltip_suppressed_ = false;
+
+  if (full_size_toggled) {
+    auto mode = full_size ? ImageView::ScaleMode::kFill
+                          : ImageView::ScaleMode::kFullSize;
+    old_view_.SetScaleMode(mode);
+    new_view_.SetScaleMode(mode);
+  }
 }
 
 // static

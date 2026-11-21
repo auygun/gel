@@ -638,6 +638,33 @@ void DrawFileTreeIcon() {
   }
 }
 
+void DrawActualSizeIcon() {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 btn_min = ImGui::GetItemRectMin();
+  ImVec2 btn_max = ImGui::GetItemRectMax();
+  float size = std::min(btn_max.x - btn_min.x, btn_max.y - btn_min.y);
+  float thickness = std::max(1.5f, size * 0.08f);
+  ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  float cx = (btn_min.x + btn_max.x) * 0.5f;
+  float cy = (btn_min.y + btn_max.y) * 0.5f;
+
+  float top = cy - size * 0.26f;
+  float bottom = cy + size * 0.26f;
+  float digit_x = size * 0.2f;
+  float flag = size * 0.09f;
+
+  // A "1" on each side: a stem with a flag at its top.
+  for (float x : {cx - digit_x, cx + digit_x}) {
+    dl->AddLine(ImVec2(x, top), ImVec2(x, bottom), color, thickness);
+    dl->AddLine(ImVec2(x, top), ImVec2(x - flag, top + flag), color, thickness);
+  }
+  // The colon between them.
+  float dot_r = std::max(1.0f, thickness * 0.6f);
+  float dot_dy = size * 0.11f;
+  dl->AddCircleFilled(ImVec2(cx, cy - dot_dy), dot_r, color);
+  dl->AddCircleFilled(ImVec2(cx, cy + dot_dy), dot_r, color);
+}
+
 void DrawFolderIcon() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();

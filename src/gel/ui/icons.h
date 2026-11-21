@@ -75,6 +75,9 @@ void DrawSortBySizeIcon();
 // list/tree view toggle.
 void DrawFileTreeIcon();
 
+// "1:1" for an image's full-size (pixel for pixel) view toggle.
+void DrawActualSizeIcon();
+
 // Folder icons for the directory browser.
 void DrawFolderIcon();
 void DrawGitFolderIcon();
