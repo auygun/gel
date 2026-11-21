@@ -16,15 +16,6 @@
 
 namespace {
 
-// |path|, relative to the repository, in the working tree at |toplevel|.
-// Converted from UTF-8, which a std::string path is not taken as on Windows.
-std::filesystem::path WorkTreePath(const std::filesystem::path& toplevel,
-                                   const std::string& path) {
-  return toplevel /
-         std::filesystem::path(std::u8string_view(
-             reinterpret_cast<const char8_t*>(path.data()), path.size()));
-}
-
 // Git treats a file as binary if its first 8000 bytes contain a NUL byte.
 constexpr size_t kBinaryCheckBytes = 8000;
 

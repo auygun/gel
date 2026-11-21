@@ -6,8 +6,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 
 #include "base/exec.h"
+#include "gel/git_repo.h"
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/kaliber/base/thread_pool.h"
 #include "third_party/stb/stb_image.h"
@@ -16,6 +19,7 @@ using namespace base;
 using namespace eng;
 
 ImageDiffViewer::ImageDiffViewer(int id,
+                                 const std::filesystem::path& toplevel,
                                  const std::string& old_ref,
                                  const std::string& new_ref,
                                  const std::string& path,
@@ -53,7 +57,8 @@ ImageDiffViewer::ImageDiffViewer(int id,
   if (new_from_worktree) {
     ++pending_loads_;
     ThreadPool::Get().PostTaskAndReplyWithResult<ImageData>(
-        HERE, [p = path]() { return LoadImageFromFile(p); },
+        HERE,
+        [p = WorkTreePath(toplevel, path)]() { return LoadImageFromFile(p); },
         [this, on_load_complete](ImageData data) {
           on_load_complete(new_image_, std::move(data));
         });
@@ -182,17 +187,15 @@ void ImageDiffViewer::CreateTextures(Renderer& renderer) {
 }
 
 ImageDiffViewer::ImageData ImageDiffViewer::LoadImageFromFile(
-    const std::string& path) {
-  ImageData result;
-  int w, h;
-  unsigned char* pixels = stbi_load(path.c_str(), &w, &h, nullptr, 4);
-  if (!pixels)
-    return result;
-  result.width = w;
-  result.height = h;
-  result.pixels.assign(pixels, pixels + static_cast<size_t>(w) * h * 4);
-  stbi_image_free(pixels);
-  return result;
+    const std::filesystem::path& path) {
+  // Read through std::filesystem::path rather than stbi_load(), whose fopen()
+  // doesn't take UTF-8 paths on Windows.
+  std::ifstream file(path, std::ios::binary);
+  if (!file)
+    return {};
+  std::string data((std::istreambuf_iterator<char>(file)),
+                   std::istreambuf_iterator<char>());
+  return DecodeImage(data);
 }
 
 ImageDiffViewer::ImageData ImageDiffViewer::LoadImageFromGit(
@@ -213,7 +216,12 @@ ImageDiffViewer::ImageData ImageDiffViewer::LoadImageFromGit(
   if (proc.GetStatus() != Exec::Status::EXITED || proc.GetResult() != 0)
     return result;
 
-  std::string data = std::move(proc.GetOut());
+  return DecodeImage(proc.GetOut());
+}
+
+ImageDiffViewer::ImageData ImageDiffViewer::DecodeImage(
+    const std::string& data) {
+  ImageData result;
   if (data.empty())
     return result;
 

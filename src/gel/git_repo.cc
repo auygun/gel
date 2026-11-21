@@ -5,6 +5,7 @@
 #include "gel/git_repo.h"
 
 #include <string>
+#include <string_view>
 
 #include "base/exec.h"
 #include "third_party/kaliber/base/thread_pool.h"
@@ -48,4 +49,11 @@ void GitRepo::Init(std::function<void(bool)> callback) {
         if (pending_ == 0 && cb)
           cb(!toplevel_.empty());
       });
+}
+
+std::filesystem::path WorkTreePath(const std::filesystem::path& toplevel,
+                                   const std::string& path) {
+  return toplevel /
+         std::filesystem::path(std::u8string_view(
+             reinterpret_cast<const char8_t*>(path.data()), path.size()));
 }

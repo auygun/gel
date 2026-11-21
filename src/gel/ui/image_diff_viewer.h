@@ -5,6 +5,7 @@
 #ifndef GEL_UI_IMAGE_DIFF_VIEWER_H
 #define GEL_UI_IMAGE_DIFF_VIEWER_H
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,8 +18,11 @@
 class ImageDiffViewer {
  public:
   // |id| must be unique across all live ImageDiffViewer instances so that each
-  // gets its own ImGui window.
+  // gets its own ImGui window. |path| is relative to the repository. With
+  // |new_from_worktree|, the new image is read from the working tree at
+  // |toplevel|.
   ImageDiffViewer(int id,
+                  const std::filesystem::path& toplevel,
                   const std::string& old_ref,
                   const std::string& new_ref,
                   const std::string& path,
@@ -64,7 +68,8 @@ class ImageDiffViewer {
 
   static ImageData LoadImageFromGit(const std::string& ref,
                                     const std::string& path);
-  static ImageData LoadImageFromFile(const std::string& path);
+  static ImageData LoadImageFromFile(const std::filesystem::path& path);
+  static ImageData DecodeImage(const std::string& data);
 };
 
 #endif  // GEL_UI_IMAGE_DIFF_VIEWER_H

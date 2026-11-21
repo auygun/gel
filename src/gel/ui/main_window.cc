@@ -680,7 +680,8 @@ void MainWindow::OnShowImageDiff(const std::string& old_ref,
                                  const std::string& path,
                                  bool new_from_worktree) {
   image_diff_viewers_.push_back(std::make_unique<ImageDiffViewer>(
-      next_image_diff_id_++, old_ref, new_ref, path, new_from_worktree));
+      next_image_diff_id_++, git_repo_.toplevel(), old_ref, new_ref, path,
+      new_from_worktree));
 }
 
 void MainWindow::SetPrimarySelection(const std::string& text) {
