@@ -39,9 +39,9 @@ class Exec {
   void Detach();
 
   // Write data to the child's stdin. Only valid after Start() with
-  // with_stdin=true and before CloseStdin(). Returns the number of bytes
-  // written, which may be less than data.size() if the pipe buffer is full.
-  // Returns 0 if the pipe would block, -1 on error.
+  // with_stdin=true and before CloseStdin(). Never blocks. Returns the number
+  // of bytes written, which may be less than data.size() if the pipe buffer
+  // is full. Returns 0 if the pipe would block, -1 on error.
   int64_t Write(std::span<const char> data);
 
   // Close the stdin pipe, signalling EOF to the child process.

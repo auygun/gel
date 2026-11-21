@@ -6,6 +6,7 @@
 #define GEL_UI_COMMIT_SEARCH_H
 
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <string>
@@ -48,7 +49,8 @@ GitChangeSearch::Query BuildChangeSearchQuery(const std::string& term,
 //   very large histories. It is cheap enough to check the visible rows on the
 //   frame the query changes.
 // - The other modes match what a commit changed, which only git can tell.
-//   GitChangeSearch checks them in the background, in chunks of commits.
+//   GitChangeSearch checks them in the background, in a few long-running
+//   git processes.
 class CommitSearch {
  public:
   CommitSearch(GitLog& git_log,
@@ -72,7 +74,7 @@ class CommitSearch {
   // ConsumeResult().
   void Search(int start, int direction);
 
-  // Called each frame. Processes a chunk of search work if needed.
+  // Called each frame. Does a slice of search work if needed.
   // Returns true while stepping to a match is still in progress (caller
   // should keep rendering frames).
   bool Update();
@@ -122,8 +124,8 @@ class CommitSearch {
   CommitSearchMode mode() const { return mode_; }
 
  private:
-  // kChecking: handed to a running chunk, result not known yet. Kept apart
-  // from kUnknown so that a commit is never handed to two chunks.
+  // kChecking: handed to a git process, result not known yet. Kept apart
+  // from kUnknown so that a commit is never handed to two processes.
   enum class State : uint8_t { kUnknown, kChecking, kMatch, kNoMatch };
   static bool IsKnown(State state) {
     return state == State::kMatch || state == State::kNoMatch;
@@ -150,6 +152,10 @@ class CommitSearch {
   int direction_ = 1;
   int search_offset_ = 0;  // How many commits walked so far.
   bool searching_ = false;
+  // Whether the step may still stop processes in its way. Once per step, so
+  // a step waiting on slow commits doesn't keep restarting them, but kept
+  // until it does stop some.
+  bool step_may_clear_ = false;
   int result_ = -1;  // Pending result for the caller.
   std::string error_;
   bool has_error_ = false;
@@ -173,23 +179,32 @@ class CommitSearch {
   int scan_direction_ = 1;
   int scan_walked_ = 0;
 
-  // Change-based modes: git diff-tree runs in several processes at once, each
-  // checking a chunk of commits. Chunks are handed out in scan order, so the
-  // nearer commits are always the ones being checked; stepping to a match only
-  // walks past commits whose result is known, so a chunk further along
-  // finishing first never makes it skip a match.
-  struct ChunkSlot {
-    explicit ChunkSlot(std::function<void(bool)> busy_callback)
+  // Change-based modes: git diff-tree runs in several processes at once. Each
+  // is started once per query and given the next unchecked commits in scan
+  // order as it gets through them, a fraction of a second of work ahead, so
+  // the nearer commits are always the ones being checked and the search can
+  // change course without stopping them. Stepping to a match only walks past
+  // commits whose result is known, so a commit further along coming back
+  // first never makes it skip a match.
+  struct SearchProcess {
+    explicit SearchProcess(std::function<void(bool)> busy_callback)
         : search(std::move(busy_callback)) {}
     GitChangeSearch search;
     int run_id = 0;
-    // The chunk's commit indices, and how many of them are done.
-    std::vector<int> chunk;
-    int done = 0;
     bool running = false;
+    // Told to end once it has checked its commits.
+    bool finishing = false;
+    // The commits given to git and not checked yet, in order.
+    std::deque<int> queued;
+    // Since the front commit got to the front.
+    base::ElapsedTimer check_timer;
+    // How long checking a commit takes, smoothed, and whether anything has
+    // been measured since the process started.
+    double seconds_per_commit = 0;
+    bool timed = false;
     size_t events_seen = 0;
   };
-  std::vector<std::unique_ptr<ChunkSlot>> slots_;
+  std::vector<std::unique_ptr<SearchProcess>> slots_;
   int next_run_id_ = 0;
 
   int visible_first_ = -1;
@@ -215,25 +230,34 @@ class CommitSearch {
   void ApplyLabelChanges();
 
   // Checks more commits from the scan cursor on: on the main thread within
-  // the time budget for kContaining, by starting the next chunk otherwise.
+  // the time budget for kContaining, by giving the git processes more
+  // commits otherwise.
   void CheckMore();
   void CheckMoreContaining();
-  // Hands the next chunk to every idle slot.
+  // Gives each process the next unchecked commits, up to its share.
   void FillSlots();
-  // Returns false if there was nothing to hand out.
-  bool StartChunk(ChunkSlot& slot);
+  // Returns the next unchecked commit from the scan cursor on, moving past
+  // it, or -1 once the walk has covered the list.
+  int NextUnchecked();
+  // Starts git for the current query. Returns false if git could not be
+  // started, which stops the search.
+  bool StartSlot(SearchProcess& slot);
   void ProcessEvents();
-  void ProcessSlotEvents(ChunkSlot& slot);
-  bool any_chunk_running() const;
+  void ProcessSlotEvents(SearchProcess& slot);
+  bool any_slot_running() const;
 
   // Makes sure the commit at |index| is checked soon, moving the scan there if
   // it is not about to reach it.
   void EnsureChecked(int index, int direction);
+  // Stepping to a match reached the unchecked commit at |index|: stops the
+  // processes busy with commits the step doesn't need next, so they take the
+  // step's commits right away. Returns true if it stopped any.
+  bool ClearPathForStep(int index, int direction);
   // Moves the scan to the visible rows once they settle.
   void PrioritizeVisible();
   void RestartScan(int index, int direction);
-  void StopChunk(ChunkSlot& slot);
-  void StopAllChunks();
+  void StopSlot(SearchProcess& slot);
+  void StopAllSlots();
 
   void UpdateNavigation();
   void FinishNavigation(int result);

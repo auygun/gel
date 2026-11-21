@@ -132,8 +132,18 @@ bool Exec::Start(const std::vector<std::string>& args, bool with_stdin) {
   status_ = Status::RUNNING;
 
   // Close the child-side handles since the child has inherited them.
-  if (with_stdin)
+  if (with_stdin) {
     in_pipe_.Close(Pipe::kRead);
+    // Writes to a pipe block until the child reads them, which could leave
+    // the caller stuck writing while the child waits for its output to be
+    // read. Make them return at once instead, writing what fits, as on POSIX.
+    // Anonymous pipes are named pipes, so this applies to them too.
+    DWORD mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+    if (!SetNamedPipeHandleState(in_pipe_[Pipe::kWrite], &mode, nullptr,
+                                 nullptr)) {
+      DLOG(0) << "SetNamedPipeHandleState failed: " << GetLastError();
+    }
+  }
   out_pipe_.Close(Pipe::kWrite);
   err_pipe_.Close(Pipe::kWrite);
 
@@ -240,9 +250,22 @@ void Exec::Detach() {
 }
 
 int64_t Exec::Write(std::span<const char> data) {
-  DWORD written = 0;
-  if (!WriteFile(in_pipe_[Pipe::kWrite], data.data(),
-                 static_cast<DWORD>(data.size()), &written, nullptr))
-    return -1;
-  return static_cast<int64_t>(written);
+  // The pipe is in PIPE_NOWAIT mode (see Start()). A write bigger than the
+  // free space in the pipe's buffer then writes nothing at all rather than
+  // what fits, so try smaller pieces until one fits or the pipe is full.
+  // Writes up to the buffer size go through whole once there is room.
+  constexpr DWORD kMaxWrite = 4096;
+  DWORD size = static_cast<DWORD>(
+      (std::min)(data.size(), static_cast<size_t>(kMaxWrite)));
+  while (size > 0) {
+    DWORD written = 0;
+    if (!WriteFile(in_pipe_[Pipe::kWrite], data.data(), size, &written,
+                   nullptr)) {
+      return -1;  // e.g. ERROR_NO_DATA: the child closed its end.
+    }
+    if (written > 0)
+      return static_cast<int64_t>(written);
+    size /= 2;
+  }
+  return 0;  // Full: try again later.
 }

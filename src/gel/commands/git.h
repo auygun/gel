@@ -12,6 +12,7 @@
 #include <optional>
 #include <semaphore>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -50,12 +51,23 @@ class Git {
  protected:
   // Starts a new git process with the given arguments. Any currently running
   // process is killed and superseded. If |stdin_data| is non-empty, the
-  // process is started with a stdin pipe and the data is written to it.
+  // process is started with a stdin pipe and the data is written to it, after
+  // which the pipe is closed. With |keep_stdin_open|, the pipe is started
+  // either way and stays open for WriteStdin() until CloseStdin().
   // |run_id| is handed back through run_id() while the process runs, so a
   // derived class can tag its results with the run that produced them.
   bool RunWithArgs(std::vector<std::string> args,
                    std::string stdin_data = {},
-                   int run_id = 0);
+                   int run_id = 0,
+                   bool keep_stdin_open = false);
+
+  // Main thread: adds |data| to the stdin of the process started last, which
+  // must have been started with |keep_stdin_open|.
+  void WriteStdin(std::string_view data);
+
+  // Main thread: closes the stdin of the process started last once everything
+  // given to it so far is written, so it sees the end of its input.
+  void CloseStdin();
 
   // Worker thread: the |run_id| passed to RunWithArgs() for the current
   // process. Valid from OnStarted() on.
@@ -66,8 +78,13 @@ class Git {
 
  private:
   std::list<Exec> new_procs_;
-  std::string pending_stdin_;  // Guarded by lock_.
-  int pending_run_id_ = 0;     // Guarded by lock_.
+  std::string pending_stdin_;       // Guarded by lock_.
+  bool pending_has_stdin_ = false;  // Guarded by lock_.
+  int pending_run_id_ = 0;          // Guarded by lock_.
+  // Input added by WriteStdin(), and whether CloseStdin() was called, for the
+  // process started last. Guarded by lock_.
+  std::string more_stdin_;
+  bool close_stdin_ = false;
   std::string pending_label_;  // Guarded by lock_.
   std::mutex lock_;
   int run_id_ = 0;  // Worker thread.
@@ -93,6 +110,8 @@ class Git {
   std::string current_stdin_;
   size_t stdin_offset_ = 0;
   bool stdin_open_ = false;
+  // Close stdin once |current_stdin_| is written.
+  bool stdin_close_ = false;
 
   // Line splitting state of one output stream, kept between Poll cycles.
   struct LineSplitter {
