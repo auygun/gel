@@ -11,6 +11,7 @@
 #include "gel/commands/git_log.h"
 #include "gel/persistent_settings.h"
 #include "gel/ui/git_cmd_runner.h"
+#include "gel/ui/modules/image_view.h"
 #include "gel/ui/style.h"
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -42,17 +43,6 @@ std::vector<std::string> BuildRestoreArgs(
   for (auto& p : paths)
     args.push_back(p);
   return args;
-}
-
-bool IsImageFile(const std::string& path) {
-  auto dot = path.rfind('.');
-  if (dot == std::string::npos)
-    return false;
-  std::string ext = path.substr(dot);
-  std::transform(ext.begin(), ext.end(), ext.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
-         ext == ".gif" || ext == ".tga" || ext == ".psd";
 }
 
 }  // namespace

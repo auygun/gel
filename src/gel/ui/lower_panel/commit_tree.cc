@@ -35,7 +35,8 @@ CommitTree::CommitTree(Delegate& delegate,
       git_repo_(git_repo),
       settings_(settings),
       git_ls_tree_(busy_callback),
-      git_show_file_(std::move(busy_callback)),
+      git_show_file_(busy_callback),
+      image_view_(std::move(busy_callback)),
       text_viewer_(*this, std::move(main_thread_busy)) {
   text_viewer_.set_search_history(&settings_.diff_search_history);
 }
@@ -104,6 +105,8 @@ bool CommitTree::SelectPath(const std::string& path) {
 void CommitTree::ClearContent() {
   git_show_file_.Stop();
   file_reader_.Stop();
+  image_view_.Clear();
+  showing_image_ = false;
   text_viewer_.Reset();
   lang_ = Language::kNone;
   from_work_tree_ = false;
@@ -148,11 +151,51 @@ void CommitTree::SelectEntry(int index) {
           "Symlink to " +
           std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()));
     }
-  } else if (source_.unstaged) {
+  } else if (IsImageFile(entry.path)) {
+    showing_image_ = true;
+    if (source_.unstaged)
+      image_view_.LoadFile(WorkTreePath(git_repo_.toplevel(), entry.path));
+    else
+      image_view_.LoadBlob(entry.blob, git_repo_.toplevel());
+  } else {
+    LoadText(entry);
+  }
+}
+
+void CommitTree::LoadText(const TreeEntry& entry) {
+  if (source_.unstaged) {
     from_work_tree_ = true;
     file_reader_.Read(WorkTreePath(git_repo_.toplevel(), entry.path));
   } else {
+    from_work_tree_ = false;
     git_show_file_.Run(entry.blob, git_repo_.toplevel());
+  }
+}
+
+void CommitTree::UpdateImage() {
+  if (!showing_image_)
+    return;
+  switch (image_view_.state()) {
+    case ImageView::State::kFailed:
+      // Not an image after all, or missing from the working tree: the text
+      // tells which.
+      showing_image_ = false;
+      image_view_.Clear();
+      LoadText(git_ls_tree_.entries()[selected_entry_]);
+      break;
+    case ImageView::State::kTooLarge:
+      showing_image_ = false;
+      if (image_view_.width() > 0) {
+        ShowNote("Image too large to show (" +
+                 std::to_string(image_view_.width()) + "x" +
+                 std::to_string(image_view_.height()) + ").");
+      } else {
+        ShowNote("Image too large to show.");
+      }
+      image_view_.Clear();
+      break;
+    default:
+      break;
   }
 }
 
@@ -175,7 +218,7 @@ std::span<const std::string> CommitTree::ShownLines() const {
 }
 
 void CommitTree::ScanContent() {
-  if (selected_entry_ < 0 || !note_.empty())
+  if (selected_entry_ < 0 || !note_.empty() || showing_image_)
     return;
   auto lines = LoadedLines();
   int count = static_cast<int>(lines.size());
@@ -224,7 +267,7 @@ void CommitTree::ScanContent() {
   }
 }
 
-void CommitTree::Update() {
+void CommitTree::Update(eng::Renderer& renderer) {
   // Read before merging, so that once done, the merge took in all entries.
   bool listed = git_ls_tree_.done();
   git_ls_tree_.Update();
@@ -252,6 +295,8 @@ void CommitTree::Update() {
     }
   }
 
+  UpdateImage();
+  image_view_.Update(renderer);
   if (from_work_tree_)
     file_reader_.Update();
   else
@@ -261,8 +306,15 @@ void CommitTree::Update() {
   if (pending_line_ > 0 && selected_entry_ >= 0 &&
       selected_path_ == pending_file_) {
     // File line N is content line N - 1.
-    if (pending_line_ <= static_cast<int>(ShownLines().size()) &&
-        note_.empty()) {
+    if (showing_image_) {
+      // An image has no lines. Kept while it loads: if it doesn't, the
+      // content is shown as text.
+      if (image_view_.state() == ImageView::State::kLoaded) {
+        pending_line_ = 0;
+        pending_file_.clear();
+      }
+    } else if (pending_line_ <= static_cast<int>(ShownLines().size()) &&
+               note_.empty()) {
       text_viewer_.HighlightLine(pending_line_ - 1);
       pending_line_ = 0;
       pending_file_.clear();
@@ -377,9 +429,14 @@ void CommitTree::RenderMainPane(float width) {
   ImGui::BeginGroup();
   if (selected_entry_ >= 0)
     RenderHeader(width);
-  text_viewer_.Update(width, ShownLines(), &settings_.diff_search_options);
+  if (showing_image_) {
+    image_view_.Render(width);
+    overlay_anchor_ = image_view_.content_top_right();
+  } else {
+    text_viewer_.Update(width, ShownLines(), &settings_.diff_search_options);
+    overlay_anchor_ = text_viewer_.content_top_right();
+  }
   ImGui::EndGroup();
-  overlay_anchor_ = text_viewer_.content_top_right();
 }
 
 void CommitTree::RenderOverlay() {

@@ -155,6 +155,8 @@ executable("gel") {
     "ui/lower_panel/size_file_tree.h",
     "ui/main_window.cc",
     "ui/main_window.h",
+    "ui/modules/image_view.cc",
+    "ui/modules/image_view.h",
     "ui/modules/markdown_renderer.cc",
     "ui/modules/markdown_renderer.h",
     "ui/modules/path_tree.cc",
