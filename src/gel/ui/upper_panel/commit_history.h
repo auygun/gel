@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "gel/ui/commit_search_mode.h"
 #include "gel/ui/upper_panel/commit_context_menu.h"
 #include "gel/ui/upper_panel/commit_graph.h"
 #include "gel/ui/upper_panel/commit_modal.h"
@@ -47,12 +48,13 @@ class CommitHistory {
                 PersistentSettings& settings,
                 std::function<void(const std::string&)> open_in_new_window);
 
-  // Whether the commit at index |ci| matches the toolbar search, to draw it
-  // highlighted.
-  using SearchMatcher = std::function<bool(int ci)>;
+  // What the toolbar search knows about the commit at index |ci|: a match is
+  // drawn highlighted, a commit not checked yet is marked "pending" after its
+  // subject, and one being checked by git with a spinner.
+  using SearchRowStates = std::function<CommitSearchRowState(int ci)>;
 
   // Renders the commit history table.
-  void Update(const SearchMatcher& is_search_match);
+  void Update(const SearchRowStates& search_row_state);
 
   // The range of commit indices visible in the table as of the last Update(),
   // [first, last], or -1 for both when there are no commits.

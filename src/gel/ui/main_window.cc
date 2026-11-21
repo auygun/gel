@@ -391,7 +391,7 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
         commit_search_.match_count(), commit_search_.search_complete()};
     toolbar_.Update(search_matches, commit_search_.progress());
     commit_history_.Update(
-        [this](int ci) { return commit_search_.IsMatch(ci); });
+        [this](int ci) { return commit_search_.GetRowState(ci); });
     if (settings_.show_size_panel) {
       commit_size_.Update();
       lower_panel_.Update(commit_size_);

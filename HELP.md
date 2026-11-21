@@ -242,8 +242,10 @@ shows how much of the history has been searched.
 
 Containing searches commit fields directly, so the rows on screen are
 highlighted as you type. The last three modes ask git about each commit's
-changes in the background. They respect the case toggle; whole word is not
-available. Merge commits are not searched, as in `git log`. An invalid regex
+changes in the background, a few commits at a time. While they search, a
+commit not checked yet shows "pending" after its subject, and one git is
+checking right now shows a spinner. They respect the case toggle; whole
+word is not available. Merge commits are not searched, as in `git log`. An invalid regex
 is reported when navigating to a match.
 
 ### Status Indicators
