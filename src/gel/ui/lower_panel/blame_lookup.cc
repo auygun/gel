@@ -5,12 +5,16 @@
 #include "gel/ui/lower_panel/blame_lookup.h"
 
 #include <algorithm>
+#include <optional>
+
+#include "base/exec.h"
 
 #include "gel/commands/git_diff.h"
 #include "gel/commands/git_log.h"
 #include "gel/git_repo.h"
 #include "gel/ui/lower_panel/commit_diff.h"
 #include "gel/ui/upper_panel/commit_history.h"
+#include "third_party/kaliber/base/thread_pool.h"
 
 BlameLookup::BlameLookup(CommitHistory& commit_history,
                          CommitDiff& commit_diff,
@@ -40,9 +44,58 @@ std::string BlameLookup::GetRevision(int parent) const {
 void BlameLookup::ShowLineOrigin(const std::string& file,
                                  int line_number,
                                  int parent) {
-  std::string revision = GetRevision(parent);
+  ShowLineOriginAt(GetRevision(parent), file, line_number);
+}
+
+void BlameLookup::ShowLineOriginAt(const std::string& revision,
+                                   const std::string& file,
+                                   int line_number) {
+  ++lookup_id_;
   busy_ = true;
   git_blame_.Run(revision, file, line_number, git_repo_.toplevel());
+}
+
+void BlameLookup::ShowStagedLineOrigin(const std::string& blob,
+                                       const std::string& file,
+                                       int line_number) {
+  int id = ++lookup_id_;
+  busy_ = true;
+  // Read as is, so its lines are what git compares with HEAD's. Off the main
+  // thread: the file can be large.
+  std::filesystem::path toplevel = git_repo_.toplevel();
+  std::weak_ptr<bool> alive = alive_;
+  base::ThreadPool::Get()
+      .PostTaskAndReplyWithResult<std::optional<std::string>>(
+          HERE,
+          [blob, toplevel]() -> std::optional<std::string> {
+            std::vector<std::string> args = {"git"};
+            if (!toplevel.empty())
+              args.insert(args.end(), {"-C", toplevel.string()});
+            args.insert(args.end(), {"cat-file", "blob", blob});
+            Exec exec;
+            if (!exec.Start(args))
+              return std::nullopt;
+            while (exec.Poll()) {
+            }
+            if (exec.GetStatus() != Exec::Status::EXITED ||
+                exec.GetResult() != 0)
+              return std::nullopt;
+            return std::move(exec.GetOut());
+          },
+          [this, alive, id, file,
+           line_number](std::optional<std::string> data) {
+            // Dropped if this object is gone, or the lookup was cancelled or
+            // superseded meanwhile.
+            if (alive.expired() || id != lookup_id_)
+              return;
+            if (!data) {
+              busy_ = false;
+              show_popup_("Error", "Could not read the staged file.");
+              return;
+            }
+            git_blame_.Run("HEAD", file, line_number, git_repo_.toplevel(),
+                           std::move(data));
+          });
 }
 
 void BlameLookup::PollBlame() {
@@ -79,6 +132,8 @@ void BlameLookup::PollBlame() {
     commit_history_.SelectCommit(row);
     commit_history_.ScrollToSelected();
   }
+  if (show_line_callback_ && show_line_callback_(result.file, result.line))
+    return;
   pending_file_ = result.file;
   pending_commit_ = result.hash;
   pending_line_ = result.line;
@@ -89,6 +144,7 @@ void BlameLookup::PollBlame() {
 }
 
 void BlameLookup::Cancel() {
+  ++lookup_id_;
   pending_file_.clear();
   pending_commit_.clear();
   pending_line_ = 0;

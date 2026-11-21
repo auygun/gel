@@ -6,6 +6,7 @@
 #define GEL_UI_LOWER_PANEL_BLAME_LOOKUP_H
 
 #include <functional>
+#include <memory>
 #include <string>
 
 #include "gel/commands/git_blame.h"
@@ -36,6 +37,26 @@ class BlameLookup {
   // |line_number| is a line of |file| in the selected commit when |parent| is
   // 0, or in its |parent|th parent otherwise.
   void ShowLineOrigin(const std::string& file, int line_number, int parent);
+
+  // Same, for |line_number| of |file| at |revision|, or in the working tree
+  // if |revision| is empty.
+  void ShowLineOriginAt(const std::string& revision,
+                        const std::string& file,
+                        int line_number);
+
+  // Same, for |line_number| of |file| as staged: the content of |blob|, on
+  // top of HEAD.
+  void ShowStagedLineOrigin(const std::string& blob,
+                            const std::string& file,
+                            int line_number);
+
+  // Called with the found line once its commit is selected. Returns true if
+  // it showed the line, for the lookup to not look for it in the diff.
+  using ShowLineCallback =
+      std::function<bool(const std::string& file, int line)>;
+  void set_show_line_callback(ShowLineCallback callback) {
+    show_line_callback_ = std::move(callback);
+  }
 
   // Returns the revision to blame for |parent| of the selected commit (0 for
   // the commit itself). HEAD for the unstaged and staged rows.
@@ -68,9 +89,15 @@ class BlameLookup {
   GitRepo& git_repo_;
   std::function<void(bool)> busy_callback_;
   PopupCallback show_popup_;
+  ShowLineCallback show_line_callback_;
 
   GitBlame git_blame_;
   bool busy_ = false;
+  // Incremented by each lookup and Cancel(), so that a staged blob read for
+  // an earlier lookup is dropped.
+  int lookup_id_ = 0;
+  // Expires with this object, for the blob read's reply.
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
   std::string pending_file_;
   std::string pending_commit_;
   int pending_line_ = 0;

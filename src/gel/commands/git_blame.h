@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include "gel/commands/git.h"
@@ -27,13 +28,17 @@ class GitBlame final : public Git {
   GitBlame(GitBlame const&) = delete;
   GitBlame& operator=(GitBlame const&) = delete;
 
-  // Runs "git blame --porcelain -L<line>,<line> <revision> -- <file>".
+  // Runs "git blame --porcelain -L<line>,<line> <revision> -- <file>". An
+  // empty |revision| blames the file in the working tree. With |contents|,
+  // blames them as the file's content on top of |revision| ("--contents -"),
+  // e.g. the file's staged content on top of HEAD.
   // When |toplevel| is non-empty, passes "-C <toplevel>" so that
   // repo-relative paths resolve correctly from any working directory.
   bool Run(const std::string& revision,
            const std::string& file,
            int line_number,
-           const std::filesystem::path& toplevel = {});
+           const std::filesystem::path& toplevel = {},
+           std::optional<std::string> contents = std::nullopt);
 
   // Main thread: returns true if a blame completed since the last call,
   // filling |result| with the outcome.

@@ -40,6 +40,7 @@ merging.
   - [Chart View](#chart-view-main-pane)
   - [Size Overlay Controls](#size-overlay-controls)
   - [Chart Interaction](#chart-interaction)
+- [File Tree View (Lower Panel)](#file-tree-view-lower-panel)
 - [Directory Browser](#directory-browser)
 - [Settings](#settings)
   - [Available Themes](#available-themes)
@@ -76,8 +77,9 @@ gel --date=short             # Use short date format in log and diff
 The window is divided into two main panels:
 
 - **Upper panel** -- Commit history table with graph visualization
-- **Lower panel** -- Diff view (file list + diff viewer) or size view (file
-  tree + chart), toggled with F6
+- **Lower panel** -- Diff view (file list + diff viewer), size view (file
+  tree + chart) or file tree view (all files + file content), switched with
+  the view buttons in the toolbar or F6
 
 Both panel dividers can be dragged to resize. Every lower panel view has the
 same layout: a side pane (the file list, the file tree) and a main pane (the
@@ -109,11 +111,12 @@ the controls. CSD can be toggled in Settings (requires restart).
 
 - **F1** -- Open this help window
 - **F5** -- Refresh commit history and diff
-- **F6** -- Toggle lower panel between diff and size view
+- **F6** -- Switch the lower panel to the next view: diff, size, file tree
 - **F7** -- Toggle console
 - **Ctrl+,** -- Open settings
 - **Ctrl+L** -- Clear path filter
-- **Ctrl+F** -- Open/focus diff search bar
+- **Ctrl+F** -- Open/focus the search bar of the diff, or of the file in the
+  file tree view
 - **Ctrl+A** -- Select all diff content
 - **Ctrl+C** -- Copy selected text to clipboard
 - **Ctrl+T** -- Stage selected file(s) to commit (unstaged view)
@@ -142,7 +145,8 @@ The toolbar spans the top of the window and contains the following controls
 - **Row counter** -- Shows selected row and total count (e.g. 42/1500)
 - **Refresh** -- Reloads the commit history and diff (F5)
 - **Clear filter** -- Clears all active path filters in a single press (Ctrl+L)
-- **Panel toggle** -- Switch lower panel between diff and size view (F6)
+- **View buttons** -- Show the diff, size or file tree view in the lower
+  panel; the active one is on (F6 cycles through them)
 - **Settings** -- Opens the settings modal (Ctrl+,)
 - **Help** -- Opens this help window (F1)
 - **Search mode** -- Icon button showing what the search field matches:
@@ -622,8 +626,8 @@ The overlay appears on hover and has a semi-transparent background.
 
 ## Size View (Lower Panel)
 
-Press **F6** or click the panel toggle button to switch the lower panel from
-the diff view to the size view. The size view shows the files touched by the
+Press **F6** or click the size view button in the toolbar to switch the lower
+panel to the size view. The size view shows the files touched by the
 selected commit, organized in a file tree with sizes, alongside an interactive
 chart. For a merge commit, these are the files the merge brought in relative to
 its first parent.
@@ -664,6 +668,28 @@ A floating overlay in the upper-right corner of the chart, like the
 - **Click** a slice, bar, or region to drill down into that directory.
 - **Right-click** the donut chart to navigate to the parent directory.
 - Click a breadcrumb component to jump directly to that directory.
+
+## File Tree View (Lower Panel)
+
+Click the file tree view button in the toolbar, or press **F6** until it is
+active, to browse every file of the selected commit, not only the ones it
+changed, as gitk's Tree mode does. For **Local uncommitted changes** it shows
+the tracked files of the working tree as they are on disk, and for **Local
+changes checked in to index** the files of the index as they are staged.
+
+- The side pane lists the files in a directory tree, collapsed at first. Click
+  a directory to expand or collapse it, and a file to show its content.
+  Right-click a file to copy its path.
+- The main pane shows the selected file's content, with line numbers and
+  syntax highlighting as in the diff. Binary files and submodules are noted
+  instead. Ctrl+F searches the content.
+- The selected file stays selected when another commit is selected, so
+  stepping through the history follows it, for as long as the commits have it.
+- Right-click a line for **Show origin of this line**, which selects the
+  commit that last changed the line, showing the line in its version of the
+  file, and **Run git gui blame on this line**.
+- The overlay in the upper-right corner of the content has **Expand all** and
+  **Collapse all** buttons for the tree.
 
 ## Directory Browser
 

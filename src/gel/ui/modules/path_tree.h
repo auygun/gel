@@ -66,6 +66,10 @@ class PathTree {
   // Expands or collapses all directories, including ones added later.
   void SetAllDirsOpen(bool open);
 
+  // Expands the directories containing the item at |path|, so that it is
+  // shown on a row of its own, as the user would.
+  void RevealPath(std::string_view path);
+
   // Where the text of an item row at |depth| starts, so that it lines up
   // with the names of directory rows at the same depth.
   static float ItemTextOffset(int depth);

@@ -314,7 +314,7 @@ void PersistentSettings::Load() {
                           ? DiffColorMode::kSyntax
                           : DiffColorMode::kAnsi;
   }
-  // show_size_panel is intentionally not loaded; always start in diff view.
+  // lower_view is intentionally not loaded; always start in diff view.
   if (j.contains("chart_style")) {
     if (j["chart_style"].is_string())
       chart_style =
@@ -425,7 +425,7 @@ void PersistentSettings::Save() {
   j["show_line_numbers"] = show_line_numbers;
   j["show_commit_graph"] = show_commit_graph;
   j["diff_color_mode"] = GetDiffColorModeName(diff_color_mode);
-  // show_size_panel is intentionally not saved; always start in diff view.
+  // lower_view is intentionally not saved; always start in diff view.
   j["chart_style"] = GetChartStyleName(chart_style);
   j["size_tree_sort"] = GetSizeTreeSortName(size_tree_sort);
 

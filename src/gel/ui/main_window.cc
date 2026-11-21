@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <utility>
 
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
@@ -46,6 +47,7 @@ MainWindow::MainWindow(Platform& platform,
               if (!browsing_specific_ref_)
                 git_status_.Run();
               RerunDiff();
+              ReloadTreeSource();
             } else if (scope == RefreshScope::kRefs &&
                        !browsing_specific_ref_) {
               // The history of HEAD and the working tree are unchanged;
@@ -89,6 +91,12 @@ MainWindow::MainWindow(Platform& platform,
           },
           main_thread_busy_),
       commit_size_(settings_, [this](bool b) { on_busy_changed_(b); }),
+      commit_tree_(
+          *this,
+          git_repo_,
+          settings_,
+          [this](bool b) { on_busy_changed_(b); },
+          main_thread_busy_),
       lower_panel_(settings_),
       toolbar_(*this, runner_, git_repo_, settings_),
       console_window_(runner_, settings_),
@@ -106,7 +114,18 @@ MainWindow::MainWindow(Platform& platform,
                      ref_decorations_,
                      [this](bool b) { on_busy_changed_(b); }),
       popup_modal_([this]() { platform_.Exit(); }),
-      directory_browser_(*this) {}
+      directory_browser_(*this) {
+  // A line found by a blame lookup is shown in the tree view's file while it
+  // is active, rather than in the diff.
+  blame_lookup_.set_show_line_callback(
+      [this](const std::string& file, int line) {
+        if (settings_.lower_view != LowerView::kTree)
+          return false;
+        UpdateTreeSource();
+        commit_tree_.ShowFileLine(file, line);
+        return true;
+      });
+}
 
 MainWindow::~MainWindow() = default;
 
@@ -227,12 +246,13 @@ void MainWindow::Refresh() {
   if (commit_history_.IsUnstagedSelected() ||
       commit_history_.IsStagedSelected())
     RerunDiff();
+  ReloadTreeSource();
   runner_.UpdateTaskState();
   toolbar_.UpdateHeadStatus();
 }
 
 void MainWindow::RerunDiff(bool preserve_scroll) {
-  if (settings_.show_size_panel) {
+  if (!IsDiffViewActive()) {
     diff_stale_ = true;
     return;
   }
@@ -247,6 +267,46 @@ void MainWindow::RerunDiff(bool preserve_scroll) {
     git_diff_.RunStaged();
   else
     git_diff_.RunTree({commit_history_.GetSelectedCommit()});
+}
+
+bool MainWindow::IsDiffViewActive() const {
+  return settings_.lower_view == LowerView::kDiff;
+}
+
+std::string MainWindow::GetSelectedRealCommit() const {
+  int idx = commit_history_.GetSelectedCommitIndex();
+  if (idx < 0)
+    return {};
+  auto commits = git_log_.GetCommits();
+  return idx < static_cast<int>(commits.size()) ? commits[idx].commit
+                                                : std::string();
+}
+
+CommitTree::Source MainWindow::GetTreeSource() const {
+  CommitTree::Source source;
+  source.unstaged = commit_history_.IsUnstagedSelected();
+  source.staged = commit_history_.IsStagedSelected();
+  // The selected hash rather than a lookup in the loaded history, which is
+  // empty while the history reloads.
+  if (!source.unstaged && !source.staged)
+    source.commit = commit_history_.GetSelectedCommit();
+  return source;
+}
+
+void MainWindow::UpdateTreeSource() {
+  // Loaded only while shown. Switching to the view loads the selection.
+  if (settings_.lower_view == LowerView::kTree)
+    commit_tree_.SetSource(GetTreeSource(), std::exchange(tree_stale_, false));
+}
+
+void MainWindow::ReloadTreeSource() {
+  CommitTree::Source source = GetTreeSource();
+  if (!source.unstaged && !source.staged)
+    return;
+  if (settings_.lower_view == LowerView::kTree)
+    commit_tree_.SetSource(source, true);
+  else
+    tree_stale_ = true;
 }
 
 bool MainWindow::IsDiffForSelection() const {
@@ -392,9 +452,12 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
     toolbar_.Update(search_matches, commit_search_.progress());
     commit_history_.Update(
         [this](int ci) { return commit_search_.GetRowState(ci); });
-    if (settings_.show_size_panel) {
+    if (settings_.lower_view == LowerView::kSize) {
       commit_size_.Update();
       lower_panel_.Update(commit_size_);
+    } else if (settings_.lower_view == LowerView::kTree) {
+      commit_tree_.Update();
+      lower_panel_.Update(commit_tree_);
     } else {
       // Only Containing matches the commit message, which is where the diff
       // panel highlights the term. The other modes match the changes, so
@@ -577,8 +640,9 @@ void MainWindow::OnCommitSelected(const std::string& commit,
   commit_search_.Cancel();
   platform_.SetPrimarySelection(commit.c_str());
   toolbar_.SetCommitInput(commit);
-  if (settings_.show_size_panel)
+  if (settings_.lower_view == LowerView::kSize)
     commit_size_.SetCommit(commit);
+  UpdateTreeSource();
   if (reselected) {
     commit_diff_.ScrollToTop();
     return;
@@ -650,6 +714,32 @@ void MainWindow::OnShowLineOrigin(const std::string& file,
                                   int line_number,
                                   int parent) {
   blame_lookup_.ShowLineOrigin(file, line_number, parent);
+}
+
+// -- CommitTree::Delegate -----------------------------------------------------
+
+void MainWindow::OnShowLineOrigin(const std::string& file,
+                                  const std::string& blob,
+                                  int line_number) {
+  // The file as the tree shows it. Lines changed in the working tree or the
+  // index are reported as not committed yet.
+  if (commit_history_.IsStagedSelected())
+    blame_lookup_.ShowStagedLineOrigin(blob, file, line_number);
+  else if (commit_history_.IsUnstagedSelected())
+    blame_lookup_.ShowLineOriginAt({}, file, line_number);
+  else
+    blame_lookup_.ShowLineOriginAt(blame_lookup_.GetRevision(0), file,
+                                   line_number);
+}
+
+void MainWindow::OnRunGitGuiBlame(const std::string& file, int line_number) {
+  std::vector<std::string> args = {"gui", "blame",
+                                   "--line=" + std::to_string(line_number)};
+  // Without a revision, git gui blames the file in the working tree.
+  if (!commit_history_.IsUnstagedSelected())
+    args.push_back(blame_lookup_.GetRevision(0));
+  args.push_back(file);
+  runner_.Spawn(std::move(args));
 }
 
 // -- Toolbar::Delegate --------------------------------------------------------
@@ -751,52 +841,71 @@ void MainWindow::OnClearPathFilterRequested() {
   }
 }
 
-void MainWindow::OnToggleLowerPanel() {
-  settings_.show_size_panel = !settings_.show_size_panel;
+void MainWindow::OnLowerViewRequested(LowerView view) {
+  if (view == settings_.lower_view)
+    return;
+  settings_.lower_view = view;
   settings_.Save();
-  if (settings_.show_size_panel) {
-    // Selections made in the diff view never reached the size view. Without
-    // a commit selected (e.g. unstaged changes), clear it rather than leave
-    // the last commit it showed.
-    std::string commit;
-    int idx = commit_history_.GetSelectedCommitIndex();
-    if (idx >= 0) {
-      auto commits = git_log_.GetCommits();
-      if (idx < static_cast<int>(commits.size()))
-        commit = commits[idx].commit;
-    }
-    commit_size_.SetCommit(commit);
-  } else {
-    // Selections made in the size view never reached the diff, which still
-    // holds what was shown before switching. Drop it rather than show it until
-    // the rerun's output replaces it.
-    if (!IsDiffForSelection()) {
-      git_diff_.Clear();
-      commit_diff_.Reset();
-      blame_lookup_.OnDiffCleared();
-    }
-    if (diff_stale_) {
-      diff_stale_ = false;
-      RerunDiff();
-    }
+  switch (view) {
+    case LowerView::kSize:
+      // Selections made in the other views never reached the size view.
+      // Without a commit selected (e.g. unstaged changes), clear it rather
+      // than leave the last commit it showed.
+      commit_size_.SetCommit(GetSelectedRealCommit());
+      break;
+    case LowerView::kTree:
+      // Reloads the local rows' files if they changed while it was hidden.
+      UpdateTreeSource();
+      break;
+    case LowerView::kDiff:
+      // Selections made in the other views never reached the diff, which
+      // still holds what was shown before switching. Drop it rather than
+      // show it until the rerun's output replaces it.
+      if (!IsDiffForSelection()) {
+        git_diff_.Clear();
+        commit_diff_.Reset();
+        blame_lookup_.OnDiffCleared();
+      }
+      if (diff_stale_) {
+        diff_stale_ = false;
+        RerunDiff();
+      }
+      break;
+    case LowerView::kCount:
+      break;
   }
 }
 
 bool MainWindow::IsDiffSearchShown() const {
-  return !settings_.show_size_panel && commit_diff_.search_active();
+  switch (settings_.lower_view) {
+    case LowerView::kDiff:
+      return commit_diff_.search_active();
+    case LowerView::kTree:
+      return commit_tree_.search_active();
+    default:
+      return false;
+  }
 }
 
 bool MainWindow::IsDiffSearchFocused() const {
-  return IsDiffSearchShown() && commit_diff_.search_input_active();
+  if (!IsDiffSearchShown())
+    return false;
+  return settings_.lower_view == LowerView::kTree
+             ? commit_tree_.search_input_active()
+             : commit_diff_.search_input_active();
 }
 
 void MainWindow::FocusDiffSearch() {
-  if (IsDiffSearchShown())
+  if (!IsDiffSearchShown())
+    return;
+  if (settings_.lower_view == LowerView::kTree)
+    commit_tree_.FocusSearch();
+  else
     commit_diff_.FocusSearch();
 }
 
-bool MainWindow::IsSizePanelActive() const {
-  return settings_.show_size_panel;
+LowerView MainWindow::GetLowerView() const {
+  return settings_.lower_view;
 }
 
 bool MainWindow::IsUsingCSD() const {

@@ -29,6 +29,7 @@
 #include "gel/ui/lower_panel/blame_lookup.h"
 #include "gel/ui/lower_panel/commit_diff.h"
 #include "gel/ui/lower_panel/commit_size.h"
+#include "gel/ui/lower_panel/commit_tree.h"
 #include "gel/ui/lower_panel/lower_panel.h"
 #include "gel/ui/popup_modal.h"
 #include "gel/ui/settings_modal.h"
@@ -44,6 +45,7 @@
 // backend; MainWindow handles everything inside the frame.
 class MainWindow final : public CommitHistory::Delegate,
                          public CommitDiff::Delegate,
+                         public CommitTree::Delegate,
                          public Toolbar::Delegate,
                          public DirectoryBrowser::Delegate {
  public:
@@ -112,6 +114,7 @@ class MainWindow final : public CommitHistory::Delegate,
   CommitHistory commit_history_;
   CommitDiff commit_diff_;
   CommitSize commit_size_;
+  CommitTree commit_tree_;
   // Lays out whichever of the views above is active.
   LowerPanel lower_panel_;
   Toolbar toolbar_;
@@ -138,6 +141,8 @@ class MainWindow final : public CommitHistory::Delegate,
   std::vector<eng::Platform::FontInfo> fonts_;
   bool commit_search_busy_ = false;
   bool diff_stale_ = false;
+  // Whether the tree view missed a reload while hidden.
+  bool tree_stale_ = false;
   bool browsing_specific_ref_ = false;
   std::string window_title_;
   std::string program_path_;
@@ -149,6 +154,17 @@ class MainWindow final : public CommitHistory::Delegate,
   void RerunDiff(bool preserve_scroll = false);
   // Whether the diff's last run was for the selected row.
   bool IsDiffForSelection() const;
+  // The commit selected for the size view: empty for the local rows.
+  std::string GetSelectedRealCommit() const;
+  // The selection, for the tree view.
+  CommitTree::Source GetTreeSource() const;
+  // Shows the selection in the tree view.
+  void UpdateTreeSource();
+  // Reloads the tree view's listing for the local rows, after the working
+  // tree or the index may have changed. A commit's tree can't change. While
+  // the view is hidden, it reloads when shown again.
+  void ReloadTreeSource();
+  bool IsDiffViewActive() const;
   void UpdateWindowTitle(const std::vector<std::string>& extra_args);
   void MergeWorkerData();
   void HandleCSDResize();
@@ -189,6 +205,12 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnNavigateToCommit(const std::string& commit) final;
   void OnSearchTouchingPaths(const std::vector<std::string>& paths) final;
 
+  // CommitTree::Delegate implementation (SetPrimarySelection() above too).
+  void OnShowLineOrigin(const std::string& file,
+                        const std::string& blob,
+                        int line_number) final;
+  void OnRunGitGuiBlame(const std::string& file, int line_number) final;
+
   // Toolbar::Delegate implementation
   void SelectCommitByHash(std::string_view query) final;
   int GetTotalRowCount() const final;
@@ -199,8 +221,8 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnHelpRequested() final;
   bool HasLogPathFilter() const final;
   void OnClearPathFilterRequested() final;
-  void OnToggleLowerPanel() final;
-  bool IsSizePanelActive() const final;
+  void OnLowerViewRequested(LowerView view) final;
+  LowerView GetLowerView() const final;
   bool IsUsingCSD() const final;
   bool IsMaximized() const final;
   bool ShowMinimizeButton() const final;

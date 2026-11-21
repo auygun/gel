@@ -9,6 +9,8 @@ source_set("base") {
     "double_buffer.h",
     "exec.cc",
     "exec.h",
+    "file_reader.cc",
+    "file_reader.h",
     "pipe.cc",
     "pipe.h",
     "text_search.cc",
