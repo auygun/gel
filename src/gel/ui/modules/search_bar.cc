@@ -265,6 +265,20 @@ SearchBar::Result SearchBar::Update(const Options& opts,
     ImGui::EndDisabled();
   }
 
+  if (opts.regex) {
+    ImGui::SameLine(0, 0);
+    bool disabled = opts.regex_disabled;
+    bool re = *opts.regex && !disabled;
+    ImGui::BeginDisabled(disabled);
+    if (ToggleButton(widget_id("regex"), re, ImVec2(frame_h, frame_h)))
+      *opts.regex = !re;
+    DrawRegexIcon();
+    tooltip(disabled ? "Regex is not available in this search mode"
+            : re     ? "Regex (click to toggle)"
+                     : "Literal string (click to toggle)");
+    ImGui::EndDisabled();
+  }
+
   bool nav_enabled = opts.nav_enable == NavEnable::kHasTerm
                          ? !empty()
                          : opts.matches.total > 0;
