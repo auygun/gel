@@ -681,8 +681,10 @@ changes checked in to index** the files of the index as they are staged.
   a directory to expand or collapse it, and a file to show its content.
   Right-click a file to copy its path.
 - The main pane shows the selected file's content, with line numbers and
-  syntax highlighting as in the diff. Binary files and submodules are noted
-  instead. Ctrl+F searches the content.
+  syntax highlighting as in the diff. Images (PNG, JPEG, GIF, BMP, TGA, PSD)
+  are shown as pictures, scaled down to fit the pane, over a checkerboard where
+  they are transparent. Other binary files and submodules are noted instead.
+  Ctrl+F searches the content.
 - The selected file stays selected when another commit is selected, so
   stepping through the history follows it, for as long as the commits have it.
 - Right-click a line for **Show origin of this line**, which selects the

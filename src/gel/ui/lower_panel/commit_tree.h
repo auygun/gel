@@ -14,6 +14,7 @@
 #include "gel/commands/git_ls_tree.h"
 #include "gel/commands/git_show_file.h"
 #include "gel/ui/lower_panel/lower_panel.h"
+#include "gel/ui/modules/image_view.h"
 #include "gel/ui/modules/path_tree.h"
 #include "gel/ui/modules/text_viewer.h"
 #include "gel/ui/overlay_toolbar.h"
@@ -23,8 +24,9 @@ class GitRepo;
 class PersistentSettings;
 
 // Lower panel: every file of the selected commit's tree in a directory tree,
-// and the content of the file selected in it, as gitk's Tree mode. For the
-// unstaged and staged rows, the files of the working tree and of the index.
+// and the content of the file selected in it, as gitk's Tree mode, or the
+// image itself for an image file. For the unstaged and staged rows, the files
+// of the working tree and of the index.
 class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
  public:
   class Delegate {
@@ -64,9 +66,13 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
   // working tree or the index changed, keeping the selected file.
   void SetSource(const Source& source, bool reload = false);
 
-  // Feeds the git results in. Call once per frame, before the panel renders
-  // the view.
-  void Update();
+  // Feeds the git results in, and uploads a newly loaded image to |renderer|.
+  // Call once per frame, before the panel renders the view.
+  void Update(eng::Renderer& renderer);
+
+  // The renderer was recreated, and the image's texture went with the old
+  // one.
+  void OnRendererChanged() { image_view_.OnRendererChanged(); }
 
   // LowerPanel::View implementation: the file tree and the file's content.
   void RenderSidePane(float width) final;
@@ -78,10 +84,13 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
   void ShowFileLine(const std::string& file, int line);
 
   // The content's search bar: whether it is open, whether its input has
-  // focus, and focusing it on the next Update().
-  bool search_active() const { return text_viewer_.search_active(); }
+  // focus, and focusing it on the next Update(). Hidden while an image is
+  // shown.
+  bool search_active() const {
+    return !showing_image_ && text_viewer_.search_active();
+  }
   bool search_input_active() const {
-    return text_viewer_.search_input_active();
+    return !showing_image_ && text_viewer_.search_input_active();
   }
   void FocusSearch() { text_viewer_.FocusSearch(); }
 
@@ -97,6 +106,11 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
   void StartListing();
   // Shows the content of entry |index|, or nothing if -1.
   void SelectEntry(int index);
+  // Starts loading the content of the selected entry, |entry|, as text.
+  void LoadText(const TreeEntry& entry);
+  // Shows the text in place of an image that didn't load, or a note if it was
+  // too large to show.
+  void UpdateImage();
   // Selects the entry at |path| if listed. Returns false if it isn't (yet).
   bool SelectPath(const std::string& path);
   // Stops loading the selected file's content and clears it.
@@ -129,6 +143,12 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
   // The selected file's content: a blob from git, or a working tree file.
   GitShowFile git_show_file_;
   FileReader file_reader_;
+  // The selected file's image, in place of its content while |showing_image_|.
+  ImageView image_view_;
+  // Whether the selected file is shown as an image: one with an image's file
+  // extension, until it fails to decode, e.g. a Git LFS pointer, and its
+  // content is shown as text after all.
+  bool showing_image_ = false;
 
   Source source_;
 

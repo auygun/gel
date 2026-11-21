@@ -296,6 +296,7 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
       }
       imgui_backend_->CreateRenderResources(renderer_.get());
       CreateIconTexture();
+      main_window_.OnRendererChanged();
       pending_renderer_.reset();
       continue;
     }

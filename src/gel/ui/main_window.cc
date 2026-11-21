@@ -159,6 +159,12 @@ void MainWindow::SetUsingCSD(bool csd, bool show_minimize, bool show_maximize) {
   show_maximize_button_ = show_maximize;
 }
 
+void MainWindow::OnRendererChanged() {
+  commit_tree_.OnRendererChanged();
+  for (auto& viewer : image_diff_viewers_)
+    viewer->OnRendererChanged();
+}
+
 void MainWindow::OnLostFocus() {
   // When CSD move/resize hands control to the window manager, the WM may
   // report a transient focus loss. Suppress it so the title bar text doesn't
@@ -456,7 +462,7 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
       commit_size_.Update();
       lower_panel_.Update(commit_size_);
     } else if (settings_.lower_view == LowerView::kTree) {
-      commit_tree_.Update();
+      commit_tree_.Update(renderer);
       lower_panel_.Update(commit_tree_);
     } else {
       // Only Containing matches the commit message, which is where the diff
@@ -483,8 +489,12 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
     help_modal_.Update(window_focused_);
     console_window_.Update(window_focused_);
 
-    std::erase_if(image_diff_viewers_,
-                  [](const auto& v) { return !v->IsOpen(); });
+    std::erase_if(image_diff_viewers_, [&renderer](const auto& v) {
+      if (v->IsOpen())
+        return false;
+      v->DestroyTextures(renderer);
+      return true;
+    });
     for (auto& viewer : image_diff_viewers_)
       viewer->Update(renderer, window_focused_);
   }
@@ -681,7 +691,7 @@ void MainWindow::OnShowImageDiff(const std::string& old_ref,
                                  bool new_from_worktree) {
   image_diff_viewers_.push_back(std::make_unique<ImageDiffViewer>(
       next_image_diff_id_++, git_repo_.toplevel(), old_ref, new_ref, path,
-      new_from_worktree));
+      new_from_worktree, [this](bool b) { on_busy_changed_(b); }));
 }
 
 void MainWindow::SetPrimarySelection(const std::string& text) {

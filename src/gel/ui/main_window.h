@@ -86,6 +86,10 @@ class MainWindow final : public CommitHistory::Delegate,
   // Clears the interactive flag and returns whether it was set.
   bool ConsumeCSDInteractive();
 
+  // The renderer was recreated, e.g. switched in the settings. Textures made
+  // with the old one are gone.
+  void OnRendererChanged();
+
   // Platform focus events forwarded from Gel.
   void OnLostFocus();
   void OnGainedFocus();
