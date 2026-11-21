@@ -380,6 +380,12 @@ void TextViewer::Update(float width,
       }
     }
 
+    // The user moving the view re-enables top line tracking. Search match
+    // jumps and keyboard scrolling suppress the scroll report, so the scroll
+    // change check above never sees them.
+    if (user_moved_view_)
+      track_top_line_ = true;
+
     // Track the top visible line for the caller. Use the exact scroll offset
     // when there is one, so the reported line matches what is drawn.
     if (track_top_line_) {
