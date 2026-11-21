@@ -289,7 +289,11 @@ columns are Message, Author, and Author Date.
 ### Graph
 
 The Message column includes a commit graph with colored lanes showing branch
-topology, merges, and parallel development lines.
+topology, merges, and parallel development lines. It shows 2 lanes side by
+side by default, up to 5 if set in [Settings](#settings). A branch that
+doesn't fit, or that waits long for its next commit, is cut with an arrow and
+resumes with an arrow above that commit. The arrow points down, or off to the
+side where a commit takes its column next or a merge's parent gets no lane.
 
 ### Keyboard Navigation
 
@@ -729,9 +733,9 @@ Open the settings modal via the gear button in the toolbar.
 - **Renderer** -- Vulkan or OpenGL (not available on macOS)
 - **GPU** -- Select which GPU to use (Vulkan only, shown when multiple GPUs are available)
 - **Client-side decorations** (Linux) -- Use custom title bar drawn in the toolbar (requires restart)
-- **Show commit graph** -- Draw the commit graph in the Message column
-  (enabled by default). With it off, the graph isn't computed, which saves
-  memory and time in very large repositories
+- **Graph lanes** -- Slider from 1 to 5 (default 2): the most lanes
+  the commit graph lays out side by side. See [Graph](#graph) for how
+  branches that don't fit are shown
 - **Commit list columns** -- Expandable section to customize the commit history
   table columns: add a column (maximum 6), change a column's data type, or
   remove it. Available types: Author, Author Date, Commit, Committer,

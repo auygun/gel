@@ -8,6 +8,7 @@
 #include <fstream>
 
 #include "gel/ui/style.h"
+#include "gel/ui/upper_panel/commit_graph.h"
 #include "third_party/json/json.h"
 #include "third_party/kaliber/base/log.h"
 #include "third_party/kaliber/platform/platform.h"
@@ -298,8 +299,10 @@ void PersistentSettings::Load() {
   load_strings("diff_search_history", diff_search_history);
   if (j.contains("show_line_numbers") && j["show_line_numbers"].is_boolean())
     show_line_numbers = j["show_line_numbers"].get<bool>();
-  if (j.contains("show_commit_graph") && j["show_commit_graph"].is_boolean())
-    show_commit_graph = j["show_commit_graph"].get<bool>();
+  if (j.contains("commit_graph_max_lanes") &&
+      j["commit_graph_max_lanes"].is_number_integer())
+    commit_graph_max_lanes = std::clamp(j["commit_graph_max_lanes"].get<int>(),
+                                        1, CommitGraph::kMaxLanes);
   if (j.contains("diff_color_mode")) {
     if (j["diff_color_mode"].is_string())
       diff_color_mode = ParseEnum(j["diff_color_mode"].get<std::string>(),
@@ -423,7 +426,7 @@ void PersistentSettings::Save() {
   j["search_history"] = search_history;
   j["diff_search_history"] = diff_search_history;
   j["show_line_numbers"] = show_line_numbers;
-  j["show_commit_graph"] = show_commit_graph;
+  j["commit_graph_max_lanes"] = commit_graph_max_lanes;
   j["diff_color_mode"] = GetDiffColorModeName(diff_color_mode);
   // lower_view is intentionally not saved; always start in diff view.
   j["chart_style"] = GetChartStyleName(chart_style);

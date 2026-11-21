@@ -596,12 +596,9 @@ void CommitHistory::Update(const SearchRowStates& search_row_state) {
 
       auto commit_history = git_log_.GetCommits();
 
-      // The graph's layout is only built while it is shown, which saves its
-      // per-commit memory and time in huge logs. Showing it again catches up
-      // from where it stopped.
-      bool show_graph = settings_.show_commit_graph;
-      if (show_graph)
-        graph_.Update(commit_history);
+      // A new lane cap rebuilds the graph's layout from the first commit.
+      graph_.SetMaxLanes(settings_.commit_graph_max_lanes);
+      graph_.Update(commit_history);
 
       // GetWindowScrollbarID() can't be used here because BeginTable() pushes
       // an override ID onto the inner window's ID stack, changing the seed used
@@ -961,16 +958,12 @@ void CommitHistory::Update(const SearchRowStates& search_row_state) {
               SelectCommit(row);
 
             ImGui::SetCursorScreenPos(cursor);
-            // Without the graph, the subject lines up with the synthetic rows.
-            float text_offset = 0.0f;
-            if (show_graph) {
-              text_offset =
-                  graph_.RowColumns(ci) * lane_spacing + lane_spacing * 0.5f;
+            float text_offset =
+                graph_.RowColumns(ci) * lane_spacing + lane_spacing * 0.5f;
 
-              // Draw graph on top of the highlight.
-              ImDrawList* dl = ImGui::GetWindowDrawList();
-              graph_.Draw(dl, ci, cursor, row_height, lane_spacing);
-            }
+            // Draw graph on top of the highlight.
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            graph_.Draw(dl, ci, cursor, row_height, lane_spacing);
 
             // Advance cursor past the graph for this row's text.
             ImGui::SetCursorScreenPos(ImVec2(cursor.x + text_offset, cursor.y));

@@ -95,7 +95,9 @@ class PersistentSettings {
   std::vector<std::string> search_history;
   std::vector<std::string> diff_search_history;
   bool show_line_numbers = true;
-  bool show_commit_graph = true;
+  // The most lanes the commit graph lays out side by side, up to
+  // CommitGraph::kMaxLanes.
+  int commit_graph_max_lanes = 2;
   DiffColorMode diff_color_mode = DiffColorMode::kSyntax;
   LowerView lower_view = LowerView::kDiff;
   ChartStyle chart_style = ChartStyle::kDonut;
