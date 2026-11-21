@@ -7,6 +7,8 @@
 
 namespace eng {
 
+enum class RendererType { kUnknown, kVulkan, kOpenGL };
+
 enum class ImageFormat { kRGBA32, kDXT1, kDXT5, kETC1, kATC, kATCIA };
 
 enum Primitive {

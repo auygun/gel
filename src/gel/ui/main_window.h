@@ -25,6 +25,7 @@
 #include "gel/ui/git_cmd_runner.h"
 #include "gel/ui/git_console_window.h"
 #include "gel/ui/help_modal.h"
+#include "gel/ui/image_delegate.h"
 #include "gel/ui/image_diff_viewer.h"
 #include "gel/ui/lower_panel/blame_lookup.h"
 #include "gel/ui/lower_panel/commit_diff.h"
@@ -38,18 +39,35 @@
 #include "gel/ui/upper_panel/commit_history.h"
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/kaliber/platform/platform.h"
-#include "third_party/kaliber/renderer/renderer.h"
+#include "third_party/kaliber/renderer/renderer_types.h"
 
 // Owns all UI panels, git workers, and delegate logic for the main application
 // window. Gel retains ownership of platform lifecycle, renderer, and ImGui
-// backend; MainWindow handles everything inside the frame.
+// backend; MainWindow handles everything inside the frame, and knows nothing of
+// the renderer: images are drawn through an ImageDelegate, and what else it
+// needs of the renderer goes through its Delegate.
 class MainWindow final : public CommitHistory::Delegate,
                          public CommitDiff::Delegate,
                          public CommitTree::Delegate,
                          public Toolbar::Delegate,
                          public DirectoryBrowser::Delegate {
  public:
-  MainWindow(eng::Platform& platform,
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+    // The renderer in use, and the GPUs it can use and the one it uses, for
+    // the settings modal.
+    virtual eng::RendererType GetRendererType() const = 0;
+    virtual std::vector<std::string> GetAvailableGpus() const = 0;
+    virtual int GetSelectedGpuIndex() const = 0;
+    // The window background color changed, with the style. The rest of the
+    // window is drawn over it.
+    virtual void OnBackgroundColorChanged(const ImVec4& color) = 0;
+  };
+
+  MainWindow(Delegate& delegate,
+             ImageDelegate& image_delegate,
+             eng::Platform& platform,
              PersistentSettings& settings,
              std::function<void(bool)> on_busy_changed,
              std::function<void()> main_thread_busy);
@@ -64,10 +82,7 @@ class MainWindow final : public CommitHistory::Delegate,
   void Initialize(const CommandLine& command_line);
 
   // Per-frame: merge worker data and render UI. Call between NewFrame and Draw.
-  UpdateResult Update(float delta_time,
-                      eng::Renderer& renderer,
-                      ImTextureID icon_texture,
-                      int mouse_busy_tasks);
+  UpdateResult Update(float delta_time, int mouse_busy_tasks);
 
   // Queues a modal popup to be shown on the next frame.
   void ShowPopup(std::string_view title,
@@ -86,10 +101,6 @@ class MainWindow final : public CommitHistory::Delegate,
   // Clears the interactive flag and returns whether it was set.
   bool ConsumeCSDInteractive();
 
-  // The renderer was recreated, e.g. switched in the settings. Textures made
-  // with the old one are gone.
-  void OnRendererChanged();
-
   // Platform focus events forwarded from Gel.
   void OnLostFocus();
   void OnGainedFocus();
@@ -100,9 +111,10 @@ class MainWindow final : public CommitHistory::Delegate,
   bool IsDirectoryBrowserOpen() const;
 
  private:
+  Delegate& delegate_;
+  ImageDelegate& image_delegate_;
   eng::Platform& platform_;
   PersistentSettings& settings_;
-  eng::Renderer* renderer_ = nullptr;
   std::function<void(bool)> on_busy_changed_;
   std::function<void()> main_thread_busy_;
 
@@ -172,7 +184,7 @@ class MainWindow final : public CommitHistory::Delegate,
   void UpdateWindowTitle(const std::vector<std::string>& extra_args);
   void MergeWorkerData();
   void HandleCSDResize();
-  void ApplyPendingStyle(eng::Renderer& renderer);
+  void ApplyPendingStyle();
   void HandleKeyboardShortcuts();
 
   // CommitHistory::Delegate implementation

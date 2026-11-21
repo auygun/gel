@@ -9,8 +9,6 @@
 #include "gel/git_repo.h"
 #include "third_party/imgui/imgui/imgui.h"
 
-using namespace eng;
-
 namespace {
 
 // The object name "git cat-file" takes for |path| in |ref|. A ref ending in
@@ -27,8 +25,11 @@ ImageDiffViewer::ImageDiffViewer(int id,
                                  const std::string& new_ref,
                                  const std::string& path,
                                  bool new_from_worktree,
+                                 ImageDelegate& image_delegate,
                                  std::function<void(bool)> busy_callback)
-    : path_(path), old_view_(busy_callback), new_view_(busy_callback) {
+    : path_(path),
+      old_view_(image_delegate, busy_callback),
+      new_view_(image_delegate, busy_callback) {
   char buf[256];
   snprintf(buf, sizeof(buf), "%s###img_diff_%d", path_.c_str(), id);
   title_ = buf;
@@ -43,20 +44,7 @@ ImageDiffViewer::ImageDiffViewer(int id,
 
 ImageDiffViewer::~ImageDiffViewer() = default;
 
-void ImageDiffViewer::OnRendererChanged() {
-  old_view_.OnRendererChanged();
-  new_view_.OnRendererChanged();
-}
-
-void ImageDiffViewer::DestroyTextures(Renderer& renderer) {
-  old_view_.DestroyTextures(renderer);
-  new_view_.DestroyTextures(renderer);
-}
-
-void ImageDiffViewer::Update(Renderer& renderer, bool window_focused) {
-  old_view_.Update(renderer);
-  new_view_.Update(renderer);
-
+void ImageDiffViewer::Update(bool window_focused) {
   if (!open_)
     return;
 

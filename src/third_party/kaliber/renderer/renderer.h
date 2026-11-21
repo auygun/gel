@@ -14,8 +14,6 @@ namespace eng {
 class ShaderSource;
 class Platform;
 
-enum class RendererType { kUnknown, kVulkan, kOpenGL };
-
 class Renderer {
  public:
   using ResourceId = uint32_t;

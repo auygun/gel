@@ -9,10 +9,13 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "base/command_line.h"
 #include "gel/persistent_settings.h"
+#include "gel/ui/image_delegate.h"
 #include "gel/ui/main_window.h"
 #include "third_party/kaliber/base/timer.h"
 #include "third_party/kaliber/imgui_backend.h"
@@ -22,8 +25,11 @@
 
 // Application lifecycle class. Sets up the platform window, renderer, and ImGui
 // backend, then enters the main loop. Delegates all UI and git logic to
-// MainWindow.
-class Gel final : public eng::PlatformObserver {
+// MainWindow. The only class that knows the renderer: the UI's images are
+// textures kept here, by ImageDelegate ids.
+class Gel final : public eng::PlatformObserver,
+                  public ImageDelegate,
+                  public MainWindow::Delegate {
  public:
   explicit Gel(eng::Platform* platform);
   ~Gel() final;
@@ -40,6 +46,22 @@ class Gel final : public eng::PlatformObserver {
   std::unique_ptr<eng::ImguiBackend> imgui_backend_;
   base::DeltaTimer timer_;
 
+  // An image of the UI: its pixels, kept to make its texture again for a new
+  // renderer, and its texture.
+  struct Image {
+    int width = 0;
+    int height = 0;
+    std::vector<uint8_t> pixels;
+    eng::Renderer::ResourceId texture = eng::Renderer::kInvalidId;
+  };
+  // Declared before |main_window_|, which removes its images as it goes.
+  std::unordered_map<ImageId, Image> images_;
+  ImageId next_image_id_ = kNoImage + 1;
+  // Removed this frame, and possibly drawn in it: the textures are destroyed,
+  // and the pixels, which the renderer can still be uploading, freed once the
+  // frame is presented.
+  std::vector<Image> removed_images_;
+
   PersistentSettings settings_;
   MainWindow main_window_;
 
@@ -51,12 +73,26 @@ class Gel final : public eng::PlatformObserver {
 
   std::optional<eng::RendererType> pending_renderer_;
   std::optional<PendingFont> pending_font_;
-  eng::Renderer::ResourceId icon_texture_ = eng::Renderer::kInvalidId;
 
   bool IsDarkMode() const;
   bool CreateRenderer(eng::RendererType type);
-  void CreateIconTexture();
   void OnBusyChanged(bool busy);
+  // Makes |image|'s texture with the current renderer.
+  void CreateTexture(Image& image);
+  // Destroys the textures of the images removed before the frame just
+  // presented.
+  void DestroyRemovedImages();
+
+  // ImageDelegate implementation
+  ImageId CreateImage(int width, int height, std::vector<uint8_t> rgba) final;
+  void DestroyImage(ImageId id) final;
+  void DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) final;
+
+  // MainWindow::Delegate implementation
+  eng::RendererType GetRendererType() const final;
+  std::vector<std::string> GetAvailableGpus() const final;
+  int GetSelectedGpuIndex() const final;
+  void OnBackgroundColorChanged(const ImVec4& color) final;
 
   // PlatformObserver implementation
   void OnWindowCreated() final;

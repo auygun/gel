@@ -11,6 +11,7 @@
 
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
+#include "third_party/kaliber/base/log.h"
 
 using namespace base;
 using namespace eng;
@@ -23,11 +24,15 @@ const std::string kEmptySearchTerm;
 
 }  // namespace
 
-MainWindow::MainWindow(Platform& platform,
+MainWindow::MainWindow(Delegate& delegate,
+                       ImageDelegate& image_delegate,
+                       Platform& platform,
                        PersistentSettings& settings,
                        std::function<void(bool)> on_busy_changed,
                        std::function<void()> main_thread_busy)
-    : platform_(platform),
+    : delegate_(delegate),
+      image_delegate_(image_delegate),
+      platform_(platform),
       settings_(settings),
       on_busy_changed_(std::move(on_busy_changed)),
       main_thread_busy_(std::move(main_thread_busy)),
@@ -93,12 +98,14 @@ MainWindow::MainWindow(Platform& platform,
       commit_size_(settings_, [this](bool b) { on_busy_changed_(b); }),
       commit_tree_(
           *this,
+          image_delegate_,
           git_repo_,
           settings_,
           [this](bool b) { on_busy_changed_(b); },
           main_thread_busy_),
       lower_panel_(settings_),
       toolbar_(*this, runner_, git_repo_, settings_),
+      settings_modal_(image_delegate_),
       console_window_(runner_, settings_),
       blame_lookup_(
           commit_history_,
@@ -157,12 +164,6 @@ void MainWindow::SetUsingCSD(bool csd, bool show_minimize, bool show_maximize) {
   using_csd_ = csd;
   show_minimize_button_ = show_minimize;
   show_maximize_button_ = show_maximize;
-}
-
-void MainWindow::OnRendererChanged() {
-  commit_tree_.OnRendererChanged();
-  for (auto& viewer : image_diff_viewers_)
-    viewer->OnRendererChanged();
 }
 
 void MainWindow::OnLostFocus() {
@@ -390,13 +391,10 @@ void MainWindow::MergeWorkerData() {
 }
 
 MainWindow::UpdateResult MainWindow::Update(float delta_time,
-                                            Renderer& renderer,
-                                            ImTextureID icon_texture,
                                             int mouse_busy_tasks) {
-  renderer_ = &renderer;
   MergeWorkerData();
   HandleCSDResize();
-  ApplyPendingStyle(renderer);
+  ApplyPendingStyle();
 
   if (!popup_modal_.IsVisible())
     HandleKeyboardShortcuts();
@@ -462,7 +460,7 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
       commit_size_.Update();
       lower_panel_.Update(commit_size_);
     } else if (settings_.lower_view == LowerView::kTree) {
-      commit_tree_.Update(renderer);
+      commit_tree_.Update();
       lower_panel_.Update(commit_tree_);
     } else {
       // Only Containing matches the commit message, which is where the diff
@@ -477,8 +475,7 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
     popup_modal_.Render(window_focused_);
     directory_browser_.Update(window_focused_);
 
-    auto settings_result =
-        settings_modal_.Update(settings_, icon_texture, window_focused_);
+    auto settings_result = settings_modal_.Update(settings_, window_focused_);
     if (settings_result.pending_style)
       pending_style_ = settings_result.pending_style;
     if (settings_result.pending_renderer)
@@ -489,14 +486,10 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
     help_modal_.Update(window_focused_);
     console_window_.Update(window_focused_);
 
-    std::erase_if(image_diff_viewers_, [&renderer](const auto& v) {
-      if (v->IsOpen())
-        return false;
-      v->DestroyTextures(renderer);
-      return true;
-    });
+    std::erase_if(image_diff_viewers_,
+                  [](const auto& v) { return !v->IsOpen(); });
     for (auto& viewer : image_diff_viewers_)
-      viewer->Update(renderer, window_focused_);
+      viewer->Update(window_focused_);
   }
   if (hide_cursor)
     ImGui::PopStyleColor();
@@ -596,14 +589,14 @@ void MainWindow::HandleCSDResize() {
 #endif
 }
 
-void MainWindow::ApplyPendingStyle(Renderer& renderer) {
+void MainWindow::ApplyPendingStyle() {
   if (!pending_style_)
     return;
   auto [style, layout, scale] = *pending_style_;
   ImGui::GetStyle() = ImGuiStyle();
   ApplyStyle(style, layout, platform_.IsDarkMode());
-  auto& bg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-  renderer.SetClearColor({bg.x, bg.y, bg.z, bg.w});
+  delegate_.OnBackgroundColorChanged(
+      ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
   float dpi_scale = platform_.GetDeviceScaleFactor();
   ImGui::GetStyle().FontScaleMain = scale;
   ImGui::GetStyle().FontScaleDpi = dpi_scale;
@@ -691,7 +684,8 @@ void MainWindow::OnShowImageDiff(const std::string& old_ref,
                                  bool new_from_worktree) {
   image_diff_viewers_.push_back(std::make_unique<ImageDiffViewer>(
       next_image_diff_id_++, git_repo_.toplevel(), old_ref, new_ref, path,
-      new_from_worktree, [this](bool b) { on_busy_changed_(b); }));
+      new_from_worktree, image_delegate_,
+      [this](bool b) { on_busy_changed_(b); }));
 }
 
 void MainWindow::SetPrimarySelection(const std::string& text) {
@@ -816,9 +810,9 @@ void MainWindow::OnRefreshRequested() {
 void MainWindow::OnSettingsRequested() {
   if (fonts_.empty())
     fonts_ = platform_.GetFonts();
-  settings_modal_.Open(settings_, renderer_->GetRendererType(), fonts_,
-                       renderer_->GetAvailableGpus(),
-                       renderer_->GetSelectedGpuIndex());
+  settings_modal_.Open(settings_, delegate_.GetRendererType(), fonts_,
+                       delegate_.GetAvailableGpus(),
+                       delegate_.GetSelectedGpuIndex());
 }
 
 void MainWindow::OnHelpRequested() {
