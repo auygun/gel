@@ -13,15 +13,16 @@
 #include <string>
 #include <vector>
 
+#include "gel/ui/image_delegate.h"
 #include "third_party/imgui/imgui/imgui.h"
-#include "third_party/kaliber/renderer/renderer.h"
 
 // Whether |path| has the extension of an image format ImageView decodes.
 bool IsImageFile(const std::string& path);
 
 // Shows an image: a blob from git or a file of the working tree, read and
 // decoded on the thread pool, and shown pixel for pixel or scaled down to fit
-// the view. A new load supersedes the one in progress, which stops early.
+// the view, drawn through an ImageDelegate. A new load supersedes the one in
+// progress, which stops early.
 class ImageView {
  public:
   enum class State {
@@ -38,7 +39,8 @@ class ImageView {
 
   // |busy_callback| is called with true when a load starts and with false
   // when it ends.
-  explicit ImageView(std::function<void(bool)> busy_callback);
+  ImageView(ImageDelegate& image_delegate,
+            std::function<void(bool)> busy_callback);
   ~ImageView();
 
   ImageView(ImageView const&) = delete;
@@ -50,19 +52,6 @@ class ImageView {
   void LoadFile(const std::filesystem::path& path);
   // Stops loading and drops the image.
   void Clear();
-
-  // Main thread: uploads a newly decoded image, and destroys the textures
-  // dropped since the last call. Call once per frame, before Render().
-  void Update(eng::Renderer& renderer);
-
-  // Main thread: the renderer was recreated, and the textures of the old one
-  // are gone. Loads the shown image again, for a texture of the new one.
-  void OnRendererChanged();
-
-  // Main thread: destroys the textures, before this object goes away without
-  // being drawn again. The destructor can't, as it can run on another thread,
-  // e.g. at exit, where the renderer frees what is left.
-  void DestroyTextures(eng::Renderer& renderer);
 
   // Renders the image in a child window, |width| wide (-FLT_MIN fills the
   // rest of the line), as tall as the space left.
@@ -94,8 +83,6 @@ class ImageView {
 
   // Starts loading |request_|.
   void Load();
-  // Drops the texture, destroyed on the next Update(), when no longer drawn.
-  void ReleaseTexture();
 
   // Thread pool: reads and decodes |request|, stopping early once |latest|
   // moves past |generation|.
@@ -104,6 +91,7 @@ class ImageView {
                          int generation);
   static Image DecodeImage(const std::string& data);
 
+  ImageDelegate& image_delegate_;
   std::function<void(bool)> busy_callback_;
 
   // The latest load, or Clear(). Shared with the loads in progress, so that a
@@ -115,16 +103,7 @@ class ImageView {
   int width_ = 0;
   int height_ = 0;
   bool has_alpha_ = false;
-  // Decoded and waiting to be uploaded.
-  std::vector<uint8_t> pixels_;
-  // Uploaded this frame. Kept until the next Update(), as the renderer can
-  // read them until the frame is presented.
-  std::vector<uint8_t> uploaded_pixels_;
-
-  eng::Renderer::ResourceId texture_ = eng::Renderer::kInvalidId;
-  // Textures dropped this frame, possibly drawn already, destroyed on the
-  // next Update().
-  std::vector<eng::Renderer::ResourceId> released_textures_;
+  ImageDelegate::ImageId image_ = ImageDelegate::kNoImage;
 
   ImVec2 content_top_right_{0, 0};
 };

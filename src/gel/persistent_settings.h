@@ -12,7 +12,7 @@
 #include "base/text_search.h"
 #include "gel/commands/merge_diff_mode.h"
 #include "gel/ui/style.h"
-#include "third_party/kaliber/renderer/renderer.h"
+#include "third_party/kaliber/renderer/renderer_types.h"
 
 enum class ChartStyle { kDonut, kBar, kTreemap, kCount };
 

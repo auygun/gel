@@ -21,6 +21,7 @@
 #include "gel/ui/syntax_highlight.h"
 
 class GitRepo;
+class ImageDelegate;
 class PersistentSettings;
 
 // Lower panel: every file of the selected commit's tree in a directory tree,
@@ -55,7 +56,9 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
     bool operator==(const Source&) const = default;
   };
 
+  // Images are drawn through |image_delegate|.
   CommitTree(Delegate& delegate,
+             ImageDelegate& image_delegate,
              GitRepo& git_repo,
              PersistentSettings& settings,
              std::function<void(bool)> busy_callback,
@@ -66,13 +69,9 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
   // working tree or the index changed, keeping the selected file.
   void SetSource(const Source& source, bool reload = false);
 
-  // Feeds the git results in, and uploads a newly loaded image to |renderer|.
-  // Call once per frame, before the panel renders the view.
-  void Update(eng::Renderer& renderer);
-
-  // The renderer was recreated, and the image's texture went with the old
-  // one.
-  void OnRendererChanged() { image_view_.OnRendererChanged(); }
+  // Feeds the git results in. Call once per frame, before the panel renders
+  // the view.
+  void Update();
 
   // LowerPanel::View implementation: the file tree and the file's content.
   void RenderSidePane(float width) final;

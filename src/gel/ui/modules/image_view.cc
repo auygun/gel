@@ -13,8 +13,6 @@
 #include "third_party/kaliber/base/thread_pool.h"
 #include "third_party/stb/stb_image.h"
 
-using namespace eng;
-
 namespace {
 
 // Larger files aren't read, and larger images aren't decoded: an image of the
@@ -39,16 +37,16 @@ bool IsImageFile(const std::string& path) {
          ext == ".gif" || ext == ".tga" || ext == ".psd";
 }
 
-ImageView::ImageView(std::function<void(bool)> busy_callback)
-    : busy_callback_(std::move(busy_callback)),
+ImageView::ImageView(ImageDelegate& image_delegate,
+                     std::function<void(bool)> busy_callback)
+    : image_delegate_(image_delegate),
+      busy_callback_(std::move(busy_callback)),
       latest_(std::make_shared<std::atomic<int>>(0)) {}
 
 ImageView::~ImageView() {
   // Loads in progress stop early, and their replies find themselves
   // superseded and don't touch this object.
-  latest_->fetch_add(1, std::memory_order_relaxed);
-  if (state_ == State::kLoading)
-    busy_callback_(false);
+  Clear();
 }
 
 void ImageView::LoadBlob(const std::string& blob,
@@ -70,9 +68,9 @@ void ImageView::Clear() {
   width_ = 0;
   height_ = 0;
   has_alpha_ = false;
-  pixels_.clear();
-  pixels_.shrink_to_fit();
-  ReleaseTexture();
+  if (image_ != ImageDelegate::kNoImage)
+    image_delegate_.DestroyImage(image_);
+  image_ = ImageDelegate::kNoImage;
 }
 
 void ImageView::Load() {
@@ -94,50 +92,11 @@ void ImageView::Load() {
         width_ = image.width;
         height_ = image.height;
         has_alpha_ = image.has_alpha;
-        pixels_ = std::move(image.pixels);
+        if (state_ == State::kLoaded) {
+          image_ = image_delegate_.CreateImage(width_, height_,
+                                               std::move(image.pixels));
+        }
       });
-}
-
-void ImageView::OnRendererChanged() {
-  // The textures went with the old renderer: forget them rather than destroy
-  // whatever the new one gives their ids to.
-  texture_ = Renderer::kInvalidId;
-  released_textures_.clear();
-  // Loaded again, unless still waiting to be uploaded.
-  if (state_ == State::kLoaded && pixels_.empty())
-    Load();
-}
-
-void ImageView::DestroyTextures(Renderer& renderer) {
-  ReleaseTexture();
-  for (Renderer::ResourceId id : released_textures_)
-    renderer.DestroyTexture(id);
-  released_textures_.clear();
-}
-
-void ImageView::ReleaseTexture() {
-  if (texture_ != Renderer::kInvalidId)
-    released_textures_.push_back(texture_);
-  texture_ = Renderer::kInvalidId;
-}
-
-void ImageView::Update(Renderer& renderer) {
-  // Drawn last frame at the latest, which is presented by now.
-  for (Renderer::ResourceId id : released_textures_)
-    renderer.DestroyTexture(id);
-  released_textures_.clear();
-  uploaded_pixels_.clear();
-  uploaded_pixels_.shrink_to_fit();
-
-  if (state_ == State::kLoaded && texture_ == Renderer::kInvalidId &&
-      !pixels_.empty()) {
-    texture_ = renderer.CreateTexture();
-    renderer.UpdateTexture(texture_, width_, height_, ImageFormat::kRGBA32,
-                           pixels_.size(), pixels_.data());
-    // The renderer can read them until the frame is presented.
-    uploaded_pixels_ = std::move(pixels_);
-    pixels_ = {};
-  }
 }
 
 void ImageView::Render(float width) {
@@ -149,7 +108,7 @@ void ImageView::Render(float width) {
     content_top_right_ =
         ImVec2(wpos.x + wsz.x - ImGui::GetStyle().ScrollbarSize, wpos.y);
 
-    if (state_ == State::kLoaded && texture_ != Renderer::kInvalidId &&
+    if (state_ == State::kLoaded && image_ != ImageDelegate::kNoImage &&
         width_ > 0 && height_ > 0) {
       // Pixel for pixel, or scaled down to fit, centered.
       ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -180,8 +139,8 @@ void ImageView::Render(float width) {
           }
         }
       }
-      dl->AddImage((ImTextureID)(intptr_t)texture_, min, max);
       dl->PopClipRect();
+      image_delegate_.DrawImage(image_, min, max);
 
       ImGui::Dummy(avail);
     }

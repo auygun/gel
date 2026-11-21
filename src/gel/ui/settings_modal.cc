@@ -14,14 +14,15 @@
 #include "base/exec.h"
 #include "gel/ui/syntax_highlight.h"
 #include "gel/ui/utils.h"
+#include "icon_data.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
 #include "third_party/kaliber/base/log.h"
 #include "third_party/kaliber/base/task_runner.h"
 #include "third_party/kaliber/base/thread_pool.h"
+#include "third_party/stb/stb_image.h"
 #include "version.h"
 #if defined(OS_LINUX)
 #include "gel/ui/completion_data.h"
-#include "icon_data.h"
 #endif
 
 using namespace eng;
@@ -38,7 +39,13 @@ constexpr size_t kMaxTableColumns = 6;
 
 }  // namespace
 
-SettingsModal::SettingsModal() = default;
+SettingsModal::SettingsModal(ImageDelegate& image_delegate)
+    : image_delegate_(image_delegate) {}
+
+SettingsModal::~SettingsModal() {
+  if (icon_ != ImageDelegate::kNoImage)
+    image_delegate_.DestroyImage(icon_);
+}
 
 void SettingsModal::Open(PersistentSettings& settings,
                          RendererType current_renderer,
@@ -137,7 +144,6 @@ void SettingsModal::RebuildFontFilter() {
 }
 
 SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
-                                          ImTextureID icon_texture,
                                           bool window_focused) {
   SettingsModalResult result;
 
@@ -552,9 +558,25 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
     }
 #endif
     ImGui::Separator();
-    if (icon_texture) {
+    if (!icon_decoded_) {
+      icon_decoded_ = true;
+      int w = 0, h = 0;
+      stbi_uc* pixels = stbi_load_from_memory(kIconData, sizeof(kIconData), &w,
+                                              &h, nullptr, 4);
+      if (pixels) {
+        icon_ = image_delegate_.CreateImage(
+            w, h,
+            std::vector<uint8_t>(pixels,
+                                 pixels + static_cast<size_t>(w) * h * 4));
+        stbi_image_free(pixels);
+      }
+    }
+    if (icon_ != ImageDelegate::kNoImage) {
       float icon_size = ImGui::GetTextLineHeight() * 6;
-      ImGui::Image(icon_texture, ImVec2(icon_size, icon_size));
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImGui::Dummy(ImVec2(icon_size, icon_size));
+      image_delegate_.DrawImage(icon_, pos,
+                                ImVec2(pos.x + icon_size, pos.y + icon_size));
       ImGui::SameLine();
       float text_height = ImGui::GetTextLineHeight();
       float spacing = ImGui::GetStyle().ItemSpacing.y;

@@ -121,6 +121,8 @@ extern void KaliberMain(Platform* platform) {
 Gel::Gel(Platform* platform)
     : platform_(platform),
       main_window_(
+          *this,
+          *this,
           *platform,
           settings_,
           [this](bool b) { OnBusyChanged(b); },
@@ -194,17 +196,69 @@ bool Gel::CreateRenderer(RendererType type) {
 #endif
 }
 
-void Gel::CreateIconTexture() {
-  int icon_w, icon_h;
-  unsigned char* pixels = stbi_load_from_memory(kIconData, sizeof(kIconData),
-                                                &icon_w, &icon_h, nullptr, 4);
-  if (pixels) {
-    icon_texture_ = renderer_->CreateTexture();
-    renderer_->UpdateTexture(icon_texture_, icon_w, icon_h,
-                             ImageFormat::kRGBA32,
-                             static_cast<size_t>(icon_w) * icon_h * 4, pixels);
-    stbi_image_free(pixels);
+void Gel::CreateTexture(Image& image) {
+  image.texture = renderer_->CreateTexture();
+  // The renderer can read the pixels until the frame is presented.
+  renderer_->UpdateTexture(image.texture, image.width, image.height,
+                           ImageFormat::kRGBA32, image.pixels.size(),
+                           image.pixels.data());
+}
+
+void Gel::DestroyRemovedImages() {
+  for (Image& image : removed_images_) {
+    if (image.texture != Renderer::kInvalidId)
+      renderer_->DestroyTexture(image.texture);
   }
+  removed_images_.clear();
+}
+
+ImageDelegate::ImageId Gel::CreateImage(int width,
+                                        int height,
+                                        std::vector<uint8_t> rgba) {
+  DCHECK(rgba.size() == static_cast<size_t>(width) * height * 4);
+  ImageId id = next_image_id_++;
+  Image& image = images_[id];
+  image.width = width;
+  image.height = height;
+  image.pixels = std::move(rgba);
+  if (renderer_)
+    CreateTexture(image);
+  return id;
+}
+
+void Gel::DestroyImage(ImageId id) {
+  auto it = images_.find(id);
+  if (it == images_.end())
+    return;
+  // Once the main loop has ended there is no renderer to destroy the texture
+  // with, nor a frame to present: the renderer frees what is left.
+  if (renderer_)
+    removed_images_.push_back(std::move(it->second));
+  images_.erase(it);
+}
+
+void Gel::DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) {
+  auto it = images_.find(id);
+  if (it == images_.end() || it->second.texture == Renderer::kInvalidId)
+    return;
+  ImGui::GetWindowDrawList()->AddImage(
+      (ImTextureID)(intptr_t)it->second.texture, min, max);
+}
+
+RendererType Gel::GetRendererType() const {
+  return renderer_->GetRendererType();
+}
+
+std::vector<std::string> Gel::GetAvailableGpus() const {
+  return renderer_->GetAvailableGpus();
+}
+
+int Gel::GetSelectedGpuIndex() const {
+  return renderer_->GetSelectedGpuIndex();
+}
+
+void Gel::OnBackgroundColorChanged(const ImVec4& color) {
+  renderer_->SetClearColor({color.x, color.y, color.z, color.w});
 }
 
 std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
@@ -256,7 +310,6 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
                              settings_.font_face_index);
   imgui_backend_->CreateRenderResources(renderer_.get());
   imgui_backend_->SetGeometryChangedCallback([this] { keep_drawing_ = true; });
-  CreateIconTexture();
 
   main_window_.Initialize(command_line);
 
@@ -295,8 +348,11 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
         renderer_->SetClearColor({bg.x, bg.y, bg.z, bg.w});
       }
       imgui_backend_->CreateRenderResources(renderer_.get());
-      CreateIconTexture();
-      main_window_.OnRendererChanged();
+      // The textures went with the old renderer. Make them again with the new
+      // one, from the pixels kept for that.
+      removed_images_.clear();
+      for (auto& [id, image] : images_)
+        CreateTexture(image);
       pending_renderer_.reset();
       continue;
     }
@@ -360,8 +416,7 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
     TaskRunner::GetThreadLocalTaskRunner()->RunTasks<Consumer::Single>();
 
     auto ur = main_window_.Update(
-        frame_delta, *renderer_, (ImTextureID)(intptr_t)icon_texture_,
-        mouse_busy_tasks_.load(std::memory_order_relaxed));
+        frame_delta, mouse_busy_tasks_.load(std::memory_order_relaxed));
     if (ur.pending_renderer)
       pending_renderer_ = ur.pending_renderer;
     if (ur.pending_font)
@@ -373,6 +428,7 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
     renderer_->PrepareForDrawing();
     imgui_backend_->Draw();
     renderer_->Present();
+    DestroyRemovedImages();
   }
 
   // Save window geometry and panel layout before exiting.
@@ -389,6 +445,10 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
   // callback captures |this| and the caller may outlive this Gel instance.
   imgui_backend_->SetGeometryChangedCallback(nullptr);
 
+  // The last frame is presented: destroy what it removed. With |renderer_|
+  // handed to the caller, images removed from here on, as MainWindow goes,
+  // are only dropped, and the renderer frees the textures left.
+  DestroyRemovedImages();
   return {std::move(renderer_), std::move(imgui_backend_)};
 }
 
