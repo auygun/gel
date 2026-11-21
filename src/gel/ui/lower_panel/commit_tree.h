@@ -21,7 +21,7 @@
 #include "gel/ui/syntax_highlight.h"
 
 class GitRepo;
-class ImageDelegate;
+class GraphicsDelegate;
 class PersistentSettings;
 
 // Lower panel: every file of the selected commit's tree in a directory tree,
@@ -56,9 +56,9 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
     bool operator==(const Source&) const = default;
   };
 
-  // Images are drawn through |image_delegate|.
+  // Images are drawn through |graphics_delegate|.
   CommitTree(Delegate& delegate,
-             ImageDelegate& image_delegate,
+             GraphicsDelegate& graphics_delegate,
              GitRepo& git_repo,
              PersistentSettings& settings,
              std::function<void(bool)> busy_callback,

@@ -27,7 +27,7 @@ constexpr int kSyntaxScanLinesPerFrame = 20000;
 }  // namespace
 
 CommitTree::CommitTree(Delegate& delegate,
-                       ImageDelegate& image_delegate,
+                       GraphicsDelegate& graphics_delegate,
                        GitRepo& git_repo,
                        PersistentSettings& settings,
                        std::function<void(bool)> busy_callback,
@@ -37,7 +37,7 @@ CommitTree::CommitTree(Delegate& delegate,
       settings_(settings),
       git_ls_tree_(busy_callback),
       git_show_file_(busy_callback),
-      image_view_(image_delegate, std::move(busy_callback)),
+      image_view_(graphics_delegate, std::move(busy_callback)),
       text_viewer_(*this, std::move(main_thread_busy)) {
   text_viewer_.set_search_history(&settings_.diff_search_history);
 }

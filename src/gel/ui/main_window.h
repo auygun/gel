@@ -24,8 +24,8 @@
 #include "gel/ui/directory_browser.h"
 #include "gel/ui/git_cmd_runner.h"
 #include "gel/ui/git_console_window.h"
+#include "gel/ui/graphics_delegate.h"
 #include "gel/ui/help_modal.h"
-#include "gel/ui/image_delegate.h"
 #include "gel/ui/image_diff_viewer.h"
 #include "gel/ui/lower_panel/blame_lookup.h"
 #include "gel/ui/lower_panel/commit_diff.h"
@@ -44,29 +44,15 @@
 // Owns all UI panels, git workers, and delegate logic for the main application
 // window. Gel retains ownership of platform lifecycle, renderer, and ImGui
 // backend; MainWindow handles everything inside the frame, and knows nothing of
-// the renderer: images are drawn through an ImageDelegate, and what else it
-// needs of the renderer goes through its Delegate.
+// the renderer: what it needs of it, images included, goes through a
+// GraphicsDelegate.
 class MainWindow final : public CommitHistory::Delegate,
                          public CommitDiff::Delegate,
                          public CommitTree::Delegate,
                          public Toolbar::Delegate,
                          public DirectoryBrowser::Delegate {
  public:
-  class Delegate {
-   public:
-    virtual ~Delegate() = default;
-    // The renderer in use, and the GPUs it can use and the one it uses, for
-    // the settings modal.
-    virtual eng::RendererType GetRendererType() const = 0;
-    virtual std::vector<std::string> GetAvailableGpus() const = 0;
-    virtual int GetSelectedGpuIndex() const = 0;
-    // The window background color changed, with the style. The rest of the
-    // window is drawn over it.
-    virtual void OnBackgroundColorChanged(const ImVec4& color) = 0;
-  };
-
-  MainWindow(Delegate& delegate,
-             ImageDelegate& image_delegate,
+  MainWindow(GraphicsDelegate& graphics_delegate,
              eng::Platform& platform,
              PersistentSettings& settings,
              std::function<void(bool)> on_busy_changed,
@@ -111,8 +97,7 @@ class MainWindow final : public CommitHistory::Delegate,
   bool IsDirectoryBrowserOpen() const;
 
  private:
-  Delegate& delegate_;
-  ImageDelegate& image_delegate_;
+  GraphicsDelegate& graphics_delegate_;
   eng::Platform& platform_;
   PersistentSettings& settings_;
   std::function<void(bool)> on_busy_changed_;

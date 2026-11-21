@@ -25,11 +25,11 @@ ImageDiffViewer::ImageDiffViewer(int id,
                                  const std::string& new_ref,
                                  const std::string& path,
                                  bool new_from_worktree,
-                                 ImageDelegate& image_delegate,
+                                 GraphicsDelegate& graphics_delegate,
                                  std::function<void(bool)> busy_callback)
     : path_(path),
-      old_view_(image_delegate, busy_callback),
-      new_view_(image_delegate, busy_callback) {
+      old_view_(graphics_delegate, busy_callback),
+      new_view_(graphics_delegate, busy_callback) {
   char buf[256];
   snprintf(buf, sizeof(buf), "%s###img_diff_%d", path_.c_str(), id);
   title_ = buf;

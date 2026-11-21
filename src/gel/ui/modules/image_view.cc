@@ -37,9 +37,9 @@ bool IsImageFile(const std::string& path) {
          ext == ".gif" || ext == ".tga" || ext == ".psd";
 }
 
-ImageView::ImageView(ImageDelegate& image_delegate,
+ImageView::ImageView(GraphicsDelegate& graphics_delegate,
                      std::function<void(bool)> busy_callback)
-    : image_delegate_(image_delegate),
+    : graphics_delegate_(graphics_delegate),
       busy_callback_(std::move(busy_callback)),
       latest_(std::make_shared<std::atomic<int>>(0)) {}
 
@@ -68,9 +68,9 @@ void ImageView::Clear() {
   width_ = 0;
   height_ = 0;
   has_alpha_ = false;
-  if (image_ != ImageDelegate::kNoImage)
-    image_delegate_.DestroyImage(image_);
-  image_ = ImageDelegate::kNoImage;
+  if (image_ != GraphicsDelegate::kNoImage)
+    graphics_delegate_.DestroyImage(image_);
+  image_ = GraphicsDelegate::kNoImage;
 }
 
 void ImageView::Load() {
@@ -93,8 +93,8 @@ void ImageView::Load() {
         height_ = image.height;
         has_alpha_ = image.has_alpha;
         if (state_ == State::kLoaded) {
-          image_ = image_delegate_.CreateImage(width_, height_,
-                                               std::move(image.pixels));
+          image_ = graphics_delegate_.CreateImage(width_, height_,
+                                                  std::move(image.pixels));
         }
       });
 }
@@ -108,7 +108,7 @@ void ImageView::Render(float width) {
     content_top_right_ =
         ImVec2(wpos.x + wsz.x - ImGui::GetStyle().ScrollbarSize, wpos.y);
 
-    if (state_ == State::kLoaded && image_ != ImageDelegate::kNoImage &&
+    if (state_ == State::kLoaded && image_ != GraphicsDelegate::kNoImage &&
         width_ > 0 && height_ > 0) {
       // Pixel for pixel, or scaled down to fit, centered.
       ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -140,7 +140,7 @@ void ImageView::Render(float width) {
         }
       }
       dl->PopClipRect();
-      image_delegate_.DrawImage(image_, min, max);
+      graphics_delegate_.DrawImage(image_, min, max);
 
       ImGui::Dummy(avail);
     }
