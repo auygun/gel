@@ -39,19 +39,17 @@ constexpr size_t kMaxTableColumns = 6;
 
 }  // namespace
 
-SettingsModal::SettingsModal(ImageDelegate& image_delegate)
-    : image_delegate_(image_delegate) {}
+SettingsModal::SettingsModal(GraphicsDelegate& graphics_delegate)
+    : graphics_delegate_(graphics_delegate) {}
 
 SettingsModal::~SettingsModal() {
-  if (icon_ != ImageDelegate::kNoImage)
-    image_delegate_.DestroyImage(icon_);
+  if (icon_ != GraphicsDelegate::kNoImage)
+    graphics_delegate_.DestroyImage(icon_);
 }
 
 void SettingsModal::Open(PersistentSettings& settings,
-                         RendererType current_renderer,
-                         const std::vector<Platform::FontInfo>& fonts,
-                         std::vector<std::string> gpu_names,
-                         int selected_gpu) {
+                         const std::vector<Platform::FontInfo>& fonts) {
+  RendererType current_renderer = graphics_delegate_.GetRendererType();
   settings_font_scale_ = settings.font_scale;
   snprintf(settings_diff_tool_, sizeof(settings_diff_tool_), "%s",
            settings.diff_tool);
@@ -80,9 +78,9 @@ void SettingsModal::Open(PersistentSettings& settings,
     }
   }
   original_font_index_ = settings_font_index_;
-  gpu_names_ = std::move(gpu_names);
-  settings_gpu_index_ = selected_gpu;
-  original_gpu_index_ = selected_gpu;
+  gpu_names_ = graphics_delegate_.GetAvailableGpus();
+  settings_gpu_index_ = graphics_delegate_.GetSelectedGpuIndex();
+  original_gpu_index_ = settings_gpu_index_;
   had_nav_focus_ = false;
   show_settings_ = true;
 
@@ -564,19 +562,19 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
       stbi_uc* pixels = stbi_load_from_memory(kIconData, sizeof(kIconData), &w,
                                               &h, nullptr, 4);
       if (pixels) {
-        icon_ = image_delegate_.CreateImage(
+        icon_ = graphics_delegate_.CreateImage(
             w, h,
             std::vector<uint8_t>(pixels,
                                  pixels + static_cast<size_t>(w) * h * 4));
         stbi_image_free(pixels);
       }
     }
-    if (icon_ != ImageDelegate::kNoImage) {
+    if (icon_ != GraphicsDelegate::kNoImage) {
       float icon_size = ImGui::GetTextLineHeight() * 6;
       ImVec2 pos = ImGui::GetCursorScreenPos();
       ImGui::Dummy(ImVec2(icon_size, icon_size));
-      image_delegate_.DrawImage(icon_, pos,
-                                ImVec2(pos.x + icon_size, pos.y + icon_size));
+      graphics_delegate_.DrawImage(
+          icon_, pos, ImVec2(pos.x + icon_size, pos.y + icon_size));
       ImGui::SameLine();
       float text_height = ImGui::GetTextLineHeight();
       float spacing = ImGui::GetStyle().ItemSpacing.y;

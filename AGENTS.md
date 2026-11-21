@@ -56,7 +56,7 @@ clang-tidy -p out/release <files>
 
 ### Key Layers
 
-**`Gel`** (`gel.h/cc`) — Application lifecycle. Creates the platform window, renderer (Vulkan or OpenGL), and ImGui backend. Runs the main loop. Delegates all UI and git logic to `MainWindow`.
+**`Gel`** (`gel.h/cc`) — Application lifecycle. Creates the platform window, renderer (Vulkan or OpenGL), and ImGui backend. Runs the main loop. Delegates all UI and git logic to `MainWindow`. The only class that knows the renderer: UI code never touches the renderer or textures, and gets what it needs of them (images to draw, renderer and GPU info, the background color) through `GraphicsDelegate` (`ui/graphics_delegate.h`), which `Gel` implements.
 
 **`MainWindow`** (`ui/main_window.h/cc`) — Central coordinator. Owns all UI panels and git workers. Implements delegate interfaces for `CommitHistory`, `CommitDiff`, `Toolbar`, and `DirectoryBrowser`. Merges worker data each frame and dispatches user actions.
 

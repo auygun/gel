@@ -122,7 +122,6 @@ Gel::Gel(Platform* platform)
     : platform_(platform),
       main_window_(
           *this,
-          *this,
           *platform,
           settings_,
           [this](bool b) { OnBusyChanged(b); },
@@ -212,9 +211,9 @@ void Gel::DestroyRemovedImages() {
   removed_images_.clear();
 }
 
-ImageDelegate::ImageId Gel::CreateImage(int width,
-                                        int height,
-                                        std::vector<uint8_t> rgba) {
+GraphicsDelegate::ImageId Gel::CreateImage(int width,
+                                           int height,
+                                           std::vector<uint8_t> rgba) {
   DCHECK(rgba.size() == static_cast<size_t>(width) * height * 4);
   ImageId id = next_image_id_++;
   Image& image = images_[id];
@@ -257,7 +256,7 @@ int Gel::GetSelectedGpuIndex() const {
   return renderer_->GetSelectedGpuIndex();
 }
 
-void Gel::OnBackgroundColorChanged(const ImVec4& color) {
+void Gel::SetBackgroundColor(const ImVec4& color) {
   renderer_->SetClearColor({color.x, color.y, color.z, color.w});
 }
 

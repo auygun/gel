@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "gel/persistent_settings.h"
-#include "gel/ui/image_delegate.h"
+#include "gel/ui/graphics_delegate.h"
 #include "gel/ui/style.h"
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/kaliber/platform/platform.h"
@@ -28,17 +28,15 @@ struct SettingsModalResult {
 // and style override so the modal is not affected by live style preview.
 class SettingsModal {
  public:
-  // The app icon is drawn through |image_delegate|.
-  explicit SettingsModal(ImageDelegate& image_delegate);
+  // The renderer settings are read from, and the app icon drawn through,
+  // |graphics_delegate|.
+  explicit SettingsModal(GraphicsDelegate& graphics_delegate);
   ~SettingsModal();
 
   // Snapshots current settings into editing state and opens the popup on the
   // next Update() call.
   void Open(PersistentSettings& settings,
-            eng::RendererType current_renderer,
-            const std::vector<eng::Platform::FontInfo>& fonts,
-            std::vector<std::string> gpu_names,
-            int selected_gpu);
+            const std::vector<eng::Platform::FontInfo>& fonts);
 
   // Renders the modal. Returns signals for pending style or renderer changes.
   SettingsModalResult Update(PersistentSettings& settings, bool window_focused);
@@ -95,9 +93,9 @@ class SettingsModal {
 #endif
   std::string git_version_;
 
-  ImageDelegate& image_delegate_;
+  GraphicsDelegate& graphics_delegate_;
   // The app icon, created the first time the modal is shown.
-  ImageDelegate::ImageId icon_ = ImageDelegate::kNoImage;
+  GraphicsDelegate::ImageId icon_ = GraphicsDelegate::kNoImage;
   bool icon_decoded_ = false;
 };
 

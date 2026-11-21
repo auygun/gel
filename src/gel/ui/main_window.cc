@@ -24,14 +24,12 @@ const std::string kEmptySearchTerm;
 
 }  // namespace
 
-MainWindow::MainWindow(Delegate& delegate,
-                       ImageDelegate& image_delegate,
+MainWindow::MainWindow(GraphicsDelegate& graphics_delegate,
                        Platform& platform,
                        PersistentSettings& settings,
                        std::function<void(bool)> on_busy_changed,
                        std::function<void()> main_thread_busy)
-    : delegate_(delegate),
-      image_delegate_(image_delegate),
+    : graphics_delegate_(graphics_delegate),
       platform_(platform),
       settings_(settings),
       on_busy_changed_(std::move(on_busy_changed)),
@@ -98,14 +96,14 @@ MainWindow::MainWindow(Delegate& delegate,
       commit_size_(settings_, [this](bool b) { on_busy_changed_(b); }),
       commit_tree_(
           *this,
-          image_delegate_,
+          graphics_delegate_,
           git_repo_,
           settings_,
           [this](bool b) { on_busy_changed_(b); },
           main_thread_busy_),
       lower_panel_(settings_),
       toolbar_(*this, runner_, git_repo_, settings_),
-      settings_modal_(image_delegate_),
+      settings_modal_(graphics_delegate_),
       console_window_(runner_, settings_),
       blame_lookup_(
           commit_history_,
@@ -595,7 +593,7 @@ void MainWindow::ApplyPendingStyle() {
   auto [style, layout, scale] = *pending_style_;
   ImGui::GetStyle() = ImGuiStyle();
   ApplyStyle(style, layout, platform_.IsDarkMode());
-  delegate_.OnBackgroundColorChanged(
+  graphics_delegate_.SetBackgroundColor(
       ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
   float dpi_scale = platform_.GetDeviceScaleFactor();
   ImGui::GetStyle().FontScaleMain = scale;
@@ -684,7 +682,7 @@ void MainWindow::OnShowImageDiff(const std::string& old_ref,
                                  bool new_from_worktree) {
   image_diff_viewers_.push_back(std::make_unique<ImageDiffViewer>(
       next_image_diff_id_++, git_repo_.toplevel(), old_ref, new_ref, path,
-      new_from_worktree, image_delegate_,
+      new_from_worktree, graphics_delegate_,
       [this](bool b) { on_busy_changed_(b); }));
 }
 
@@ -810,9 +808,7 @@ void MainWindow::OnRefreshRequested() {
 void MainWindow::OnSettingsRequested() {
   if (fonts_.empty())
     fonts_ = platform_.GetFonts();
-  settings_modal_.Open(settings_, delegate_.GetRendererType(), fonts_,
-                       delegate_.GetAvailableGpus(),
-                       delegate_.GetSelectedGpuIndex());
+  settings_modal_.Open(settings_, fonts_);
 }
 
 void MainWindow::OnHelpRequested() {

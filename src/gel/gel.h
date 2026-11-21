@@ -15,7 +15,7 @@
 
 #include "base/command_line.h"
 #include "gel/persistent_settings.h"
-#include "gel/ui/image_delegate.h"
+#include "gel/ui/graphics_delegate.h"
 #include "gel/ui/main_window.h"
 #include "third_party/kaliber/base/timer.h"
 #include "third_party/kaliber/imgui_backend.h"
@@ -25,11 +25,9 @@
 
 // Application lifecycle class. Sets up the platform window, renderer, and ImGui
 // backend, then enters the main loop. Delegates all UI and git logic to
-// MainWindow. The only class that knows the renderer: the UI's images are
-// textures kept here, by ImageDelegate ids.
-class Gel final : public eng::PlatformObserver,
-                  public ImageDelegate,
-                  public MainWindow::Delegate {
+// MainWindow. The only class that knows the renderer: the UI gets what it
+// needs of it through GraphicsDelegate, its images being textures kept here.
+class Gel final : public eng::PlatformObserver, public GraphicsDelegate {
  public:
   explicit Gel(eng::Platform* platform);
   ~Gel() final;
@@ -83,16 +81,14 @@ class Gel final : public eng::PlatformObserver,
   // presented.
   void DestroyRemovedImages();
 
-  // ImageDelegate implementation
+  // GraphicsDelegate implementation
   ImageId CreateImage(int width, int height, std::vector<uint8_t> rgba) final;
   void DestroyImage(ImageId id) final;
   void DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) final;
-
-  // MainWindow::Delegate implementation
   eng::RendererType GetRendererType() const final;
   std::vector<std::string> GetAvailableGpus() const final;
   int GetSelectedGpuIndex() const final;
-  void OnBackgroundColorChanged(const ImVec4& color) final;
+  void SetBackgroundColor(const ImVec4& color) final;
 
   // PlatformObserver implementation
   void OnWindowCreated() final;

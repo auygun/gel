@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "gel/ui/image_delegate.h"
+#include "gel/ui/graphics_delegate.h"
 #include "third_party/imgui/imgui/imgui.h"
 
 // Whether |path| has the extension of an image format ImageView decodes.
@@ -21,7 +21,7 @@ bool IsImageFile(const std::string& path);
 
 // Shows an image: a blob from git or a file of the working tree, read and
 // decoded on the thread pool, and shown pixel for pixel or scaled down to fit
-// the view, drawn through an ImageDelegate. A new load supersedes the one in
+// the view, drawn through a GraphicsDelegate. A new load supersedes the one in
 // progress, which stops early.
 class ImageView {
  public:
@@ -39,7 +39,7 @@ class ImageView {
 
   // |busy_callback| is called with true when a load starts and with false
   // when it ends.
-  ImageView(ImageDelegate& image_delegate,
+  ImageView(GraphicsDelegate& graphics_delegate,
             std::function<void(bool)> busy_callback);
   ~ImageView();
 
@@ -91,7 +91,7 @@ class ImageView {
                          int generation);
   static Image DecodeImage(const std::string& data);
 
-  ImageDelegate& image_delegate_;
+  GraphicsDelegate& graphics_delegate_;
   std::function<void(bool)> busy_callback_;
 
   // The latest load, or Clear(). Shared with the loads in progress, so that a
@@ -103,7 +103,7 @@ class ImageView {
   int width_ = 0;
   int height_ = 0;
   bool has_alpha_ = false;
-  ImageDelegate::ImageId image_ = ImageDelegate::kNoImage;
+  GraphicsDelegate::ImageId image_ = GraphicsDelegate::kNoImage;
 
   ImVec2 content_top_right_{0, 0};
 };
