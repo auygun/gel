@@ -18,6 +18,9 @@ enum class ChartStyle { kDonut, kBar, kTreemap, kCount };
 
 enum class SizeTreeSort { kSize, kName, kCount };
 
+// The lower panel's views, in the order F6 cycles through them.
+enum class LowerView { kDiff, kSize, kTree, kCount };
+
 enum class DisplayBackend { kAuto, kWayland, kX11, kCount };
 
 enum class DiffColorMode { kSyntax, kAnsi, kAnsiWithBackground, kCount };
@@ -94,7 +97,7 @@ class PersistentSettings {
   bool show_line_numbers = true;
   bool show_commit_graph = true;
   DiffColorMode diff_color_mode = DiffColorMode::kSyntax;
-  bool show_size_panel = false;
+  LowerView lower_view = LowerView::kDiff;
   ChartStyle chart_style = ChartStyle::kDonut;
   SizeTreeSort size_tree_sort = SizeTreeSort::kSize;
   std::vector<ColumnData> table_columns = {ColumnData::kAuthor,

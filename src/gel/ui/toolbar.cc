@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <optional>
 
 #include "base/utf8.h"
 #include "gel/commands/busy_tracker.h"
@@ -199,23 +200,39 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     ImGui::EndDisabled();
   }
 
-  // Lower panel toggle button.
-  bool toggle_panel_requested = false;
+  // Lower panel view buttons, one per view, the active one on. F6 cycles
+  // through them.
+  std::optional<LowerView> view_requested;
   {
     ImGui::SameLine();
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
-    bool size_active = delegate_.IsSizePanelActive();
-    toggle_panel_requested =
-        ToggleButton("##panel_toggle", size_active, ImVec2(frame_h, frame_h)) ||
-        (!modal_open && ImGui::IsKeyPressed(ImGuiKey_F6));
-    if (size_active)
-      DrawSizePanelIcon();
-    else
-      DrawDiffPanelIcon();
-    ItemTooltip(
-        size_active ? "Show diff view (F6)" : "Show commit size view (F6)",
-        any_toolbar_hovered, tooltip_suppressed_);
+    struct ViewButton {
+      LowerView view;
+      const char* id;
+      void (*draw_icon)();
+      const char* tooltip;
+    };
+    static constexpr ViewButton kViewButtons[] = {
+        {LowerView::kDiff, "##diff_view", DrawDiffPanelIcon, "Diff view (F6)"},
+        {LowerView::kSize, "##size_view", DrawSizePanelIcon,
+         "Commit size view (F6)"},
+        {LowerView::kTree, "##tree_view", DrawTreePanelIcon,
+         "File tree view (F6)"},
+    };
+    LowerView active = delegate_.GetLowerView();
+    for (const auto& btn : kViewButtons) {
+      ImGui::SameLine();
+      if (ToggleButton(btn.id, btn.view == active, ImVec2(frame_h, frame_h)) &&
+          btn.view != active)
+        view_requested = btn.view;
+      btn.draw_icon();
+      ItemTooltip(btn.tooltip, any_toolbar_hovered, tooltip_suppressed_);
+    }
+    if (!modal_open && ImGui::IsKeyPressed(ImGuiKey_F6, false)) {
+      constexpr int kViews = static_cast<int>(LowerView::kCount);
+      view_requested =
+          static_cast<LowerView>((static_cast<int>(active) + 1) % kViews);
+    }
   }
 
   ImGui::SameLine();
@@ -782,8 +799,8 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     delegate_.OnSettingsRequested();
   if (help_requested)
     delegate_.OnHelpRequested();
-  if (toggle_panel_requested)
-    delegate_.OnToggleLowerPanel();
+  if (view_requested)
+    delegate_.OnLowerViewRequested(*view_requested);
   if (search.next || search.prev)
     delegate_.OnSearchRequested(search.next ? 1 : -1);
   if (minimize_requested)

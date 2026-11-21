@@ -193,6 +193,19 @@ void PathTree::SetAllDirsOpen(bool open) {
   dirty_ = true;
 }
 
+void PathTree::RevealPath(std::string_view path) {
+  size_t slash = path.rfind('/');
+  if (slash == std::string_view::npos)
+    return;
+  auto it = dir_index_.find(path.substr(0, slash));
+  if (it == dir_index_.end())
+    return;
+  for (int dir = it->second; dir > 0; dir = dirs_[dir].parent) {
+    if (!dirs_[dir].open)
+      SetDirOpen(dir, true);
+  }
+}
+
 void PathTree::RenderDirRow(const Row& row, bool selected) {
   int dir = ~row.item;
   const Dir& d = dirs_[dir];

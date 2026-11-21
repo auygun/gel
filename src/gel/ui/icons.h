@@ -56,9 +56,11 @@ void DrawClearFilterIcon();
 // Draw a merge icon (two branches joining into one) for the merge diff mode.
 void DrawMergeIcon();
 
-// Draw a panel-toggle icon (two horizontal panels with an arrow).
+// Draw the icons of the lower panel's views: diff lines, a bar chart, and a
+// file tree beside a page of text.
 void DrawDiffPanelIcon();
 void DrawSizePanelIcon();
+void DrawTreePanelIcon();
 
 // Chart style icons for the size panel chart view switcher.
 void DrawDonutChartIcon();

@@ -6,6 +6,8 @@
 
 #include <cstdlib>
 
+#include "gel/commands/git_ls_tree.h"
+
 using namespace base;
 
 GitBlame::GitBlame(std::function<void(bool)> busy_callback)
@@ -18,14 +20,21 @@ GitBlame::~GitBlame() {
 bool GitBlame::Run(const std::string& revision,
                    const std::string& file,
                    int line_number,
-                   const std::filesystem::path& toplevel) {
+                   const std::filesystem::path& toplevel,
+                   std::optional<std::string> contents) {
   std::string line_arg =
       "-L" + std::to_string(line_number) + "," + std::to_string(line_number);
-  std::vector<std::string> args = {"blame",  "--porcelain", line_arg,
-                                   revision, "--",          file};
+  std::vector<std::string> args = {"blame", "--porcelain", line_arg};
+  if (contents)
+    args.insert(args.end(), {"--contents", "-"});
+  if (!revision.empty())
+    args.push_back(revision);
+  args.insert(args.end(), {"--", file});
   if (!toplevel.empty())
     args.insert(args.begin(), {"-C", toplevel.string()});
-  return RunWithArgs(std::move(args));
+  // Written to stdin, which is then closed. Empty contents have no line to
+  // blame: git fails on the -L range without waiting for input.
+  return RunWithArgs(std::move(args), contents ? std::move(*contents) : "");
 }
 
 bool GitBlame::Update(Result& result) {
@@ -52,8 +61,9 @@ void GitBlame::OnOutput(std::string line) {
     if (space != std::string::npos)
       parse_line_ = std::atoi(line.c_str() + space + 1);
   }
+  // Quoted if it has special characters, as in ls-tree's output.
   if (line.starts_with("filename "))
-    parse_file_ = line.substr(9);
+    parse_file_ = UnquoteGitPath(std::string_view(line).substr(9));
 }
 
 void GitBlame::OnFinished(Exec::Status status, int exit_code) {

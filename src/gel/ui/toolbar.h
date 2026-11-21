@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "gel/persistent_settings.h"
 #include "gel/ui/commit_search_mode.h"
 #include "gel/ui/modules/search_bar.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -36,8 +37,9 @@ class Toolbar {
     virtual bool HasDiffPathFilter() const = 0;
     virtual bool HasLogPathFilter() const = 0;
     virtual void OnClearPathFilterRequested() = 0;
-    virtual void OnToggleLowerPanel() = 0;
-    virtual bool IsSizePanelActive() const = 0;
+    // Shows |view| in the lower panel.
+    virtual void OnLowerViewRequested(LowerView view) = 0;
+    virtual LowerView GetLowerView() const = 0;
     virtual bool IsUsingCSD() const = 0;
     virtual bool IsMaximized() const = 0;
     virtual bool ShowMinimizeButton() const = 0;

@@ -446,6 +446,36 @@ void DrawSizePanelIcon() {
   }
 }
 
+void DrawTreePanelIcon() {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 btn_min = ImGui::GetItemRectMin();
+  ImVec2 btn_max = ImGui::GetItemRectMax();
+  float size = std::min(btn_max.x - btn_min.x, btn_max.y - btn_min.y);
+  float thickness = std::max(1.5f, size * 0.08f);
+  ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+  float cx = (btn_min.x + btn_max.x) * 0.5f;
+  float cy = (btn_min.y + btn_max.y) * 0.5f;
+
+  // A small tree on the left: a trunk with two branches.
+  float step = size * 0.2f;
+  float left = cx - size * 0.30f;
+  float branch_end = cx - size * 0.10f;
+  dl->AddLine(ImVec2(left, cy - step), ImVec2(left, cy + step), color,
+              thickness);
+  for (float y : {cy, cy + step})
+    dl->AddLine(ImVec2(left, y), ImVec2(branch_end, y), color, thickness);
+  dl->AddCircleFilled(ImVec2(left, cy - step), thickness * 0.9f, color);
+
+  // A page of text on the right.
+  float page_l = cx + size * 0.02f;
+  float page_r = cx + size * 0.30f;
+  for (int i = -1; i <= 1; i++) {
+    float y = cy + i * step;
+    float r = i == 0 ? page_r - size * 0.08f : page_r;
+    dl->AddLine(ImVec2(page_l, y), ImVec2(r, y), color, thickness);
+  }
+}
+
 void DrawDonutChartIcon() {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImVec2 btn_min = ImGui::GetItemRectMin();
