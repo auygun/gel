@@ -100,21 +100,23 @@ GitChangeSearch::Query BuildChangeSearchQuery(const std::string& term,
 
     case CommitSearchMode::kAddingRemoving:
       // A literal string, as for -S.
-      if (!term.empty()) {
+      if (!term.empty())
         query.diff_options.push_back("-S" + term);
-        if (!options.case_sensitive)
-          query.diff_options.push_back("--regexp-ignore-case");
-      }
       break;
 
     case CommitSearchMode::kChangingLines:
       // A regex, as for -G.
-      if (!term.empty()) {
+      if (!term.empty())
         query.diff_options.push_back("-G" + term);
-        if (!options.case_sensitive)
-          query.diff_options.push_back("--regexp-ignore-case");
-      }
       break;
+  }
+  if (!query.diff_options.empty()) {
+    if (!options.case_sensitive)
+      query.diff_options.push_back("--regexp-ignore-case");
+    // Only whether a commit matches is needed, not which of its files do, so
+    // let git stop at the first matching file. By default it checks every
+    // one, which takes several times longer for commits touching many files.
+    query.diff_options.push_back("--pickaxe-all");
   }
   return query;
 }
