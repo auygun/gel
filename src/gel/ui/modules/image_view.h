@@ -20,7 +20,7 @@
 bool IsImageFile(const std::string& path);
 
 // Shows an image: a blob from git or a file of the working tree, read and
-// decoded on the thread pool, and shown pixel for pixel or scaled down to fit
+// decoded on the thread pool, and shown pixel for pixel or stretched to fill
 // the view, drawn through a GraphicsDelegate. A new load supersedes the one in
 // progress, which stops early.
 class ImageView {
@@ -35,6 +35,14 @@ class ImageView {
     // Too large to show. width() and height() tell its size, or are 0 if the
     // file was too large to decode.
     kTooLarge,
+  };
+
+  enum class ScaleMode {
+    // Pixel for pixel, centered, with scrollbars where it's larger than the
+    // view.
+    kFullSize,
+    // Scaled up or down to fill the view, keeping its aspect ratio, centered.
+    kFill,
   };
 
   // |busy_callback| is called with true when a load starts and with false
@@ -56,6 +64,10 @@ class ImageView {
   // Renders the image in a child window, |width| wide (-FLT_MIN fills the
   // rest of the line), as tall as the space left.
   void Render(float width);
+
+  // How the image is fit to the view. Kept across loads.
+  void SetScaleMode(ScaleMode mode);
+  ScaleMode scale_mode() const { return scale_mode_; }
 
   State state() const { return state_; }
   int width() const { return width_; }
@@ -84,6 +96,10 @@ class ImageView {
   // Starts loading |request_|.
   void Load();
 
+  // Draws a checkerboard over [min, max], where it's visible, behind an image
+  // with transparent pixels.
+  static void DrawCheckerboard(const ImVec2& min, const ImVec2& max);
+
   // Thread pool: reads and decodes |request|, stopping early once |latest|
   // moves past |generation|.
   static Image ReadImage(const Request& request,
@@ -104,6 +120,11 @@ class ImageView {
   int height_ = 0;
   bool has_alpha_ = false;
   GraphicsDelegate::ImageId image_ = GraphicsDelegate::kNoImage;
+
+  ScaleMode scale_mode_ = ScaleMode::kFill;
+  // Whether to scroll to the image's center, for a new image or one just
+  // switched to full size.
+  bool center_scroll_ = true;
 
   ImVec2 content_top_right_{0, 0};
 };

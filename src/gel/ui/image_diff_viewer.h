@@ -41,6 +41,9 @@ class ImageDiffViewer {
   // Renders one side, |width| wide, with |label| and the image's size above
   // it.
   static void RenderSide(const char* label, ImageView& view, float width);
+  // Renders the path, with the toggle between full size and stretch to fill
+  // for both sides at the right edge.
+  void RenderHeader();
 
   std::string title_;
   std::string path_;
@@ -49,6 +52,10 @@ class ImageDiffViewer {
 
   ImageView old_view_;
   ImageView new_view_;
+
+  // Whether the toggle's tooltip is held back after a click, until the mouse
+  // leaves it.
+  bool tooltip_suppressed_ = false;
 };
 
 #endif  // GEL_UI_IMAGE_DIFF_VIEWER_H

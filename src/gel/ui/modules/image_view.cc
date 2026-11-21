@@ -76,6 +76,7 @@ void ImageView::Clear() {
 void ImageView::Load() {
   Clear();
   state_ = State::kLoading;
+  center_scroll_ = true;
   busy_callback_(true);
   int generation = latest_->fetch_add(1, std::memory_order_relaxed) + 1;
   base::ThreadPool::Get().PostTaskAndReplyWithResult<Image>(
@@ -99,10 +100,20 @@ void ImageView::Load() {
       });
 }
 
+void ImageView::SetScaleMode(ScaleMode mode) {
+  if (mode == scale_mode_)
+    return;
+  scale_mode_ = mode;
+  center_scroll_ = true;
+}
+
 void ImageView::Render(float width) {
-  if (ImGui::BeginChild(
-          "image_view", ImVec2(width, -FLT_MIN), ImGuiChildFlags_Borders,
-          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+  bool full_size = scale_mode_ == ScaleMode::kFullSize;
+  ImGuiWindowFlags flags = full_size ? ImGuiWindowFlags_HorizontalScrollbar
+                                     : ImGuiWindowFlags_NoScrollbar |
+                                           ImGuiWindowFlags_NoScrollWithMouse;
+  if (ImGui::BeginChild("image_view", ImVec2(width, -FLT_MIN),
+                        ImGuiChildFlags_Borders, flags)) {
     ImVec2 wpos = ImGui::GetWindowPos();
     ImVec2 wsz = ImGui::GetWindowSize();
     content_top_right_ =
@@ -110,42 +121,76 @@ void ImageView::Render(float width) {
 
     if (state_ == State::kLoaded && image_ != GraphicsDelegate::kNoImage &&
         width_ > 0 && height_ > 0) {
-      // Pixel for pixel, or scaled down to fit, centered.
+      // The visible content region, less any scrollbars, wherever it's
+      // scrolled to.
       ImVec2 avail = ImGui::GetContentRegionAvail();
       ImVec2 origin = ImGui::GetCursorScreenPos();
-      float scale = std::min({1.0f, avail.x / static_cast<float>(width_),
-                              avail.y / static_cast<float>(height_)});
-      scale = std::max(scale, 0.0f);
+      // Pixel for pixel, or scaled to fill keeping the aspect ratio.
+      float scale = 1.0f;
+      if (!full_size) {
+        scale = std::max(std::min(avail.x / static_cast<float>(width_),
+                                  avail.y / static_cast<float>(height_)),
+                         0.0f);
+      }
       float w = std::round(static_cast<float>(width_) * scale);
       float h = std::round(static_cast<float>(height_) * scale);
-      ImVec2 min(std::round(origin.x + (avail.x - w) / 2),
-                 std::round(origin.y + (avail.y - h) / 2));
+      // Centered where it's smaller than the view, otherwise at the start of
+      // the scrollable area.
+      ImVec2 offset(std::round(std::max((avail.x - w) / 2, 0.0f)),
+                    std::round(std::max((avail.y - h) / 2, 0.0f)));
+      ImVec2 min(origin.x + offset.x, origin.y + offset.y);
       ImVec2 max(min.x + w, min.y + h);
 
-      ImDrawList* dl = ImGui::GetWindowDrawList();
-      dl->PushClipRect(min, max, true);
-      if (has_alpha_) {
-        // A checkerboard behind it, for transparent pixels to show as such.
-        dl->AddRectFilled(min, max, IM_COL32(204, 204, 204, 255));
-        int rows = static_cast<int>(std::ceil(h / kCheckerSize));
-        int columns = static_cast<int>(std::ceil(w / kCheckerSize));
-        for (int row = 0; row < rows; row++) {
-          float y = min.y + static_cast<float>(row) * kCheckerSize;
-          for (int column = row % 2; column < columns; column += 2) {
-            float x = min.x + static_cast<float>(column) * kCheckerSize;
-            dl->AddRectFilled(ImVec2(x, y),
-                              ImVec2(x + kCheckerSize, y + kCheckerSize),
-                              IM_COL32(153, 153, 153, 255));
-          }
-        }
-      }
-      dl->PopClipRect();
+      if (has_alpha_)
+        DrawCheckerboard(min, max);
       graphics_delegate_.DrawImage(image_, min, max);
 
-      ImGui::Dummy(avail);
+      // Sizes the scrollable area: the image, or the view if it's larger.
+      ImGui::Dummy(full_size ? ImVec2(offset.x + w, offset.y + h) : avail);
+
+      if (center_scroll_) {
+        // On the image's center, once it's shown full size. Takes effect
+        // next frame.
+        if (full_size) {
+          ImGui::SetScrollX(std::max((w - avail.x) / 2, 0.0f));
+          ImGui::SetScrollY(std::max((h - avail.y) / 2, 0.0f));
+        }
+        center_scroll_ = false;
+      }
     }
   }
   ImGui::EndChild();
+}
+
+// static
+void ImageView::DrawCheckerboard(const ImVec2& min, const ImVec2& max) {
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  dl->PushClipRect(min, max, true);
+  // Only the squares within the clip rect, which for a large image shown full
+  // size is a small part of it.
+  ImVec2 clip_min = dl->GetClipRectMin();
+  ImVec2 clip_max = dl->GetClipRectMax();
+  dl->AddRectFilled(clip_min, clip_max, IM_COL32(204, 204, 204, 255));
+  int first_row = std::max(
+      static_cast<int>(std::floor((clip_min.y - min.y) / kCheckerSize)), 0);
+  int last_row =
+      static_cast<int>(std::ceil((clip_max.y - min.y) / kCheckerSize));
+  int first_column = std::max(
+      static_cast<int>(std::floor((clip_min.x - min.x) / kCheckerSize)), 0);
+  int last_column =
+      static_cast<int>(std::ceil((clip_max.x - min.x) / kCheckerSize));
+  for (int row = first_row; row < last_row; row++) {
+    float y = min.y + static_cast<float>(row) * kCheckerSize;
+    // Every other square, starting a square later on odd rows.
+    int column = first_column + ((first_column + row) % 2);
+    for (; column < last_column; column += 2) {
+      float x = min.x + static_cast<float>(column) * kCheckerSize;
+      dl->AddRectFilled(ImVec2(x, y),
+                        ImVec2(x + kCheckerSize, y + kCheckerSize),
+                        IM_COL32(153, 153, 153, 255));
+    }
+  }
+  dl->PopClipRect();
 }
 
 // static
