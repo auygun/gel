@@ -537,7 +537,7 @@ void GitDiff::AppendUntrackedFiles(const std::vector<std::string>& paths) {
     buffers_.Push<HunkEntry>({line_count_, 2});
 
     try {
-      std::ifstream file(toplevel_ / path, std::ios::binary);
+      std::ifstream file(WorkTreePath(toplevel_, path), std::ios::binary);
       if (!file)
         continue;
 

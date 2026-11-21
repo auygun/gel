@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <string>
 
 class GitRepo {
  public:
@@ -20,5 +21,10 @@ class GitRepo {
   std::filesystem::path git_dir_;
   int pending_ = 0;
 };
+
+// |path|, relative to the repository, in the working tree at |toplevel|.
+// Converted from UTF-8, which a std::string path is not taken as on Windows.
+std::filesystem::path WorkTreePath(const std::filesystem::path& toplevel,
+                                   const std::string& path);
 
 #endif  // GEL_GIT_REPO_H
