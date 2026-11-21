@@ -5,6 +5,7 @@
 #include "gel/ui/lower_panel/file_list.h"
 
 #include <algorithm>
+#include <string_view>
 
 #include "gel/commands/git_diff.h"
 #include "gel/commands/git_log.h"
@@ -14,7 +15,6 @@
 #include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
-#include "third_party/kaliber/base/thread_pool.h"
 
 namespace {
 
@@ -73,7 +73,7 @@ FileList::FileList(Delegate& delegate,
 void FileList::Reset() {
   selected_file_ = -1;
   multi_selection_.Clear();
-  ClearTree();
+  tree_.Clear();
 }
 
 void FileList::RevertAll() {
@@ -207,193 +207,27 @@ void FileList::PrepareRevert() {
       });
 }
 
-void FileList::ClearTree() {
-  if (!tree_dirs_.empty()) {
-    // Free the old tree on the thread pool so that a huge one doesn't stall
-    // the main thread.
-    base::ThreadPool::Get().PostTask(
-        HERE, [d = std::move(tree_dirs_), m = std::move(tree_dir_index_)]() {});
-  }
-  tree_dirs_.clear();
-  tree_dir_index_.clear();
-  tree_rows_.clear();
-  file_row_.clear();
-  tree_file_count_ = 0;
-  tree_dirty_ = true;
-}
-
 void FileList::SyncTree(std::span<const FileEntry> files) {
   int count = static_cast<int>(files.size());
-  if (count < tree_file_count_)
-    ClearTree();
-  if (tree_dirs_.empty())
-    tree_dirs_.emplace_back();  // Root.
-
-  for (int i = tree_file_count_; i < count; i++)
-    AddFileToTree(files[i], i);
-  tree_file_count_ = count;
-
-  if (tree_dirty_)
-    FlattenTree();
-}
-
-void FileList::AddFileToTree(const FileEntry& entry, int index) {
-  // Find the deepest existing directory of the file and create the missing
-  // ones below it.
-  int parent = 0;
-  int child = index;
-  if (entry.status != FileStatus::kCommit) {
-    std::string_view path = entry.path;
-    int dir = 0;
-    for (size_t slash = path.find('/'); slash != std::string_view::npos;
-         slash = path.find('/', slash + 1)) {
-      std::string_view dir_path = path.substr(0, slash);
-      if (child == index) {
-        if (auto it = tree_dir_index_.find(dir_path);
-            it != tree_dir_index_.end()) {
-          dir = parent = it->second;
-          continue;
-        }
-      }
-      int new_dir = static_cast<int>(tree_dirs_.size());
-      TreeDir& d = tree_dirs_.emplace_back();
-      d.path = dir_path;
-      d.parent = dir;
-      d.open = dirs_open_by_default_ != toggled_dirs_.contains(dir_path);
-      tree_dir_index_.emplace(d.path, new_dir);
-      if (child == index)
-        child = ~new_dir;  // Topmost new directory.
-      else
-        tree_dirs_[dir].children.push_back(~new_dir);
-      dir = new_dir;
-    }
-    if (dir != parent)
-      tree_dirs_[dir].children.push_back(index);
-  }
-
-  // A directory whose only child is a directory is folded into one row with
-  // it. Adding a second child unfolds it.
-  TreeDir& p = tree_dirs_[parent];
-  bool unfolds = parent != 0 && p.children.size() == 1 && p.children[0] < 0;
-  p.children.push_back(child);
-  file_row_.push_back(-1);
-  if (tree_dirty_)
-    return;
-
-  // Hidden in a collapsed directory: no rows change.
-  if (parent != 0 && (!p.visible || (!unfolds && !p.open))) {
-    HideChild(child, p.row);
-    return;
-  }
-
-  // Rows can only be updated in place if they change at the end. In
-  // depth-first order, the subtree of a directory is at the end if it and
-  // all its ancestors are the last child of their parent.
-  for (int d = parent; d != 0; d = tree_dirs_[d].parent) {
-    if (tree_dirs_[tree_dirs_[d].parent].children.back() != ~d) {
-      tree_dirty_ = true;
-      return;
-    }
-  }
-
-  if (unfolds) {
-    // Reflatten the row |parent| was folded into, from the first directory
-    // of the fold.
-    int first = parent;
-    while (tree_dirs_[first].parent != 0 &&
-           tree_dirs_[tree_dirs_[first].parent].children.size() == 1)
-      first = tree_dirs_[first].parent;
-    int row = p.row;
-    int depth = tree_rows_[row].depth;
-    tree_rows_.resize(row);
-    FlattenChild(~first, depth);
-    return;
-  }
-
-  FlattenChild(child, parent == 0 ? 0 : tree_rows_[p.row].depth + 1);
-}
-
-void FileList::FlattenTree() {
-  tree_dirty_ = false;
-  tree_rows_.clear();
-  file_row_.assign(tree_file_count_, -1);
-  if (!tree_dirs_.empty())
-    FlattenDir(0, 0);
-}
-
-void FileList::FlattenDir(int dir, int depth) {
-  for (int child : tree_dirs_[dir].children)
-    FlattenChild(child, depth);
-}
-
-void FileList::FlattenChild(int child, int depth) {
-  int row = static_cast<int>(tree_rows_.size());
-  if (child >= 0) {
-    file_row_[child] = row;
-    tree_rows_.push_back({child, depth, 0});
-    return;
-  }
-  // Fold a chain of single-directory directories into one row.
-  int first = ~child;
-  int last = first;
-  while (true) {
-    TreeDir& d = tree_dirs_[last];
-    d.row = row;
-    d.visible = true;
-    if (d.children.size() != 1 || d.children[0] >= 0)
-      break;
-    last = ~d.children[0];
-  }
-  size_t slash = tree_dirs_[first].path.rfind('/');
-  int label_offset =
-      slash == std::string::npos ? 0 : static_cast<int>(slash) + 1;
-  tree_rows_.push_back({~last, depth, label_offset});
-  if (tree_dirs_[last].open)
-    FlattenDir(last, depth + 1);
-  else
-    HideSubtree(last, row);
-}
-
-void FileList::HideSubtree(int dir, int row) {
-  for (int child : tree_dirs_[dir].children)
-    HideChild(child, row);
-}
-
-void FileList::HideChild(int child, int row) {
-  if (child >= 0) {
-    file_row_[child] = row;
-    return;
-  }
-  TreeDir& d = tree_dirs_[~child];
-  d.row = row;
-  d.visible = false;
-  HideSubtree(~child, row);
-}
-
-void FileList::SetDirOpen(int dir, bool open) {
-  TreeDir& d = tree_dirs_[dir];
-  d.open = open;
-  if (open == dirs_open_by_default_)
-    toggled_dirs_.erase(d.path);
-  else
-    toggled_dirs_.insert(d.path);
-  tree_dirty_ = true;
+  if (count < tree_.item_count())
+    tree_.Clear();
+  // The commit header is shown at the top level.
+  for (int i = tree_.item_count(); i < count; i++)
+    tree_.Add(files[i].status == FileStatus::kCommit ? std::string_view()
+                                                     : files[i].path);
+  tree_.FlattenIfDirty();
 }
 
 void FileList::SetAllDirsOpen(bool open) {
-  dirs_open_by_default_ = open;
-  toggled_dirs_.clear();
-  for (size_t i = 1; i < tree_dirs_.size(); i++)
-    tree_dirs_[i].open = open;
-  tree_dirty_ = true;
+  tree_.SetAllDirsOpen(open);
   // Keep the selected file, or the directory now hiding it, in view.
   ScrollToSelected();
 }
 
 ImGuiID FileList::RowToStorageId(int row) const {
-  int item = row >= 0 && row < static_cast<int>(tree_rows_.size())
-                 ? tree_rows_[row].item
-                 : -1;
+  auto rows = tree_.rows();
+  int item =
+      row >= 0 && row < static_cast<int>(rows.size()) ? rows[row].item : -1;
   return item >= 0 ? static_cast<ImGuiID>(item)
                    : kDirRowIdFlag | static_cast<ImGuiID>(row);
 }
@@ -672,33 +506,6 @@ void FileList::RenderFileRow(std::span<const FileEntry> files,
   ImGui::PopID();
 }
 
-void FileList::RenderDirRow(const TreeRow& row, bool selected) {
-  int dir = ~row.item;
-  const TreeDir& d = tree_dirs_[dir];
-  float font_size = ImGui::GetFontSize();
-  float indent = font_size * 0.75f;
-
-  ImGui::PushID(row.item);
-
-  ImVec2 cursor = ImGui::GetCursorScreenPos();
-  // Not a multi-select item, so clicking it leaves the file selection alone.
-  // Clicking anywhere on the row expands or collapses the directory. The
-  // tree is reflattened after rendering.
-  if (ImGui::Selectable("##dir", selected, ImGuiSelectableFlags_AllowOverlap))
-    SetDirOpen(dir, !d.open);
-
-  ImVec2 arrow_pos(cursor.x + row.depth * indent, cursor.y);
-  ImGui::RenderArrow(ImGui::GetWindowDrawList(),
-                     ImVec2(arrow_pos.x, arrow_pos.y + font_size * 0.15f),
-                     ImGui::GetColorU32(ImGuiCol_Text),
-                     d.open ? ImGuiDir_Down : ImGuiDir_Right, 0.7f);
-  ImGui::SetCursorScreenPos(
-      ImVec2(cursor.x + row.depth * indent + font_size, cursor.y));
-  ImGui::TextUnformatted(d.path.c_str() + row.label_offset);
-
-  ImGui::PopID();
-}
-
 void FileList::Update(float width) {
   bool tree = settings_.file_list_tree;
   // Separate windows, so that ImGui's per-window multi-selection state (e.g.
@@ -727,13 +534,14 @@ void FileList::Update(float width) {
 
     if (tree)
       SyncTree(files.first(file_count_));
-    int row_count = tree ? static_cast<int>(tree_rows_.size()) : file_count_;
+    auto tree_rows = tree_.rows();
+    int row_count = tree ? static_cast<int>(tree_rows.size()) : file_count_;
 
     // The row showing the selected file. In the tree view, this is the
     // collapsed directory the file is hidden in, if any.
     int selected_row = -1;
     if (selected_file_ >= 0 && selected_file_ < file_count_)
-      selected_row = tree ? file_row_[selected_file_] : selected_file_;
+      selected_row = tree ? tree_.RowOfItem(selected_file_) : selected_file_;
 
     ImGuiMultiSelectIO* ms_io = nullptr;
     if (is_multi) {
@@ -755,8 +563,6 @@ void FileList::Update(float width) {
         clipper.IncludeItemByIndex(src);
     }
 
-    float font_size = ImGui::GetFontSize();
-    float indent = font_size * 0.75f;
     while (clipper.Step()) {
       for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++) {
         if (!tree) {
@@ -764,17 +570,15 @@ void FileList::Update(float width) {
             break;
           RenderFileRow(files, row, row, 0.0f, files[row].path.c_str(),
                         is_multi, is_unstaged, is_staged);
-        } else if (int item = tree_rows_[row].item; item >= 0) {
-          // Files line up with the names of directories at the same depth.
-          const std::string& path = files[item].path;
-          size_t slash = path.rfind('/');
-          const char* name =
-              path.c_str() + (slash == std::string::npos ? 0 : slash + 1);
+        } else if (int item = tree_rows[row].item; item >= 0) {
           RenderFileRow(files, item, row,
-                        tree_rows_[row].depth * indent + font_size, name,
-                        is_multi, is_unstaged, is_staged);
+                        PathTree::ItemTextOffset(tree_rows[row].depth),
+                        PathTree::ItemName(files[item].path), is_multi,
+                        is_unstaged, is_staged);
         } else {
-          RenderDirRow(tree_rows_[row], row == selected_row);
+          // Not a multi-select item, so clicking it leaves the file selection
+          // alone.
+          tree_.RenderDirRow(tree_rows[row], row == selected_row);
         }
 
         // Keep the auto-selected file visible when scrolling through diff
@@ -792,8 +596,8 @@ void FileList::Update(float width) {
     }
 
     // Apply directories expanded or collapsed this frame.
-    if (tree && tree_dirty_)
-      FlattenTree();
+    if (tree)
+      tree_.FlattenIfDirty();
 
     bool cmd_busy = runner_.IsCommandBusy();
     if (!ImGui::GetTopMostPopupModal() && !cmd_busy && is_unstaged &&

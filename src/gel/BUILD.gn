@@ -151,6 +151,8 @@ executable("gel") {
     "ui/main_window.h",
     "ui/modules/markdown_renderer.cc",
     "ui/modules/markdown_renderer.h",
+    "ui/modules/path_tree.cc",
+    "ui/modules/path_tree.h",
     "ui/modules/search_bar.cc",
     "ui/modules/search_bar.h",
     "ui/modules/text_viewer.cc",
