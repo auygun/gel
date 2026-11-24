@@ -214,10 +214,10 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     };
     static constexpr ViewButton kViewButtons[] = {
         {LowerView::kDiff, "##diff_view", DrawDiffPanelIcon, "Diff view (F6)"},
-        {LowerView::kSize, "##size_view", DrawSizePanelIcon,
-         "Commit size view (F6)"},
         {LowerView::kTree, "##tree_view", DrawTreePanelIcon,
          "File tree view (F6)"},
+        {LowerView::kSize, "##size_view", DrawSizePanelIcon,
+         "Commit size view (F6)"},
     };
     LowerView active = delegate_.GetLowerView();
     for (const auto& btn : kViewButtons) {

@@ -77,9 +77,9 @@ gel --date=short             # Use short date format in log and diff
 The window is divided into two main panels:
 
 - **Upper panel** -- Commit history table with graph visualization
-- **Lower panel** -- Diff view (file list + diff viewer), size view (file
-  tree + chart) or file tree view (all files + file content), switched with
-  the view buttons in the toolbar or F6
+- **Lower panel** -- Diff view (file list + diff viewer), file tree view (all
+  files + file content) or size view (file tree + chart), switched with the
+  view buttons in the toolbar or F6
 
 Both panel dividers can be dragged to resize. Every lower panel view has the
 same layout: a side pane (the file list, the file tree) and a main pane (the
@@ -111,7 +111,7 @@ the controls. CSD can be toggled in Settings (requires restart).
 
 - **F1** -- Open this help window
 - **F5** -- Refresh commit history and diff
-- **F6** -- Switch the lower panel to the next view: diff, size, file tree
+- **F6** -- Switch the lower panel to the next view: diff, file tree, size
 - **F7** -- Toggle console
 - **Ctrl+,** -- Open settings
 - **Ctrl+L** -- Clear path filter
@@ -145,7 +145,7 @@ The toolbar spans the top of the window and contains the following controls
 - **Row counter** -- Shows selected row and total count (e.g. 42/1500)
 - **Refresh** -- Reloads the commit history and diff (F5)
 - **Clear filter** -- Clears all active path filters in a single press (Ctrl+L)
-- **View buttons** -- Show the diff, size or file tree view in the lower
+- **View buttons** -- Show the diff, file tree or size view in the lower
   panel; the active one is on (F6 cycles through them)
 - **Settings** -- Opens the settings modal (Ctrl+,)
 - **Help** -- Opens this help window (F1)

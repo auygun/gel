@@ -19,7 +19,7 @@ enum class ChartStyle { kDonut, kBar, kTreemap, kCount };
 enum class SizeTreeSort { kSize, kName, kCount };
 
 // The lower panel's views, in the order F6 cycles through them.
-enum class LowerView { kDiff, kSize, kTree, kCount };
+enum class LowerView { kDiff, kTree, kSize, kCount };
 
 enum class DisplayBackend { kAuto, kWayland, kX11, kCount };
 
