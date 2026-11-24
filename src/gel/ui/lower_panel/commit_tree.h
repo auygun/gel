@@ -128,7 +128,8 @@ class CommitTree : public LowerPanel::View, public TextViewer::Delegate {
   // nothing while it can't be told yet whether the file is binary.
   std::span<const std::string> ShownLines() const;
   void RenderTree();
-  // Renders the selected file's path above its content, |width| wide.
+  // Renders the selected file's path above its content, |width| wide, or an
+  // empty bar without a file selected.
   void RenderHeader(float width);
   void RenderOverlay();
   // Width of the line number column, for the selected file's line count.

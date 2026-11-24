@@ -405,7 +405,8 @@ void CommitTree::RenderSidePane(float width) {
 
 void CommitTree::RenderHeader(float width) {
   // The file's path, in a bar like the diff's file headers, as wide as the
-  // pane. A negative |width| fills the rest of the line.
+  // pane. A negative |width| fills the rest of the line. Shown without a file
+  // selected too, empty, so the content doesn't move when one is.
   ImVec2 pos = ImGui::GetCursorScreenPos();
   float height = ImGui::GetFrameHeight();
   if (width <= 0)
@@ -419,7 +420,8 @@ void CommitTree::RenderHeader(float width) {
       ImVec2(pos.x + ImGui::GetStyle().FramePadding.x,
              pos.y + (height - ImGui::GetTextLineHeight()) / 2));
   ImGui::PushStyleColor(ImGuiCol_Text, ResolveColor(ColorId::kDefaultBold));
-  ImGui::TextUnformatted(selected_path_.c_str());
+  if (selected_entry_ >= 0)
+    ImGui::TextUnformatted(selected_path_.c_str());
   ImGui::PopStyleColor();
   ImGui::PopClipRect();
   ImGui::SetCursorScreenPos(
@@ -428,8 +430,7 @@ void CommitTree::RenderHeader(float width) {
 
 void CommitTree::RenderMainPane(float width) {
   ImGui::BeginGroup();
-  if (selected_entry_ >= 0)
-    RenderHeader(width);
+  RenderHeader(width);
   if (showing_image_) {
     image_view_.Render(width);
     overlay_anchor_ = image_view_.content_top_right();
