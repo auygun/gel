@@ -195,33 +195,28 @@ bool Gel::CreateRenderer(RendererType type) {
 #endif
 }
 
-void Gel::CreateTexture(Image& image) {
-  image.texture = renderer_->CreateTexture();
-  // The renderer can read the pixels until the frame is presented.
-  renderer_->UpdateTexture(image.texture, image.width, image.height,
-                           ImageFormat::kRGBA32, image.pixels.size(),
-                           image.pixels.data());
-}
-
-void Gel::DestroyRemovedImages() {
-  for (Image& image : removed_images_) {
-    if (image.texture != Renderer::kInvalidId)
-      renderer_->DestroyTexture(image.texture);
-  }
-  removed_images_.clear();
+void Gel::EndFrame() {
+  for (Renderer::ResourceId texture : removed_textures_)
+    renderer_->DestroyTexture(texture);
+  removed_textures_.clear();
+  uploaded_pixels_ = std::exchange(uploading_pixels_, {});
 }
 
 GraphicsDelegate::ImageId Gel::CreateImage(int width,
                                            int height,
                                            std::vector<uint8_t> rgba) {
   DCHECK(rgba.size() == static_cast<size_t>(width) * height * 4);
+  // Once the main loop has ended there is no renderer to draw with.
+  if (!renderer_)
+    return kNoImage;
   ImageId id = next_image_id_++;
-  Image& image = images_[id];
-  image.width = width;
-  image.height = height;
-  image.pixels = std::move(rgba);
-  if (renderer_)
-    CreateTexture(image);
+  Renderer::ResourceId texture = renderer_->CreateTexture();
+  renderer_->UpdateTexture(texture, width, height, ImageFormat::kRGBA32,
+                           rgba.size(), rgba.data());
+  images_[id] = texture;
+  // Uploaded on the renderer's thread, which can still be reading them after
+  // this frame is done.
+  uploading_pixels_.push_back(std::move(rgba));
   return id;
 }
 
@@ -232,16 +227,17 @@ void Gel::DestroyImage(ImageId id) {
   // Once the main loop has ended there is no renderer to destroy the texture
   // with, nor a frame to present: the renderer frees what is left.
   if (renderer_)
-    removed_images_.push_back(std::move(it->second));
+    removed_textures_.push_back(it->second);
   images_.erase(it);
 }
 
-void Gel::DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) {
+bool Gel::DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) {
   auto it = images_.find(id);
-  if (it == images_.end() || it->second.texture == Renderer::kInvalidId)
-    return;
-  ImGui::GetWindowDrawList()->AddImage(
-      (ImTextureID)(intptr_t)it->second.texture, min, max);
+  if (it == images_.end())
+    return false;
+  ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)it->second, min,
+                                       max);
+  return true;
 }
 
 RendererType Gel::GetRendererType() const {
@@ -347,11 +343,12 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
         renderer_->SetClearColor({bg.x, bg.y, bg.z, bg.w});
       }
       imgui_backend_->CreateRenderResources(renderer_.get());
-      // The textures went with the old renderer. Make them again with the new
-      // one, from the pixels kept for that.
-      removed_images_.clear();
-      for (auto& [id, image] : images_)
-        CreateTexture(image);
+      // The textures went with the old renderer, along with its uploads. The
+      // UI finds its images gone when it draws them and loads them again.
+      images_.clear();
+      removed_textures_.clear();
+      uploading_pixels_.clear();
+      uploaded_pixels_.clear();
       pending_renderer_.reset();
       continue;
     }
@@ -427,7 +424,7 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
     renderer_->PrepareForDrawing();
     imgui_backend_->Draw();
     renderer_->Present();
-    DestroyRemovedImages();
+    EndFrame();
   }
 
   // Save window geometry and panel layout before exiting.
@@ -446,8 +443,9 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
 
   // The last frame is presented: destroy what it removed. With |renderer_|
   // handed to the caller, images removed from here on, as MainWindow goes,
-  // are only dropped, and the renderer frees the textures left.
-  DestroyRemovedImages();
+  // are only dropped, and the renderer frees the textures left. The pixels
+  // of the last uploads are kept until this object goes.
+  EndFrame();
   return {std::move(renderer_), std::move(imgui_backend_)};
 }
 

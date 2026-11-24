@@ -44,21 +44,18 @@ class Gel final : public eng::PlatformObserver, public GraphicsDelegate {
   std::unique_ptr<eng::ImguiBackend> imgui_backend_;
   base::DeltaTimer timer_;
 
-  // An image of the UI: its pixels, kept to make its texture again for a new
-  // renderer, and its texture.
-  struct Image {
-    int width = 0;
-    int height = 0;
-    std::vector<uint8_t> pixels;
-    eng::Renderer::ResourceId texture = eng::Renderer::kInvalidId;
-  };
+  // The textures of the UI's images. They go with the renderer: a new one
+  // starts with none, and the UI loads its images again.
   // Declared before |main_window_|, which removes its images as it goes.
-  std::unordered_map<ImageId, Image> images_;
+  std::unordered_map<ImageId, eng::Renderer::ResourceId> images_;
   ImageId next_image_id_ = kNoImage + 1;
-  // Removed this frame, and possibly drawn in it: the textures are destroyed,
-  // and the pixels, which the renderer can still be uploading, freed once the
-  // frame is presented.
-  std::vector<Image> removed_images_;
+  // Removed this frame, and possibly drawn in it: destroyed once the frame is
+  // presented.
+  std::vector<eng::Renderer::ResourceId> removed_textures_;
+  // Pixels uploaded this frame, and the frame before. The renderer uploads
+  // them on a thread of its own, so they are freed a frame later.
+  std::vector<std::vector<uint8_t>> uploading_pixels_;
+  std::vector<std::vector<uint8_t>> uploaded_pixels_;
 
   PersistentSettings settings_;
   MainWindow main_window_;
@@ -75,16 +72,14 @@ class Gel final : public eng::PlatformObserver, public GraphicsDelegate {
   bool IsDarkMode() const;
   bool CreateRenderer(eng::RendererType type);
   void OnBusyChanged(bool busy);
-  // Makes |image|'s texture with the current renderer.
-  void CreateTexture(Image& image);
   // Destroys the textures of the images removed before the frame just
-  // presented.
-  void DestroyRemovedImages();
+  // presented, and frees the pixels uploaded the frame before.
+  void EndFrame();
 
   // GraphicsDelegate implementation
   ImageId CreateImage(int width, int height, std::vector<uint8_t> rgba) final;
   void DestroyImage(ImageId id) final;
-  void DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) final;
+  bool DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) final;
   eng::RendererType GetRendererType() const final;
   std::vector<std::string> GetAvailableGpus() const final;
   int GetSelectedGpuIndex() const final;

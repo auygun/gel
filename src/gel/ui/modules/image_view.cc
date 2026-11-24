@@ -141,14 +141,15 @@ void ImageView::Render(float width) {
       ImVec2 min(origin.x + offset.x, origin.y + offset.y);
       ImVec2 max(min.x + w, min.y + h);
 
-      if (has_alpha_)
-        DrawCheckerboard(min, max);
-      graphics_delegate_.DrawImage(image_, min, max);
-
       // Sizes the scrollable area: the image, or the view if it's larger.
       ImGui::Dummy(full_size ? ImVec2(offset.x + w, offset.y + h) : avail);
 
-      if (center_scroll_) {
+      if (has_alpha_)
+        DrawCheckerboard(min, max);
+      if (!graphics_delegate_.DrawImage(image_, min, max)) {
+        // Gone with the renderer: load it again.
+        Load();
+      } else if (center_scroll_) {
         // On the image's center, once it's shown full size. Takes effect
         // next frame.
         if (full_size) {

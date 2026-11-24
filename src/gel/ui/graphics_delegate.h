@@ -23,7 +23,8 @@ class GraphicsDelegate {
   virtual ~GraphicsDelegate() = default;
 
   // Adds an image, |width| x |height| pixels of RGBA, 4 bytes each, and
-  // returns the id to draw it by.
+  // returns the id to draw it by. The pixels are uploaded and then freed: the
+  // image goes when the renderer does, see DrawImage().
   virtual ImageId CreateImage(int width,
                               int height,
                               std::vector<uint8_t> rgba) = 0;
@@ -32,8 +33,10 @@ class GraphicsDelegate {
   // Safe to call from a destructor, also once the main loop has ended.
   virtual void DestroyImage(ImageId id) = 0;
 
-  // Draws image |id| into the rect [min, max] of the current window.
-  virtual void DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) = 0;
+  // Draws image |id| into the rect [min, max] of the current window. Returns
+  // false if the image is gone, as all are once the renderer changes: its
+  // owner then creates it again.
+  virtual bool DrawImage(ImageId id, const ImVec2& min, const ImVec2& max) = 0;
 
   // The renderer in use, and the GPUs it can use and the one it uses, for the
   // settings.

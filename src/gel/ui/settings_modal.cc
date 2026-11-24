@@ -585,8 +585,12 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
       float icon_size = ImGui::GetTextLineHeight() * 6;
       ImVec2 pos = ImGui::GetCursorScreenPos();
       ImGui::Dummy(ImVec2(icon_size, icon_size));
-      graphics_delegate_.DrawImage(
-          icon_, pos, ImVec2(pos.x + icon_size, pos.y + icon_size));
+      // Gone with the renderer: decode it again next frame.
+      if (!graphics_delegate_.DrawImage(
+              icon_, pos, ImVec2(pos.x + icon_size, pos.y + icon_size))) {
+        icon_ = GraphicsDelegate::kNoImage;
+        icon_decoded_ = false;
+      }
       ImGui::SameLine();
       float text_height = ImGui::GetTextLineHeight();
       float spacing = ImGui::GetStyle().ItemSpacing.y;
