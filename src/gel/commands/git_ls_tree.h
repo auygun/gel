@@ -6,20 +6,31 @@
 #define GEL_COMMANDS_GIT_LS_TREE_H
 
 #include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <span>
 #include <string>
+#include <string_view>
 
 #include "base/double_buffer.h"
 #include "gel/commands/git.h"
 
 // A file in a commit's tree, in the index, or in the working tree.
 struct TreeEntry {
+  // Fits a SHA-256 hash.
+  static constexpr size_t kMaxBlobBytes = 32;
+
   std::string path;  // Relative to the repository's top level.
-  // Blob hash of the file's content. Empty for files read from the working
-  // tree, and for submodules, which have no content to show. A symlink's
-  // content is its target.
-  std::string blob;
+  // Blob hash of the file's content, in hex. Empty for files read from the
+  // working tree, and for submodules, which have no content to show. A
+  // symlink's content is its target.
+  std::string blob() const;
+  // Sets the blob hash from |hex|. Left empty if it isn't a hash.
+  void SetBlob(std::string_view hex);
+
+  // The blob hash in binary, inline: a tree can have millions of entries.
+  uint8_t blob_bytes[kMaxBlobBytes];
+  uint8_t blob_size = 0;
   bool submodule = false;
   bool symlink = false;
 };

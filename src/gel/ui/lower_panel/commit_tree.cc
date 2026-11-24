@@ -158,7 +158,7 @@ void CommitTree::SelectEntry(int index) {
     if (source_.unstaged)
       image_view_.LoadFile(WorkTreePath(git_repo_.toplevel(), entry.path));
     else
-      image_view_.LoadBlob(entry.blob, git_repo_.toplevel());
+      image_view_.LoadBlob(entry.blob(), git_repo_.toplevel());
   } else {
     LoadText(entry);
   }
@@ -170,7 +170,7 @@ void CommitTree::LoadText(const TreeEntry& entry) {
     file_reader_.Read(WorkTreePath(git_repo_.toplevel(), entry.path));
   } else {
     from_work_tree_ = false;
-    git_show_file_.Run(entry.blob, git_repo_.toplevel());
+    git_show_file_.Run(entry.blob(), git_repo_.toplevel());
   }
 }
 
@@ -553,7 +553,7 @@ void CommitTree::OnContextMenu(int line_index) {
   ImGui::Separator();
   if (ImGui::MenuItem("Show origin of this line", nullptr, false, is_content)) {
     delegate_.OnShowLineOrigin(selected_path_,
-                               git_ls_tree_.entries()[selected_entry_].blob,
+                               git_ls_tree_.entries()[selected_entry_].blob(),
                                line_index + 1);
   }
   if (ImGui::MenuItem("Run git gui blame on this line", nullptr, false,

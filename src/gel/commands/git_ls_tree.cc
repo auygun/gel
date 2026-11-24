@@ -10,7 +10,42 @@ namespace {
 constexpr std::string_view kGitlinkMode = "160000";
 constexpr std::string_view kSymlinkMode = "120000";
 
+// The value of hex digit |c|, or -1 if it isn't one.
+int HexValue(char c) {
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  return -1;
+}
+
 }  // namespace
+
+std::string TreeEntry::blob() const {
+  static constexpr char kDigits[] = "0123456789abcdef";
+  std::string hex(size_t{blob_size} * 2, '\0');
+  for (size_t i = 0; i < blob_size; i++) {
+    hex[i * 2] = kDigits[blob_bytes[i] >> 4U];
+    hex[(i * 2) + 1] = kDigits[blob_bytes[i] & 0xFU];
+  }
+  return hex;
+}
+
+void TreeEntry::SetBlob(std::string_view hex) {
+  blob_size = 0;
+  if (hex.size() % 2 != 0 || hex.size() > kMaxBlobBytes * 2)
+    return;
+  for (size_t i = 0; i < hex.size() / 2; i++) {
+    int high = HexValue(hex[i * 2]);
+    int low = HexValue(hex[(i * 2) + 1]);
+    if (high < 0 || low < 0)
+      return;
+    blob_bytes[i] = static_cast<uint8_t>((high << 4) | low);
+  }
+  blob_size = static_cast<uint8_t>(hex.size() / 2);
+}
 
 std::string UnquoteGitPath(std::string_view path) {
   if (path.size() < 2 || path.front() != '"' || path.back() != '"')
@@ -164,6 +199,6 @@ void GitLsTree::OnOutput(std::string line) {
   entry.submodule = mode == kGitlinkMode;
   entry.symlink = mode == kSymlinkMode;
   if (!entry.submodule && source_ != Source::kWorkTree)
-    entry.blob = hash;
+    entry.SetBlob(hash);
   buffer_.Push(std::move(entry));
 }
