@@ -492,6 +492,9 @@ void DirectoryBrowser::RenderTree() {
                    ImGui::IsItemDeactivated()) {
           CancelRename();
         }
+        // Paste only: the right-click menu would take focus from the field,
+        // which cancels the rename.
+        InputTextPrimaryPaste(rename_input_, sizeof(rename_input_));
         if (ImGui::IsKeyPressed(ImGuiKey_Escape))
           CancelRename();
       } else {

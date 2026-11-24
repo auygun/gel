@@ -267,8 +267,15 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
           scroll_to_selected_font_ = true;
         }
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::InputTextWithHint("##font_filter", "Search fonts",
-                                     font_filter_, sizeof(font_filter_)))
+        bool font_filter_changed =
+            ImGui::InputTextWithHint("##font_filter", "Search fonts",
+                                     font_filter_, sizeof(font_filter_));
+        // Paste only: this sits in the combo popup, where a right-click menu
+        // would be a popup on top of a popup. The paste changes the filter
+        // without InputText reporting it, so compare against the old text.
+        std::string old_font_filter = font_filter_;
+        InputTextPrimaryPaste(font_filter_, sizeof(font_filter_));
+        if (font_filter_changed || old_font_filter != font_filter_)
           RebuildFontFilter();
 
         // Cap the list rather than letting it grow to hundreds of rows, but
@@ -445,6 +452,7 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
     }
     ImGui::InputTextWithHint("Diff tool", "Default", settings_diff_tool_,
                              sizeof(settings_diff_tool_));
+    InputTextContextMenu(settings_diff_tool_, sizeof(settings_diff_tool_));
     {
       const char* side_pane_names[] = {"Left", "Right"};
       int side_pane_index = settings_side_pane_on_right_ ? 1 : 0;
@@ -490,6 +498,7 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
       ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
       ImGui::InputTextWithHint("##ext", "ext", new_ext_input_,
                                sizeof(new_ext_input_));
+      InputTextContextMenu(new_ext_input_, sizeof(new_ext_input_));
       ImGui::SameLine();
       ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6);
       Language preview_lang = static_cast<Language>(new_ext_lang_index_);

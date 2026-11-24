@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "gel/ui/style.h"
+#include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
 
@@ -45,6 +46,10 @@ void GitConsoleWindow::RenderLine(int line_index, const std::string& line) {
   ImGui::PushStyleColor(ImGuiCol_Text, color);
   ImGui::TextUnformatted(line.c_str(), line.c_str() + line.size());
   ImGui::PopStyleColor();
+}
+
+void GitConsoleWindow::OnSearchInput(char* buf, size_t buf_size) {
+  InputTextContextMenu(buf, buf_size);
 }
 
 void GitConsoleWindow::AppendLine(std::string text, LineType type) {

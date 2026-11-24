@@ -28,6 +28,7 @@ class GitConsoleWindow : public TextViewer::Delegate {
 
   // TextViewer::Delegate implementation.
   void RenderLine(int line_index, const std::string& line) override;
+  void OnSearchInput(char* buf, size_t buf_size) override;
 
   void AppendLine(std::string text, LineType type);
   void RebuildLines();

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "gel/ui/utils.h"
 #include "third_party/imgui/imgui/imgui.h"
 
 PopupModal::PopupModal(std::function<void()> exit_callback)
@@ -31,6 +32,10 @@ void PopupModal::ShowConfirmation(std::string_view title,
   req.message = std::move(message);
   req.on_confirm = std::move(on_confirm);
   queue_.push_back(std::move(req));
+}
+
+void PopupModal::OnSearchInput(char* buf, size_t buf_size) {
+  InputTextContextMenu(buf, buf_size);
 }
 
 void PopupModal::PrepareLines(const std::string& message) {

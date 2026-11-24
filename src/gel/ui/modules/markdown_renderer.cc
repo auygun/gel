@@ -4,6 +4,7 @@
 
 #include "gel/ui/modules/markdown_renderer.h"
 #include "gel/ui/style.h"
+#include "gel/ui/utils.h"
 
 #include <algorithm>
 #include <cstring>
@@ -770,6 +771,9 @@ void MarkdownRenderer::UpdateSearchBar() {
   opts.match_counter = true;
   opts.close_button = true;
   opts.matches = {current_match_, static_cast<int>(matches_.size()), true};
+  opts.on_input = [](char* buf, size_t buf_size) {
+    InputTextContextMenu(buf, buf_size);
+  };
   SearchBar::Result search = search_bar_.Update(opts, &search_options_);
 
   // Re-run the search when the matches went stale. Compared against what they

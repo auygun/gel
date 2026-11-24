@@ -35,6 +35,9 @@ class PopupModal : public TextViewer::Delegate {
     std::function<void()> on_confirm;
   };
 
+  // TextViewer::Delegate implementation.
+  void OnSearchInput(char* buf, size_t buf_size) override;
+
   std::function<void()> exit_callback_;
   TextViewer text_viewer_;
   std::vector<Request> queue_;

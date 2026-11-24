@@ -188,6 +188,35 @@ void DrawRoundedFill(ImDrawList* dl,
     dl->AddConvexPolyFilled(clipped.Data, clipped.Size, color);
 }
 
+void InputTextPrimaryPaste(char* buf, size_t buf_size) {
+  if (!ImGui::IsItemHovered() ||
+      !ImGui::IsMouseClicked(ImGuiMouseButton_Middle))
+    return;
+  auto* platform =
+      static_cast<eng::Platform*>(ImGui::GetIO().BackendPlatformUserData);
+  if (!platform)
+    return;
+  const char* ps_text = platform->GetPrimarySelection();
+  if (!ps_text || !ps_text[0])
+    return;
+  size_t ps_len = strlen(ps_text);
+  size_t buf_len = strlen(buf);
+  auto* state = ImGui::GetInputTextState(ImGui::GetItemID());
+  if (state && buf_len + ps_len < buf_size) {
+    int cursor = state->GetCursorPos();
+    if (cursor > static_cast<int>(buf_len))
+      cursor = static_cast<int>(buf_len);
+    memmove(buf + cursor + ps_len, buf + cursor, buf_len - cursor + 1);
+    memcpy(buf + cursor, ps_text, ps_len);
+    state->ReloadUserBufAndMoveToEnd();
+  } else if (!state && ps_len < buf_size) {
+    // Not active: overwrite buffer.
+    size_t copy_len = std::min(ps_len, buf_size - 1);
+    memcpy(buf, ps_text, copy_len);
+    buf[copy_len] = '\0';
+  }
+}
+
 void InputTextContextMenu(char* buf, size_t buf_size) {
   ImGuiID id = ImGui::GetItemID();
 
@@ -243,33 +272,7 @@ void InputTextContextMenu(char* buf, size_t buf_size) {
     }
   }
 
-  // Middle-click paste from primary selection (Linux convention).
-  if (ImGui::IsItemHovered() &&
-      ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
-    auto* platform =
-        static_cast<eng::Platform*>(ImGui::GetIO().BackendPlatformUserData);
-    if (platform) {
-      const char* ps_text = platform->GetPrimarySelection();
-      if (ps_text && ps_text[0]) {
-        size_t ps_len = strlen(ps_text);
-        size_t buf_len = strlen(buf);
-        auto* state = ImGui::GetInputTextState(id);
-        if (state && buf_len + ps_len < buf_size) {
-          int cursor = state->GetCursorPos();
-          if (cursor > static_cast<int>(buf_len))
-            cursor = static_cast<int>(buf_len);
-          memmove(buf + cursor + ps_len, buf + cursor, buf_len - cursor + 1);
-          memcpy(buf + cursor, ps_text, ps_len);
-          state->ReloadUserBufAndMoveToEnd();
-        } else if (!state && ps_len < buf_size) {
-          // Not active: overwrite buffer.
-          size_t copy_len = std::min(ps_len, buf_size - 1);
-          memcpy(buf, ps_text, copy_len);
-          buf[copy_len] = '\0';
-        }
-      }
-    }
-  }
+  InputTextPrimaryPaste(buf, buf_size);
 
   if (ImGui::BeginPopupContextItem()) {
     if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {

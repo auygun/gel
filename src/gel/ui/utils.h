@@ -14,8 +14,15 @@ struct ImVec2;
 // Renders a ColoredLine with per-segment colors resolved via ResolveColor.
 void RenderColoredLine(const ColoredLine& line);
 
+// Middle-click paste of the primary selection (Linux convention) into an
+// InputText. Call immediately after ImGui::InputText(). Use it on its own where
+// the right-click menu of InputTextContextMenu() would get in the way, e.g. in
+// a popup menu.
+void InputTextPrimaryPaste(char* buf, size_t buf_size);
+
 // Right-click context menu for InputText widgets (Select all, Copy, Cut,
-// Paste). Call immediately after ImGui::InputText().
+// Paste), plus middle-click paste (see InputTextPrimaryPaste()). Call
+// immediately after ImGui::InputText().
 void InputTextContextMenu(char* buf, size_t buf_size);
 
 // Shows a delayed tooltip for the last ImGui item. Tracks hover state via
