@@ -5,6 +5,7 @@
 #include "gel/ui/modules/text_viewer.h"
 #include "gel/ui/icons.h"
 #include "gel/ui/style.h"
+#include "gel/ui/utils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -647,21 +648,10 @@ void TextViewer::Update(float width,
       std::swap(s_char, e_char);
     }
 
-    // Horizontal extent of full-row backgrounds and line text. Inset them from
-    // the window edges like Selectable rows (window padding minus half the item
-    // spacing) so they stay clear of the rounded corners of the frame. A
-    // vertical scrollbar already covers the right corners, so like the commit
-    // list, run them up to it.
+    // Horizontal extent of full-row backgrounds and line text, clear of the
+    // rounded corners of the frame.
     float row_min_x, row_max_x;
-    {
-      const ImGuiStyle& style = ImGui::GetStyle();
-      ImGuiWindow* win = ImGui::GetCurrentWindowRead();
-      float inset = std::max(
-          0.0f, win->WindowPadding.x - IM_TRUNC(style.ItemSpacing.x * 0.5f));
-      row_min_x = win->InnerRect.Min.x + inset;
-      row_max_x = std::max(
-          row_min_x, win->InnerRect.Max.x - (win->ScrollbarY ? 0 : inset));
-    }
+    GetRowExtent(row_min_x, row_max_x);
 
     // Use a list clipper to only submit the visible lines.
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,

@@ -347,3 +347,12 @@ void InputTextContextMenu(char* buf, size_t buf_size) {
     ImGui::EndPopup();
   }
 }
+
+void GetRowExtent(float& min_x, float& max_x) {
+  const ImGuiStyle& style = ImGui::GetStyle();
+  ImGuiWindow* win = ImGui::GetCurrentWindowRead();
+  float inset = std::max(
+      0.0f, win->WindowPadding.x - IM_TRUNC(style.ItemSpacing.x * 0.5f));
+  min_x = win->InnerRect.Min.x + inset;
+  max_x = std::max(min_x, win->InnerRect.Max.x - (win->ScrollbarY ? 0 : inset));
+}

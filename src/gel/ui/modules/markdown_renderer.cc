@@ -494,6 +494,12 @@ bool MarkdownRenderer::RenderBlocks() {
 
   // --- Render blocks ---
   float indent_base = ImGui::GetCursorPosX();
+  // Horizontal extent of full-width backgrounds and text, clear of the rounded
+  // corners of the frame.
+  float row_min_x, row_max_x;
+  GetRowExtent(row_min_x, row_max_x);
+  ImGui::PushClipRect(ImVec2(row_min_x, -FLT_MAX), ImVec2(row_max_x, FLT_MAX),
+                      true);
   bool scrolled = false;
   heading_positions_.clear();
   std::string clicked_link;
@@ -581,7 +587,7 @@ bool MarkdownRenderer::RenderBlocks() {
         float line_h = ImGui::GetTextLineHeight();
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padding);
         ImVec2 code_block_min = ImGui::GetCursorScreenPos();
-        code_block_min.x = ImGui::GetWindowPos().x;
+        code_block_min.x = row_min_x;
         code_block_min.y -= padding;
         float max_content_right = 0;
         dl->ChannelsSplit(2);
@@ -653,16 +659,20 @@ bool MarkdownRenderer::RenderBlocks() {
           line_offset += line_len + 1;  // +1 for newline
           cp = nl + 1;
         }
-        // Draw background rectangle behind the code block.
+        // Draw background rectangle behind the code block. It spans the row
+        // extent, and when the content is wider, the content plus the same
+        // margin as on the left, so it ends at the row extent when scrolled
+        // all the way right.
         dl->ChannelsSetCurrent(0);  // Background channel.
         {
           ImGuiWindow* win = ImGui::GetCurrentWindow();
+          float margin =
+              win->WindowPadding.x - (row_min_x - win->InnerRect.Min.x);
           float content_right = win->Pos.x - ImGui::GetScrollX() +
-                                win->ContentSize.x + win->WindowPadding.x;
-          float visible_right =
-              ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-          float right = std::max(
-              {visible_right, content_right, max_content_right + padding});
+                                win->WindowPadding.x + win->ContentSize.x +
+                                margin;
+          float right =
+              std::max({row_max_x, content_right, max_content_right + padding});
           ImVec2 code_block_max(right, ImGui::GetCursorScreenPos().y -
                                            ImGui::GetStyle().ItemSpacing.y +
                                            padding);
@@ -687,6 +697,8 @@ bool MarkdownRenderer::RenderBlocks() {
       }
     }
   }
+
+  ImGui::PopClipRect();
 
   if (scrolled)
     scroll_to_match_ = -1;
@@ -813,7 +825,9 @@ bool MarkdownRenderer::Render(const char* id, ImVec2 size) {
   if (search_active_)
     UpdateSearchBar();
 
-  ImGui::BeginChild(id, size, ImGuiChildFlags_None,
+  // Keep the window padding despite having no border, so the text stays clear
+  // of the rounded corners of the frame.
+  ImGui::BeginChild(id, size, ImGuiChildFlags_AlwaysUseWindowPadding,
                     ImGuiWindowFlags_HorizontalScrollbar);
   UpdateScroll();
   bool link_activated = RenderBlocks();

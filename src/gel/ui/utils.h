@@ -59,4 +59,12 @@ void DrawRoundedFill(ImDrawList* dl,
                      float fill_w,
                      unsigned int color);
 
+// Gets the horizontal extent of full-row backgrounds in the current window.
+// They are inset from the window edges like Selectable rows (window padding
+// minus half the item spacing), so they stay clear of the rounded corners of a
+// child frame. A vertical scrollbar already covers the right corners, so when
+// there is one they run up to it. Clip the row contents to the same extent, so
+// text scrolled horizontally doesn't show in the margins beside them.
+void GetRowExtent(float& min_x, float& max_x);
+
 #endif  // GEL_UI_UTILS_H
