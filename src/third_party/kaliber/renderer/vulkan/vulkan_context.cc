@@ -68,6 +68,10 @@ void VulkanContext::Shutdown() {
   swapchain_image_count_ = 0;
   command_buffers_.clear();
   window_ = {};
+  swapchain_suboptimal_ = false;
+  present_wait_supported_ = false;
+  last_present_id_ = 0;
+  swapchain_presented_ = false;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::DebugMessengerCallback(
@@ -286,6 +290,7 @@ bool VulkanContext::InitializeExtensions() {
   enabled_extension_count_ = 0;
   enabled_layer_count_ = 0;
   memset(extension_names_, 0, sizeof(extension_names_));
+  get_physical_device_properties2_enabled_ = false;
 
   // Get the extensions required by the platform (e.g. GLFW).
   const char** required_extensions = nullptr;
@@ -352,6 +357,15 @@ bool VulkanContext::InitializeExtensions() {
           extension_names_[enabled_extension_count_++] =
               VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
         }
+      }
+      // Provides vkGetPhysicalDeviceFeatures2KHR, needed to query the
+      // VK_KHR_present_wait features where vkGetPhysicalDeviceFeatures2 (core
+      // in 1.1) can't be used: on a Vulkan 1.0 instance or device.
+      if (!strcmp(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+                  instance_extensions[i].extensionName)) {
+        extension_names_[enabled_extension_count_++] =
+            VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+        get_physical_device_properties2_enabled_ = true;
       }
       if (enabled_extension_count_ >= kMaxExtensions) {
         DLOG(0) << "Enabled extension count reaches kMaxExtensions";
@@ -515,6 +529,52 @@ bool VulkanContext::CreatePhysicalDevice() {
       }
     }
 
+    // VK_KHR_present_wait (with VK_KHR_present_id) lets the app wait until a
+    // presented image is on screen; used to pace swapchain recreation.
+    bool has_present_id = false, has_present_wait = false;
+    for (uint32_t i = 0; i < device_extension_count; i++) {
+      if (!strcmp(VK_KHR_PRESENT_ID_EXTENSION_NAME,
+                  device_extensions[i].extensionName))
+        has_present_id = true;
+      if (!strcmp(VK_KHR_PRESENT_WAIT_EXTENSION_NAME,
+                  device_extensions[i].extensionName))
+        has_present_wait = true;
+    }
+    // Querying their features needs vkGetPhysicalDeviceFeatures2: core when
+    // both the instance and the device are Vulkan 1.1 or later, otherwise
+    // vkGetPhysicalDeviceFeatures2KHR from
+    // VK_KHR_get_physical_device_properties2 (gpu_props_ is not filled in yet
+    // at this point).
+    VkPhysicalDeviceProperties device_props;
+    vkGetPhysicalDeviceProperties(gpu_, &device_props);
+    PFN_vkGetPhysicalDeviceFeatures2 get_features2 = nullptr;
+    if (application_api_version >= VK_API_VERSION_1_1 &&
+        device_props.apiVersion >= VK_API_VERSION_1_1)
+      get_features2 = vkGetPhysicalDeviceFeatures2;
+    else if (get_physical_device_properties2_enabled_)
+      get_features2 = vkGetPhysicalDeviceFeatures2KHR;
+    if (has_present_id && has_present_wait && get_features2 &&
+        enabled_extension_count_ + 2 <= kMaxExtensions) {
+      VkPhysicalDevicePresentWaitFeaturesKHR wait_features{};
+      wait_features.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR;
+      VkPhysicalDevicePresentIdFeaturesKHR id_features{};
+      id_features.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR;
+      id_features.pNext = &wait_features;
+      VkPhysicalDeviceFeatures2 features2{};
+      features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+      features2.pNext = &id_features;
+      get_features2(gpu_, &features2);
+      if (id_features.presentId && wait_features.presentWait) {
+        extension_names_[enabled_extension_count_++] =
+            VK_KHR_PRESENT_ID_EXTENSION_NAME;
+        extension_names_[enabled_extension_count_++] =
+            VK_KHR_PRESENT_WAIT_EXTENSION_NAME;
+        present_wait_supported_ = true;
+      }
+    }
+
     // Enable VK_KHR_maintenance1 extension for old vulkan drivers.
     for (uint32_t i = 0; i < device_extension_count; i++) {
       if (!strcmp(VK_KHR_MAINTENANCE1_EXTENSION_NAME,
@@ -627,9 +687,19 @@ bool VulkanContext::CreateDevice() {
   requested_device_features.sparseResidencyAliased = 0;
   requested_device_features.inheritedQueries = 0;
 
+  VkPhysicalDevicePresentWaitFeaturesKHR present_wait_features{};
+  present_wait_features.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR;
+  present_wait_features.presentWait = VK_TRUE;
+  VkPhysicalDevicePresentIdFeaturesKHR present_id_features{};
+  present_id_features.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR;
+  present_id_features.pNext = &present_wait_features;
+  present_id_features.presentId = VK_TRUE;
+
   VkDeviceCreateInfo sdevice{};
   sdevice.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  sdevice.pNext = nullptr;
+  sdevice.pNext = present_wait_supported_ ? &present_id_features : nullptr;
   sdevice.flags = 0;
   sdevice.queueCreateInfoCount = static_cast<uint32_t>(queues.size());
   sdevice.pQueueCreateInfos = queues.data();
@@ -850,7 +920,29 @@ bool VulkanContext::CreateSemaphores() {
 void VulkanContext::ResizeSurface(int width, int height) {
   window_.width = width;
   window_.height = height;
-  UpdateSwapChain(&window_);
+  RecreateSwapChain();
+}
+
+void VulkanContext::WaitForLastPresent() {
+  if (!present_wait_supported_ || !swapchain_presented_ ||
+      window_.swapchain == VK_NULL_HANDLE)
+    return;
+  // Bounded, so a compositor that stops showing the window (e.g. minimized or
+  // on another workspace) can't stall the app.
+  constexpr uint64_t kPresentWaitTimeoutNs = 100'000'000;  // 100 ms
+  VkResult err = vkWaitForPresentKHR(device_, window_.swapchain,
+                                     last_present_id_, kPresentWaitTimeoutNs);
+  if (err != VK_SUCCESS && err != VK_TIMEOUT &&
+      err != VK_ERROR_OUT_OF_DATE_KHR && err != VK_SUBOPTIMAL_KHR)
+    DLOG(0) << "vkWaitForPresentKHR failed. Error: " << string_VkResult(err);
+}
+
+bool VulkanContext::RecreateSwapChain() {
+  swapchain_suboptimal_ = false;
+  WaitForLastPresent();
+  bool result = UpdateSwapChain(&window_);
+  swapchain_presented_ = false;
+  return result;
 }
 
 void VulkanContext::DestroySurface() {
@@ -1087,14 +1179,14 @@ bool VulkanContext::UpdateSwapChain(Window* window) {
 
   err = vkCreateSwapchainKHR(device_, &swapchain_create_info, nullptr,
                              &window->swapchain);
-  if (err) {
-    DLOG(0) << "vkCreateSwapchainKHR failed. Error: " << string_VkResult(err);
-    return false;
-  }
-
-  // Destroy the retired old swapchain now that the new one is created.
+  // The old swapchain is retired either way; its images are no longer used.
   if (old_swapchain)
     vkDestroySwapchainKHR(device_, old_swapchain, nullptr);
+  if (err) {
+    DLOG(0) << "vkCreateSwapchainKHR failed. Error: " << string_VkResult(err);
+    window->swapchain = VK_NULL_HANDLE;
+    return false;
+  }
 
   uint32_t image_count;
   err = vkGetSwapchainImagesKHR(device_, window->swapchain, &image_count,
@@ -1332,6 +1424,10 @@ bool VulkanContext::PrepareBuffers() {
   vkWaitForFences(device_, 1, &fences_[frame_index_], VK_TRUE,
                   std::numeric_limits<uint64_t>::max());
 
+  // The last acquire reported the swapchain suboptimal.
+  if (swapchain_suboptimal_)
+    RecreateSwapChain();
+
   DCHECK(window_.swapchain != VK_NULL_HANDLE);
   if (window_.swapchain == VK_NULL_HANDLE)
     return false;
@@ -1350,12 +1446,16 @@ bool VulkanContext::PrepareBuffers() {
       // swapchain is out of date (e.g. the window was resized) and must be
       // recreated:
       DLOG(0) << "Swapchain is out of date, recreating.";
-      UpdateSwapChain(&window_);
+      // Don't acquire from a swapchain that failed to be recreated.
+      if (!RecreateSwapChain() || window_.swapchain == VK_NULL_HANDLE)
+        return false;
     } else if (err == VK_SUBOPTIMAL_KHR) {
-      // swapchain is not as optimal as it could be, but the platform's
-      // presentation engine will still present the image correctly.
-      DLOG(0) << "Swapchain is suboptimal, recreating.";
-      UpdateSwapChain(&window_);
+      // The image was acquired and the presentation engine will still present
+      // it correctly. Render and present this frame as usual, and recreate the
+      // swapchain before the next acquire. Recreating it now would destroy the
+      // acquired image and leave this frame rendering to one never acquired.
+      DLOG(0) << "Swapchain is suboptimal.";
+      swapchain_suboptimal_ = true;
       break;
     } else if (err == VK_TIMEOUT || err == VK_NOT_READY) {
       return false;
@@ -1439,7 +1539,19 @@ bool VulkanContext::SwapBuffers() {
   present.pSwapchains = &window_.swapchain;
   present.pImageIndices = &window_.current_buffer;
 
+  uint64_t present_id = last_present_id_ + 1;
+  VkPresentIdKHR present_id_info{};
+  present_id_info.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR;
+  present_id_info.swapchainCount = 1;
+  present_id_info.pPresentIds = &present_id;
+  if (present_wait_supported_)
+    present.pNext = &present_id_info;
+
   err = vkQueuePresentKHR(present_queue_, &present);
+  if (present_wait_supported_) {
+    last_present_id_ = present_id;
+    swapchain_presented_ = true;
+  }
 
   frame_index_ += 1;
   frame_index_ %= kFrameLag;

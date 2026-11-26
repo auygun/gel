@@ -126,6 +126,15 @@ class VulkanContext {
 
   Window window_;
 
+  // Set when acquire reported VK_SUBOPTIMAL_KHR. The swapchain is recreated
+  // before the next acquire.
+  bool swapchain_suboptimal_ = false;
+  // VK_KHR_present_wait is enabled.
+  bool present_wait_supported_ = false;
+  // Id of the last present, and whether the current swapchain has had one.
+  uint64_t last_present_id_ = 0;
+  bool swapchain_presented_ = false;
+
   std::vector<std::string> device_names_;
   int selected_device_index_ = 0;
   std::string preferred_device_name_;
@@ -133,6 +142,8 @@ class VulkanContext {
   // Extensions.
   uint32_t enabled_extension_count_ = 0;
   const char* extension_names_[kMaxExtensions];
+  // VK_KHR_get_physical_device_properties2 is enabled on the instance.
+  bool get_physical_device_properties2_enabled_ = false;
 
   uint32_t enabled_layer_count_ = 0;
   const char* enabled_layers_[kMaxLayers];
@@ -163,6 +174,18 @@ class VulkanContext {
   bool CleanUpSwapChain(Window* window);
 
   bool UpdateSwapChain(Window* window);
+
+  // Recreates the swapchain at the current window size, after waiting for the
+  // last present (see WaitForLastPresent()).
+  bool RecreateSwapChain();
+
+  // Waits until the last image presented to the current swapchain is on
+  // screen, if VK_KHR_present_wait is available. Called before recreating the
+  // swapchain so it is recreated at most once per displayed frame: the NVIDIA
+  // driver on Wayland leaks the buffers of swapchains recreated faster than
+  // the compositor shows them (seen with an undecorated window, where a resize
+  // delivers sizes faster than the refresh rate), gigabytes within seconds.
+  void WaitForLastPresent();
 
   void DeinitSwapChainResources(Window* window);
 

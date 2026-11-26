@@ -5,15 +5,15 @@
 #include <sstream>
 #include <utility>
 
-#include "third_party/kaliber/base/hash.h"
-#include "third_party/kaliber/base/log.h"
-#include "third_party/kaliber/base/vecmath.h"
-#include "third_party/kaliber/renderer/shader_source.h"
 #include "third_party/glslang/glslang/SPIRV/GlslangToSpv.h"
 #include "third_party/glslang/glslang/glslang/Include/ResourceLimits.h"
 #include "third_party/glslang/glslang/glslang/Include/Types.h"
 #include "third_party/glslang/glslang/glslang/Public/ResourceLimits.h"
 #include "third_party/glslang/glslang/glslang/Public/ShaderLang.h"
+#include "third_party/kaliber/base/hash.h"
+#include "third_party/kaliber/base/log.h"
+#include "third_party/kaliber/base/vecmath.h"
+#include "third_party/kaliber/renderer/shader_source.h"
 #include "third_party/spirv-reflect/spirv-reflect/spirv_reflect.h"
 #include "third_party/vulkan/vk_enum_string_helper.h"
 
@@ -861,11 +861,41 @@ void RendererVulkan::PrepareForDrawing() {
 }
 
 void RendererVulkan::Present() {
-  if (!frame_prepared_)
+  if (!frame_prepared_) {
+    DiscardDrawCommands();
     return;
+  }
 
   DrawListEnd();
   SwapBuffers();
+}
+
+void RendererVulkan::DiscardDrawCommands() {
+  // No swapchain image was acquired this frame (acquire timed out, or there is
+  // no swapchain while minimized), so no render pass was begun, yet the app
+  // still recorded its draws. Throw those away and start the command buffer
+  // over. The setup command buffer keeps this frame's uploads and goes out with
+  // the next presented frame.
+
+  // The setup thread may still be recording uploads that read the app's frame
+  // data, which is only valid until the next frame.
+  task_runner_.WaitForCompletion();
+
+  // The pool holds only this command buffer (its pool lacks
+  // RESET_COMMAND_BUFFER_BIT, so it can't be reset on its own).
+  vkResetCommandPool(device_, frames_[current_frame_].draw_command_pool, 0);
+  VkCommandBufferBeginInfo cmd_buf_begin{};
+  cmd_buf_begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  cmd_buf_begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  vkBeginCommandBuffer(frames_[current_frame_].draw_command_buffer,
+                       &cmd_buf_begin);
+
+  // The discarded commands carried the bound state and push constants.
+  active_shader_id_ = kInvalidId;
+  for (auto& ds : active_descriptor_sets_)
+    ds = VK_NULL_HANDLE;
+  for (auto& [id, shader] : shaders_)
+    shader.push_constants_dirty = true;
 }
 
 void RendererVulkan::BeginRenderToTexture(ResourceId texture_id) {

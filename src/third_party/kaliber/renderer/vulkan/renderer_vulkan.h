@@ -312,6 +312,7 @@ class RendererVulkan final : public Renderer {
   void DrawListEnd();
 
   void SwapBuffers();
+  void DiscardDrawCommands();
 
   void SetupThreadMain();
 
