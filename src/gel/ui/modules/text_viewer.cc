@@ -624,19 +624,7 @@ void TextViewer::Update(float width,
         }
       } else {
         sel_dragging_ = false;
-
-        // Notify delegate with the selected text.
-        int sl = sel_start_line_, sc = sel_start_char_;
-        int el = sel_end_line_, ec = sel_end_char_;
-        if (sl > el || (sl == el && sc > ec)) {
-          std::swap(sl, el);
-          std::swap(sc, ec);
-        }
-        if (sl >= 0) {
-          std::string text = ExtractSelectedText(content, sl, sc, el, ec);
-          if (!text.empty())
-            delegate_.OnTextSelected(text);
-        }
+        NotifyTextSelected(content);
       }
     }
 
@@ -862,6 +850,21 @@ void TextViewer::SelectAll(std::span<const std::string> content) {
   } else {
     sel_end_char_ = 0;
   }
+  NotifyTextSelected(content);
+}
+
+void TextViewer::NotifyTextSelected(std::span<const std::string> content) {
+  int sl = sel_start_line_, sc = sel_start_char_;
+  int el = sel_end_line_, ec = sel_end_char_;
+  if (sl > el || (sl == el && sc > ec)) {
+    std::swap(sl, el);
+    std::swap(sc, ec);
+  }
+  if (sl < 0)
+    return;
+  std::string text = ExtractSelectedText(content, sl, sc, el, ec);
+  if (!text.empty())
+    delegate_.OnTextSelected(text);
 }
 
 std::string TextViewer::ExtractSelectedText(

@@ -50,7 +50,8 @@ class MainWindow final : public CommitHistory::Delegate,
                          public CommitDiff::Delegate,
                          public CommitTree::Delegate,
                          public Toolbar::Delegate,
-                         public DirectoryBrowser::Delegate {
+                         public DirectoryBrowser::Delegate,
+                         public HelpModal::Delegate {
  public:
   MainWindow(GraphicsDelegate& graphics_delegate,
              eng::Platform& platform,
@@ -206,7 +207,8 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnNavigateToCommit(const std::string& commit) final;
   void OnSearchTouchingPaths(const std::vector<std::string>& paths) final;
 
-  // CommitTree::Delegate implementation (SetPrimarySelection() above too).
+  // CommitTree::Delegate and HelpModal::Delegate implementation
+  // (SetPrimarySelection() above).
   void OnShowLineOrigin(const std::string& file,
                         const std::string& blob,
                         int line_number) final;

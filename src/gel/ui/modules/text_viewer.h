@@ -30,7 +30,8 @@ class TextViewer {
    public:
     virtual ~Delegate() = default;
 
-    // Called when the user completes a text selection via mouse drag.
+    // Called when the user completes a text selection with the mouse, or
+    // selects all.
     virtual void OnTextSelected(const std::string& text) {}
 
     // Called on right-click before the context menu opens.
@@ -203,6 +204,9 @@ class TextViewer {
 
   // Helper: perform Select All.
   void SelectAll(std::span<const std::string> content);
+
+  // Passes the selected text, if any, to the delegate's OnTextSelected().
+  void NotifyTextSelected(std::span<const std::string> content);
 
   // Helper: extract selected text from content using given selection bounds.
   // The selection bounds are stripped-relative (\x01 prefix skipped).

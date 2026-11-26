@@ -6,6 +6,7 @@
 #define GEL_UI_MODULES_MARKDOWN_RENDERER_H
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/text_search.h"
@@ -22,6 +23,18 @@
 // has a claim on Escape.
 class MarkdownRenderer {
  public:
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+
+    // Called when the user completes a text selection with the mouse, or
+    // selects all.
+    virtual void OnTextSelected(const std::string& text) = 0;
+  };
+
+  explicit MarkdownRenderer(Delegate& delegate);
+  ~MarkdownRenderer();
+
   // Parse markdown text into renderable blocks.  Call once.
   void Parse(const char* data, size_t len);
   bool parsed() const { return parsed_; }
@@ -66,6 +79,8 @@ class MarkdownRenderer {
     int length;
   };
 
+  Delegate& delegate_;
+
   std::vector<Block> blocks_;
   bool parsed_ = false;
 
@@ -97,6 +112,12 @@ class MarkdownRenderer {
   int sel_end_block_ = -1;
   int sel_end_char_ = 0;
   bool sel_dragging_ = false;
+  // Double-click selects a word; dragging then extends by whole words while
+  // keeping the anchor word selected.
+  bool sel_word_mode_ = false;
+  int sel_anchor_block_ = -1;
+  int sel_anchor_start_ = 0;
+  int sel_anchor_end_ = 0;
   bool context_menu_open_ = false;
 
   void UpdateSearchBar();
@@ -112,6 +133,11 @@ class MarkdownRenderer {
   void ScrollToPrevHeading(float current_scroll_y);
 
   void MouseToPos(float mx, float my, int& block, int& char_offset) const;
+  // Bounds of the word, whitespace run or punctuation run at |ch|.
+  static std::pair<int, int> WordBounds(const std::string& text, int ch);
+  void SelectAll();
+  // Passes the selected text, if any, to the delegate's OnTextSelected().
+  void NotifyTextSelected();
   std::string GetSelectedText() const;
 };
 

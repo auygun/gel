@@ -11,7 +11,11 @@
 #include "third_party/imgui/imgui/imgui.h"
 #include "third_party/imgui/imgui/imgui_internal.h"
 
-HelpModal::HelpModal() = default;
+HelpModal::HelpModal(Delegate& delegate)
+    : delegate_(delegate),
+      renderers_{MarkdownRenderer(*this), MarkdownRenderer(*this)} {}
+
+HelpModal::~HelpModal() = default;
 
 void HelpModal::Open() {
   show_ = true;
@@ -141,4 +145,8 @@ void HelpModal::Update(bool window_focused) {
     open_ = false;
   if (!window_focused)
     ImGui::PopStyleColor();
+}
+
+void HelpModal::OnTextSelected(const std::string& text) {
+  delegate_.SetPrimarySelection(text);
 }

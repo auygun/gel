@@ -104,6 +104,7 @@ MainWindow::MainWindow(GraphicsDelegate& graphics_delegate,
       lower_panel_(settings_),
       toolbar_(*this, runner_, git_repo_, settings_),
       settings_modal_(graphics_delegate_),
+      help_modal_(*this),
       console_window_(runner_, settings_),
       blame_lookup_(
           commit_history_,

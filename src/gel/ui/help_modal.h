@@ -5,19 +5,32 @@
 #ifndef GEL_UI_HELP_MODAL_H
 #define GEL_UI_HELP_MODAL_H
 
+#include <string>
+
 #include "gel/ui/modules/markdown_renderer.h"
 
 // Modal window that renders the embedded help documentation using
 // imgui_markdown.
-class HelpModal {
+class HelpModal : public MarkdownRenderer::Delegate {
  public:
-  HelpModal();
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+    virtual void SetPrimarySelection(const std::string& text) = 0;
+  };
+
+  explicit HelpModal(Delegate& delegate);
+  ~HelpModal() override;
 
   void Open();
   void Update(bool window_focused);
   bool IsOpen() const { return open_; }
 
  private:
+  // MarkdownRenderer::Delegate implementation
+  void OnTextSelected(const std::string& text) final;
+
+  Delegate& delegate_;
   bool open_ = false;
   bool show_ = false;
 

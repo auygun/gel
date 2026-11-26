@@ -7,9 +7,11 @@
 #include "gel/ui/utils.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "third_party/imgui/imgui/imgui.h"
@@ -335,6 +337,10 @@ void RenderWrappedSpans(const std::vector<TextSpan>& spans,
 
 }  // namespace
 
+MarkdownRenderer::MarkdownRenderer(Delegate& delegate) : delegate_(delegate) {}
+
+MarkdownRenderer::~MarkdownRenderer() = default;
+
 void MarkdownRenderer::Parse(const char* data, size_t len) {
   blocks_.clear();
   const char* p = data;
@@ -436,13 +442,28 @@ bool MarkdownRenderer::RenderBlocks() {
   bool hovered =
       ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
 
-  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+  if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    int block, ch;
+    MouseToPos(ImGui::GetMousePos().x, ImGui::GetMousePos().y, block, ch);
+    if (block >= 0) {
+      auto [ws, we] = WordBounds(blocks_[block].search_text, ch);
+      sel_start_block_ = sel_end_block_ = block;
+      sel_start_char_ = ws;
+      sel_end_char_ = we;
+      sel_dragging_ = true;
+      sel_word_mode_ = true;
+      sel_anchor_block_ = block;
+      sel_anchor_start_ = ws;
+      sel_anchor_end_ = we;
+    }
+  } else if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     int block, ch;
     MouseToPos(ImGui::GetMousePos().x, ImGui::GetMousePos().y, block, ch);
     if (block >= 0) {
       sel_start_block_ = sel_end_block_ = block;
       sel_start_char_ = sel_end_char_ = ch;
       sel_dragging_ = true;
+      sel_word_mode_ = false;
     }
   }
 
@@ -450,12 +471,29 @@ bool MarkdownRenderer::RenderBlocks() {
     if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
       int block, ch;
       MouseToPos(ImGui::GetMousePos().x, ImGui::GetMousePos().y, block, ch);
-      if (block >= 0) {
+      if (block >= 0 && sel_word_mode_) {
+        // Extend the selection a whole word at a time, keeping the
+        // double-clicked word selected.
+        auto [ws, we] = WordBounds(blocks_[block].search_text, ch);
+        if (block < sel_anchor_block_ ||
+            (block == sel_anchor_block_ && ch < sel_anchor_start_)) {
+          sel_start_block_ = block;
+          sel_start_char_ = ws;
+          sel_end_block_ = sel_anchor_block_;
+          sel_end_char_ = sel_anchor_end_;
+        } else {
+          sel_start_block_ = sel_anchor_block_;
+          sel_start_char_ = sel_anchor_start_;
+          sel_end_block_ = block;
+          sel_end_char_ = we;
+        }
+      } else if (block >= 0) {
         sel_end_block_ = block;
         sel_end_char_ = ch;
       }
     } else {
       sel_dragging_ = false;
+      NotifyTextSelected();
     }
   }
 
@@ -729,15 +767,7 @@ bool MarkdownRenderer::RenderBlocks() {
   // --- Keyboard shortcuts ---
   if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl) {
     if (ImGui::IsKeyPressed(ImGuiKey_A, false)) {
-      sel_start_block_ = 0;
-      sel_start_char_ = 0;
-      for (int i = static_cast<int>(blocks_.size()) - 1; i >= 0; --i) {
-        if (!blocks_[i].search_text.empty()) {
-          sel_end_block_ = i;
-          sel_end_char_ = static_cast<int>(blocks_[i].search_text.size());
-          break;
-        }
-      }
+      SelectAll();
     }
     if (ImGui::IsKeyPressed(ImGuiKey_C, false) && has_selection) {
       std::string text = GetSelectedText();
@@ -756,15 +786,7 @@ bool MarkdownRenderer::RenderBlocks() {
       ImGui::CloseCurrentPopup();
     }
     if (ImGui::MenuItem("Select all", "Ctrl+A")) {
-      sel_start_block_ = 0;
-      sel_start_char_ = 0;
-      for (int i = static_cast<int>(blocks_.size()) - 1; i >= 0; --i) {
-        if (!blocks_[i].search_text.empty()) {
-          sel_end_block_ = i;
-          sel_end_char_ = static_cast<int>(blocks_[i].search_text.size());
-          break;
-        }
-      }
+      SelectAll();
     }
     if (ImGui::MenuItem("Copy", "Ctrl+C", false, has_selection)) {
       std::string text = GetSelectedText();
@@ -919,6 +941,31 @@ void MarkdownRenderer::ScrollToPrevHeading(float current_scroll_y) {
   }
 }
 
+// static
+std::pair<int, int> MarkdownRenderer::WordBounds(const std::string& text,
+                                                 int ch) {
+  int len = static_cast<int>(text.size());
+  ch = std::clamp(ch, 0, len);
+  if (ch >= len)
+    return {len, len};
+  auto classify = [](char c) -> int {
+    // Same notion of a word as whole-word search, so double-clicking a word
+    // and searching it with that toggle on agree.
+    if (base::IsWordByte(c))
+      return 0;
+    if (std::isspace(static_cast<unsigned char>(c)))
+      return 1;
+    return 2;
+  };
+  int cat = classify(text[ch]);
+  int start = ch, end = ch;
+  while (start > 0 && classify(text[start - 1]) == cat)
+    --start;
+  while (end < len && classify(text[end]) == cat)
+    ++end;
+  return {start, end};
+}
+
 void MarkdownRenderer::MouseToPos(float mx,
                                   float my,
                                   int& block,
@@ -991,6 +1038,25 @@ void MarkdownRenderer::MouseToPos(float mx,
       break;
     }
   }
+}
+
+void MarkdownRenderer::SelectAll() {
+  sel_start_block_ = 0;
+  sel_start_char_ = 0;
+  for (int i = static_cast<int>(blocks_.size()) - 1; i >= 0; --i) {
+    if (!blocks_[i].search_text.empty()) {
+      sel_end_block_ = i;
+      sel_end_char_ = static_cast<int>(blocks_[i].search_text.size());
+      break;
+    }
+  }
+  NotifyTextSelected();
+}
+
+void MarkdownRenderer::NotifyTextSelected() {
+  std::string text = GetSelectedText();
+  if (!text.empty())
+    delegate_.OnTextSelected(text);
 }
 
 std::string MarkdownRenderer::GetSelectedText() const {
