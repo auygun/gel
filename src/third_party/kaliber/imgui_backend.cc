@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -642,10 +643,23 @@ void ImguiBackend::NewFrame(float delta_time) {
   int window_w = platform_->GetWindowWidth();
   int window_h = platform_->GetWindowHeight();
   io.DisplaySize = ImVec2((float)window_w, (float)window_h);
-  io.DisplayFramebufferScale = ImVec2(
-      window_w > 0 ? (float)renderer_->GetFramebufferWidth() / window_w : 1.0f,
-      window_h > 0 ? (float)renderer_->GetFramebufferHeight() / window_h
-                   : 1.0f);
+  // ImGui rasterizes fonts at this scale and bakes a separate glyph set for
+  // every distinct value. With Wayland fractional scaling the framebuffer size
+  // is the window size times the scale, rounded to whole pixels, so dividing
+  // the two back gives a ratio that wobbles with the window size (1502 / 1001
+  // = 1.5005 at 150%), and a resize would re-bake the fonts every frame. The
+  // compositor's scale is always a multiple of 1/120 (fractional-scale-v1),
+  // and the rounding error stays under half a step for any window wider than
+  // 120 pixels, so snapping recovers the exact scale. Integer scales snap to
+  // themselves.
+  auto snap_scale = [](int fb_size, int window_size) {
+    if (window_size <= 0)
+      return 1.0f;
+    return std::round((float)fb_size / window_size * 120.0f) / 120.0f;
+  };
+  io.DisplayFramebufferScale =
+      ImVec2(snap_scale(renderer_->GetFramebufferWidth(), window_w),
+             snap_scale(renderer_->GetFramebufferHeight(), window_h));
   io.DeltaTime = delta_time;
 
   // Apply the cursor that ImGui requested during the previous frame, before
@@ -727,11 +741,16 @@ void ImguiBackend::Draw() {
   if (!draw_data || draw_data->CmdListsCount <= 0)
     return;
 
-  ImVec2 fb_scale = draw_data->FramebufferScale;
-  int fb_width = (int)(draw_data->DisplaySize.x * fb_scale.x);
-  int fb_height = (int)(draw_data->DisplaySize.y * fb_scale.y);
-  if (fb_width <= 0 || fb_height <= 0)
+  // FramebufferScale is snapped (see NewFrame), so DisplaySize * scale can be
+  // a pixel off the real framebuffer. Take the size from the renderer, and
+  // project clip rects with the exact ratio so they land on the same pixels.
+  int fb_width = renderer_->GetFramebufferWidth();
+  int fb_height = renderer_->GetFramebufferHeight();
+  if (fb_width <= 0 || fb_height <= 0 || draw_data->DisplaySize.x <= 0 ||
+      draw_data->DisplaySize.y <= 0)
     return;
+  ImVec2 fb_scale(fb_width / draw_data->DisplaySize.x,
+                  fb_height / draw_data->DisplaySize.y);
 
   if (draw_data->Textures)
     for (ImTextureData* tex : *draw_data->Textures)
