@@ -1,6 +1,7 @@
 #include "third_party/kaliber/renderer/vulkan/vulkan_context.h"
 
 #include <string.h>
+#include <algorithm>
 #include <limits>
 #include <string>
 
@@ -1036,27 +1037,19 @@ bool VulkanContext::UpdateSwapChain(Window* window) {
   if (surface_capabilities.currentExtent.width == 0xFFFFFFFF) {
     // If the surface size is undefined, the size is set to the size of the
     // images requested, which must fit within the minimum and maximum values.
-    window->swapchain_extent.width = window->width;
-    window->swapchain_extent.height = window->height;
+    window->swapchain_extent.width = std::clamp(
+        (uint32_t)window->width, surface_capabilities.minImageExtent.width,
+        surface_capabilities.maxImageExtent.width);
+    window->swapchain_extent.height = std::clamp(
+        (uint32_t)window->height, surface_capabilities.minImageExtent.height,
+        surface_capabilities.maxImageExtent.height);
 
-    if (window->swapchain_extent.width <
-        surface_capabilities.minImageExtent.width) {
-      window->swapchain_extent.width =
-          surface_capabilities.minImageExtent.width;
-    } else if (window->swapchain_extent.width >
-               surface_capabilities.maxImageExtent.width) {
-      window->swapchain_extent.width =
-          surface_capabilities.maxImageExtent.width;
-    }
-
-    if (window->swapchain_extent.height <
-        surface_capabilities.minImageExtent.height) {
-      window->swapchain_extent.height =
-          surface_capabilities.minImageExtent.height;
-    } else if (window->swapchain_extent.height >
-               surface_capabilities.maxImageExtent.height) {
-      window->swapchain_extent.height =
-          surface_capabilities.maxImageExtent.height;
+    // The framebuffers, viewport and render area are sized from width/height,
+    // so they must match the clamped image size. A zero size (minimized) is
+    // kept so that no swapchain is created below.
+    if (window->width != 0 && window->height != 0) {
+      window->width = window->swapchain_extent.width;
+      window->height = window->swapchain_extent.height;
     }
   } else {
     // If the surface size is defined, the swap chain size must match

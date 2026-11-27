@@ -179,6 +179,11 @@ class Platform {
   int GetWindowWidth() const;
   int GetWindowHeight() const;
 
+  // Retrieves the framebuffer-to-window scale as the window system reports it.
+  // Returns false when the window system only reports sizes, in which case
+  // framebuffer size / window size is the exact scale.
+  bool GetFramebufferScale(float& x, float& y) const;
+
   void GetWindowPosition(int& x, int& y) const;
   void SetWindowPosition(int x, int y);
   bool IsMaximized() const;

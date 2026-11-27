@@ -499,6 +499,18 @@ int Platform::GetWindowHeight() const {
   return h;
 }
 
+bool Platform::GetFramebufferScale(float& x, float& y) const {
+  // On Wayland GLFW sizes the framebuffer as the window size times the
+  // compositor's scale, rounded to whole pixels, so dividing the two back only
+  // approximates the scale (1502 / 1001 = 1.5005 at 150%). The content scale
+  // is the compositor's scale itself, and with GLFW_SCALE_FRAMEBUFFER (default
+  // true) it is what the framebuffer is scaled by.
+  if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND)
+    return false;
+  glfwGetWindowContentScale(window_, &x, &y);
+  return true;
+}
+
 void Platform::GetWindowPosition(int& x, int& y) const {
   if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
     x = y = -1;

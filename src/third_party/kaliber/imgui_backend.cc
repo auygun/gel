@@ -642,10 +642,17 @@ void ImguiBackend::NewFrame(float delta_time) {
   int window_w = platform_->GetWindowWidth();
   int window_h = platform_->GetWindowHeight();
   io.DisplaySize = ImVec2((float)window_w, (float)window_h);
-  io.DisplayFramebufferScale = ImVec2(
-      window_w > 0 ? (float)renderer_->GetFramebufferWidth() / window_w : 1.0f,
-      window_h > 0 ? (float)renderer_->GetFramebufferHeight() / window_h
-                   : 1.0f);
+  // ImGui rasterizes fonts at this scale and bakes a separate glyph set for
+  // every distinct value, so it must not wobble with the window size, as
+  // framebuffer / window size does under Wayland fractional scaling.
+  float scale_x, scale_y;
+  if (!platform_->GetFramebufferScale(scale_x, scale_y)) {
+    scale_x = window_w > 0 ? (float)renderer_->GetFramebufferWidth() / window_w
+                           : 1.0f;
+    scale_y = window_h > 0 ? (float)renderer_->GetFramebufferHeight() / window_h
+                           : 1.0f;
+  }
+  io.DisplayFramebufferScale = ImVec2(scale_x, scale_y);
   io.DeltaTime = delta_time;
 
   // Apply the cursor that ImGui requested during the previous frame, before
@@ -727,11 +734,17 @@ void ImguiBackend::Draw() {
   if (!draw_data || draw_data->CmdListsCount <= 0)
     return;
 
-  ImVec2 fb_scale = draw_data->FramebufferScale;
-  int fb_width = (int)(draw_data->DisplaySize.x * fb_scale.x);
-  int fb_height = (int)(draw_data->DisplaySize.y * fb_scale.y);
-  if (fb_width <= 0 || fb_height <= 0)
+  // FramebufferScale can be the compositor's scale rather than the size ratio
+  // (see NewFrame), so DisplaySize * scale can be a pixel off the real
+  // framebuffer. Take the size from the renderer, and project clip rects with
+  // the exact ratio so they land on the same pixels.
+  int fb_width = renderer_->GetFramebufferWidth();
+  int fb_height = renderer_->GetFramebufferHeight();
+  if (fb_width <= 0 || fb_height <= 0 || draw_data->DisplaySize.x <= 0 ||
+      draw_data->DisplaySize.y <= 0)
     return;
+  ImVec2 fb_scale(fb_width / draw_data->DisplaySize.x,
+                  fb_height / draw_data->DisplaySize.y);
 
   if (draw_data->Textures)
     for (ImTextureData* tex : *draw_data->Textures)
