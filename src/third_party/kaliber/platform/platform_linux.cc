@@ -347,6 +347,10 @@ bool Platform::UsesClientDecorations() const {
   return wayland_frame_ && wayland_frame_->client_side();
 }
 
+bool Platform::IsWindowActivated() const {
+  return !wayland_frame_ || wayland_frame_->activated();
+}
+
 void Platform::BeginInteractiveMove() {
   auto* wl = GetWaylandSelection();
   if (!wayland_frame_ || !wl || !wl->seat)

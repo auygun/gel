@@ -83,13 +83,7 @@ void DrawFolderIcon();
 void DrawGitFolderIcon();
 void DrawGitFirstIcon();
 
-// Simplified app icon for the toolbar.
-void DrawAppIcon();
-
-// Window control icons for client-side decorations (CSD).
-void DrawMinimizeIcon();
-void DrawMaximizeIcon();
-void DrawRestoreIcon();
+// Close icon (x).
 void DrawCloseIcon();
 
 #endif  // GEL_UI_ICONS_H

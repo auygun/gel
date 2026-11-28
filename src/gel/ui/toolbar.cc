@@ -76,58 +76,6 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
   bool any_toolbar_hovered = false;
   float frame_h = ImGui::GetFrameHeight();
 
-  // CSD window control buttons at the far right.
-  bool csd = delegate_.IsUsingCSD();
-  bool show_minimize = csd && delegate_.ShowMinimizeButton();
-  bool show_maximize = csd && delegate_.ShowMaximizeButton();
-  bool minimize_requested = false;
-  bool maximize_toggle_requested = false;
-  bool close_requested = false;
-  float csd_buttons_width = 0;
-  if (csd) {
-    // Calculate total width of CSD buttons so toolbar items can leave room.
-    float spacing = ImGui::GetStyle().ItemSpacing.x;
-    int button_count = 1 + (show_minimize ? 1 : 0) + (show_maximize ? 1 : 0);
-    csd_buttons_width = frame_h * button_count + spacing * button_count;
-
-    // Clip toolbar items so they don't overlap the CSD buttons.
-    ImVec2 wpos = ImGui::GetWindowPos();
-    ImVec2 wpad = ImGui::GetStyle().WindowPadding;
-    float clip_right =
-        wpos.x + ImGui::GetWindowContentRegionMax().x - csd_buttons_width;
-    ImGui::PushClipRect(ImVec2(wpos.x, wpos.y),
-                        ImVec2(clip_right, wpos.y + frame_h + wpad.y * 2),
-                        true);
-  }
-
-  // Draw the app icon at the left edge when CSD is active.
-  // Right-click shows the system window menu.  Drawn on the foreground draw
-  // list so it stays visible above modals.
-  bool window_menu_requested = false;
-  if (csd) {
-    csd_app_icon_min_ = ImGui::GetCursorScreenPos();
-    ImGui::Dummy(ImVec2(frame_h, frame_h));
-    csd_app_icon_max_ = ImGui::GetItemRectMax();
-    {
-      ImDrawList* dl = ImGui::GetForegroundDrawList();
-      ImVec2 bmin = csd_app_icon_min_, bmax = csd_app_icon_max_;
-      ImVec2 center((bmin.x + bmax.x) * 0.5f, (bmin.y + bmax.y) * 0.5f);
-      float sz = std::min(bmax.x - bmin.x, bmax.y - bmin.y);
-      float thick = std::max(1.5f, sz * 0.09f);
-      float radius = sz * 0.38f;
-      dl->AddCircleFilled(center, radius, IM_COL32(0x2A, 0x6B, 0xC6, 0xFF));
-      ImU32 fg = IM_COL32(0xFF, 0xFF, 0xFF, 0xFF);
-      float g_r = sz * 0.22f;
-      float arc_start = 0;
-      float arc_end = 2.0f * 3.14159265f - 3.14159265f / 3.0f;
-      dl->PathArcTo(center, g_r, arc_start, arc_end, 24);
-      dl->PathStroke(fg, 0, thick);
-      dl->AddLine(ImVec2(center.x, center.y), ImVec2(center.x + g_r, center.y),
-                  fg, thick);
-    }
-    ImGui::SameLine();
-  }
-
   ImGui::SetNextItemWidth(
       ImGui::CalcTextSize("0000000000000000000000000000000000000000").x +
       ImGui::GetStyle().FramePadding.x * 2);
@@ -416,14 +364,11 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     tooltip_suppressed_ = false;
 
   // Right edge of the last toolbar widget (window-local X coordinate).
-  // Used to position the window title in the CSD drag area.
   float widgets_end = ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x +
                       ImGui::GetStyle().ItemSpacing.x;
 
   // Display current branch/HEAD and in-progress task status,
-  // right-justified on the toolbar line (leaving room for CSD buttons).
-  float right_content_start =
-      ImGui::GetWindowContentRegionMax().x - csd_buttons_width;
+  // right-justified on the toolbar line.
   {
     auto task = runner_.task();
     bool has_task = task != GitTask::kNone;
@@ -442,8 +387,7 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     float spinner_w = git_busy ? frame_h + spinner_gap : 0.0f;
 
     if (has_task || !display_head.empty()) {
-      float right_edge =
-          ImGui::GetWindowContentRegionMax().x - csd_buttons_width;
+      float right_edge = ImGui::GetWindowContentRegionMax().x;
       float available =
           right_edge - widgets_end - ImGui::GetStyle().ItemSpacing.x;
       float status_w = spinner_w + badge_w + ImGui::GetStyle().ItemSpacing.x;
@@ -576,218 +520,7 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
                           : "Current branch\nRight-click for options",
                       any_toolbar_hovered, tooltip_suppressed_);
         }
-        right_content_start = right_edge - text_width;
       }
-    }
-  }
-
-  // Draw the window title centered in the drag area when CSD is active.
-  if (csd) {
-    auto& title = delegate_.GetWindowTitle();
-    if (!title.empty()) {
-      float title_width = ImGui::CalcTextSize(title.c_str()).x;
-      float gap_start = widgets_end;
-      float gap_end = right_content_start;
-      float gap_width = gap_end - gap_start;
-      if (gap_width > 0) {
-        float title_x = gap_start + (gap_width - title_width) / 2;
-        // Clamp so the title doesn't overlap toolbar widgets or right content.
-        title_x = std::max(title_x, gap_start);
-        ImVec2 window_pos = ImGui::GetWindowPos();
-        float title_y = window_pos.y + ImGui::GetStyle().WindowPadding.y;
-        auto* dl = ImGui::GetWindowDrawList();
-        dl->PushClipRect(ImVec2(window_pos.x + gap_start, title_y),
-                         ImVec2(window_pos.x + gap_end, title_y + frame_h));
-        bool focused =
-            delegate_.IsWindowFocused() ||
-            ImGui::IsPopupOpen(
-                "", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
-        ImGuiCol title_col = focused ? ImGuiCol_Text : ImGuiCol_TextDisabled;
-        dl->AddText(
-            ImVec2(window_pos.x + title_x,
-                   title_y + (frame_h - ImGui::GetTextLineHeight()) / 2),
-            ImGui::GetColorU32(title_col), title.c_str());
-        dl->PopClipRect();
-      }
-    }
-  }
-
-  // Pop the toolbar clip rect before drawing CSD buttons.
-  if (csd)
-    ImGui::PopClipRect();
-
-  // CSD window control buttons.  Drawn on the foreground draw list with raw
-  // mouse input so they always work, even when a modal is open.
-  if (csd) {
-    float right_edge = ImGui::GetWindowContentRegionMax().x;
-    float spacing = ImGui::GetStyle().ItemSpacing.x;
-    int button_count = 1 + (show_minimize ? 1 : 0) + (show_maximize ? 1 : 0);
-    ImGui::SameLine();
-    float start_x =
-        right_edge - frame_h * button_count - spacing * (button_count - 1);
-    ImGui::SetCursorPosX(start_x);
-
-    // Reserve layout space.
-    float total_w = frame_h * button_count + spacing * (button_count - 1);
-    ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImGui::Dummy(ImVec2(total_w, frame_h));
-
-    ImDrawList* dl = ImGui::GetForegroundDrawList();
-    ImVec2 mpos = ImGui::GetMousePos();
-
-    auto hit = [&mpos](ImVec2 bmin, ImVec2 bmax) {
-      return mpos.x >= bmin.x && mpos.x < bmax.x && mpos.y >= bmin.y &&
-             mpos.y < bmax.y;
-    };
-
-    // Build button rects.
-    struct BtnInfo {
-      CSDButton id;
-      ImVec2 bmin, bmax;
-    };
-    BtnInfo btns[3];
-    int btn_count = 0;
-    ImVec2 cur = origin;
-    if (show_minimize) {
-      btns[btn_count++] = {
-          CSDButton::kMinimize, cur, {cur.x + frame_h, cur.y + frame_h}};
-      cur.x += frame_h + spacing;
-    }
-    if (show_maximize) {
-      btns[btn_count++] = {
-          CSDButton::kMaximize, cur, {cur.x + frame_h, cur.y + frame_h}};
-      cur.x += frame_h + spacing;
-    }
-    btns[btn_count++] = {
-        CSDButton::kClose, cur, {cur.x + frame_h, cur.y + frame_h}};
-
-    // Press detection.
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-      csd_pressed_ = CSDButton::kNone;
-      for (int i = 0; i < btn_count; ++i) {
-        if (hit(btns[i].bmin, btns[i].bmax)) {
-          csd_pressed_ = btns[i].id;
-          break;
-        }
-      }
-    }
-
-    // Draw backgrounds with hover/press colors.
-    bool mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    ImU32 col_btn = ImGui::GetColorU32(ImGuiCol_Button);
-    ImU32 col_hov = ImGui::GetColorU32(ImGuiCol_ButtonHovered);
-    ImU32 col_act = ImGui::GetColorU32(ImGuiCol_ButtonActive);
-    ImU32 col_close_hov = ResolveColor(ColorId::kRed);
-    ImU32 col_close_act = ResolveColor(ColorId::kBrightRed);
-    float rounding = ImGui::GetStyle().FrameRounding;
-
-    for (int i = 0; i < btn_count; ++i) {
-      bool hovered = hit(btns[i].bmin, btns[i].bmax);
-      bool pressed = hovered && mouse_down && csd_pressed_ == btns[i].id;
-      bool is_close = btns[i].id == CSDButton::kClose;
-      ImU32 bg;
-      if (pressed)
-        bg = is_close ? col_close_act : col_act;
-      else if (hovered)
-        bg = is_close ? col_close_hov : col_hov;
-      else
-        bg = col_btn;
-      dl->AddRectFilled(btns[i].bmin, btns[i].bmax, bg, rounding);
-    }
-
-    // Draw icons.
-    ImU32 icon_col = ImGui::GetColorU32(ImGuiCol_Text);
-    for (int i = 0; i < btn_count; ++i) {
-      ImVec2 bmin = btns[i].bmin, bmax = btns[i].bmax;
-      float sz = std::min(bmax.x - bmin.x, bmax.y - bmin.y);
-      float thick = std::max(1.5f, sz * 0.09f);
-      float cx = (bmin.x + bmax.x) * 0.5f, cy = (bmin.y + bmax.y) * 0.5f;
-      switch (btns[i].id) {
-        case CSDButton::kMinimize: {
-          float hw = sz * 0.22f;
-          dl->AddLine(ImVec2(cx - hw, cy), ImVec2(cx + hw, cy), icon_col,
-                      thick);
-          break;
-        }
-        case CSDButton::kMaximize:
-          if (delegate_.IsMaximized()) {
-            float half = sz * 0.16f, off = sz * 0.08f;
-            dl->AddRect(ImVec2(cx - half - off, cy - half + off),
-                        ImVec2(cx + half - off, cy + half + off), icon_col, 0,
-                        0, thick);
-            float bx0 = cx - half + off, by0 = cy - half - off;
-            float bx1 = cx + half + off, by1 = cy + half - off;
-            dl->AddLine(ImVec2(bx0, by0), ImVec2(bx1, by0), icon_col, thick);
-            dl->AddLine(ImVec2(bx1, by0), ImVec2(bx1, by1), icon_col, thick);
-            dl->AddLine(ImVec2(bx0, by0), ImVec2(bx0, cy - half + off),
-                        icon_col, thick);
-            dl->AddLine(ImVec2(cx + half - off, by1), ImVec2(bx1, by1),
-                        icon_col, thick);
-          } else {
-            float half = sz * 0.20f;
-            dl->AddRect(ImVec2(cx - half, cy - half),
-                        ImVec2(cx + half, cy + half), icon_col, 0, 0, thick);
-          }
-          break;
-        case CSDButton::kClose: {
-          float half = sz * 0.20f;
-          dl->AddLine(ImVec2(cx - half, cy - half),
-                      ImVec2(cx + half, cy + half), icon_col, thick);
-          dl->AddLine(ImVec2(cx + half, cy - half),
-                      ImVec2(cx - half, cy + half), icon_col, thick);
-          break;
-        }
-        default:
-          break;
-      }
-    }
-
-    // Release detection.
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-      for (int i = 0; i < btn_count; ++i) {
-        if (csd_pressed_ == btns[i].id && hit(btns[i].bmin, btns[i].bmax)) {
-          switch (btns[i].id) {
-            case CSDButton::kMinimize:
-              minimize_requested = true;
-              break;
-            case CSDButton::kMaximize:
-              maximize_toggle_requested = true;
-              break;
-            case CSDButton::kClose:
-              close_requested = true;
-              break;
-            default:
-              break;
-          }
-        }
-      }
-      csd_pressed_ = CSDButton::kNone;
-    }
-
-    // App icon right-click for window menu.
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-        hit(csd_app_icon_min_, csd_app_icon_max_)) {
-      window_menu_requested = true;
-    }
-  }
-
-  // CSD drag detection: limit the interactive area to the window title region
-  // (the gap between the last toolbar widget and the right-side content).
-  // Double-click toggles maximize/restore; single-click initiates window drag.
-  if (csd) {
-    ImVec2 window_pos = ImGui::GetWindowPos();
-    float title_min_x = window_pos.x + widgets_end;
-    float title_max_x = window_pos.x + right_content_start;
-    float title_min_y = window_pos.y;
-    float title_max_y =
-        window_pos.y + frame_h + ImGui::GetStyle().WindowPadding.y * 2;
-    ImVec2 mouse = ImGui::GetMousePos();
-    if (mouse.x >= title_min_x && mouse.x < title_max_x &&
-        mouse.y >= title_min_y && mouse.y < title_max_y) {
-      if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-        maximize_toggle_requested = true;
-      else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-        delegate_.OnTitleBarDragRequested();
     }
   }
 
@@ -803,15 +536,6 @@ void Toolbar::Update(const SearchBar::MatchState& search_matches,
     delegate_.OnLowerViewRequested(*view_requested);
   if (search.next || search.prev)
     delegate_.OnSearchRequested(search.next ? 1 : -1);
-  if (minimize_requested)
-    delegate_.OnMinimizeRequested();
-  if (maximize_toggle_requested)
-    delegate_.OnMaximizeToggleRequested();
-  if (close_requested)
-    delegate_.OnCloseRequested();
-  if (window_menu_requested)
-    delegate_.OnWindowMenuRequested(static_cast<int>(csd_app_icon_min_.x),
-                                    static_cast<int>(csd_app_icon_max_.y));
 }
 
 void Toolbar::SetSearch(const std::string& term, CommitSearchMode mode) {

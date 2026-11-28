@@ -177,6 +177,8 @@ executable("gel") {
     "ui/style.h",
     "ui/syntax_highlight.cc",
     "ui/syntax_highlight.h",
+    "ui/title_bar.cc",
+    "ui/title_bar.h",
     "ui/toolbar.cc",
     "ui/toolbar.h",
     "ui/upper_panel/commit_context_menu.cc",

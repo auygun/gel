@@ -48,6 +48,10 @@ class WaylandFrame {
   // change its mind at any time; Update() picks the change up.
   bool client_side() const { return client_side_; }
 
+  // Whether the compositor shows the window as the active one, which title
+  // bars follow. Unlike keyboard focus, it holds on a seat with no keyboard.
+  bool activated() const;
+
   // Brings the frame up to date with the window: its size, its state, its
   // scale and the decoration mode. Call once events have been processed.
   // Returns whether anything changed that takes the window's next frame to
@@ -78,6 +82,7 @@ class WaylandFrame {
 
   GLFWwindow* window_;
   bool client_side_ = false;
+  bool activated_ = false;
 
   std::array<Surface, kPartCount> parts_;
   // Buffers replaced on a scale change, which the compositor may still be

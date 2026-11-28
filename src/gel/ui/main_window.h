@@ -35,6 +35,7 @@
 #include "gel/ui/popup_modal.h"
 #include "gel/ui/settings_modal.h"
 #include "gel/ui/style.h"
+#include "gel/ui/title_bar.h"
 #include "gel/ui/toolbar.h"
 #include "gel/ui/upper_panel/commit_history.h"
 #include "third_party/imgui/imgui/imgui.h"
@@ -50,6 +51,7 @@ class MainWindow final : public CommitHistory::Delegate,
                          public CommitDiff::Delegate,
                          public CommitTree::Delegate,
                          public Toolbar::Delegate,
+                         public TitleBar::Delegate,
                          public DirectoryBrowser::Delegate,
                          public HelpModal::Delegate {
  public:
@@ -89,10 +91,10 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnLostFocus();
   void OnGainedFocus();
 
-  // Whether the window draws its own title bar, in the toolbar: on Wayland
-  // compositors that do not decorate windows (GNOME). Can change at any time.
+  // Whether the window draws its own title bar: on Wayland compositors that
+  // do not decorate windows (GNOME). Can change at any time.
   bool using_csd() const;
-  bool IsWindowFocused() const final { return window_focused_; }
+  bool IsWindowFocused() const { return window_focused_; }
   bool IsSettingsModalOpen() const;
   bool IsDirectoryBrowserOpen() const;
 
@@ -119,6 +121,7 @@ class MainWindow final : public CommitHistory::Delegate,
   // Lays out whichever of the views above is active.
   LowerPanel lower_panel_;
   Toolbar toolbar_;
+  TitleBar title_bar_;
   SettingsModal settings_modal_;
   HelpModal help_modal_;
   GitConsoleWindow console_window_;
@@ -135,11 +138,12 @@ class MainWindow final : public CommitHistory::Delegate,
 
   bool csd_interactive_ = false;
   bool window_focused_ = true;
-  // Which title bar buttons the desktop shows, read once the title bar is
-  // first drawn.
+  // Which title bar buttons the desktop shows and whether it prefers dark,
+  // read once the title bar is first drawn.
   bool csd_buttons_queried_ = false;
   bool show_minimize_button_ = true;
   bool show_maximize_button_ = true;
+  bool dark_title_bar_ = false;
 
   std::vector<eng::Platform::FontInfo> fonts_;
   bool commit_search_busy_ = false;
@@ -226,22 +230,25 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnClearPathFilterRequested() final;
   void OnLowerViewRequested(LowerView view) final;
   LowerView GetLowerView() const final;
-  bool IsUsingCSD() const final;
-  bool IsMaximized() const final;
-  bool ShowMinimizeButton() const final;
-  bool ShowMaximizeButton() const final;
-  void OnMinimizeRequested() final;
-  void OnMaximizeToggleRequested() final;
-  void OnCloseRequested() final;
-  void OnTitleBarDragRequested() final;
-  void OnWindowMenuRequested(int x, int y) final;
-  const std::string& GetWindowTitle() const final;
   void OnBranchSwitchRequested(const std::string& branch) final;
   void OnConsoleWindowRequested() final;
   void OnKeepDrawingRequested() final;
   bool IsDiffSearchShown() const final;
   bool IsDiffSearchFocused() const final;
   void FocusDiffSearch() final;
+
+  // TitleBar::Delegate implementation
+  const std::string& GetWindowTitle() const final;
+  bool IsWindowActive() const final;
+  bool IsWindowMaximized() const final;
+  bool IsDarkMode() const final;
+  bool ShowMinimizeButton() const final;
+  bool ShowMaximizeButton() const final;
+  void OnMinimizeRequested() final;
+  void OnMaximizeToggleRequested() final;
+  void OnCloseRequested() final;
+  void OnMoveRequested() final;
+  void OnWindowMenuRequested(int x, int y) final;
 
   // DirectoryBrowser::Delegate implementation
   void OnDirectorySelected(const std::filesystem::path& path) final;

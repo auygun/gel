@@ -40,17 +40,6 @@ class Toolbar {
     // Shows |view| in the lower panel.
     virtual void OnLowerViewRequested(LowerView view) = 0;
     virtual LowerView GetLowerView() const = 0;
-    virtual bool IsUsingCSD() const = 0;
-    virtual bool IsMaximized() const = 0;
-    virtual bool ShowMinimizeButton() const = 0;
-    virtual bool ShowMaximizeButton() const = 0;
-    virtual void OnMinimizeRequested() = 0;
-    virtual void OnMaximizeToggleRequested() = 0;
-    virtual void OnCloseRequested() = 0;
-    virtual void OnTitleBarDragRequested() = 0;
-    virtual void OnWindowMenuRequested(int x, int y) = 0;
-    virtual const std::string& GetWindowTitle() const = 0;
-    virtual bool IsWindowFocused() const = 0;
     virtual void OnBranchSwitchRequested(const std::string& branch) = 0;
     virtual void OnConsoleWindowRequested() = 0;
     // Asks the user to confirm |message| before running |on_confirm|.
@@ -111,12 +100,6 @@ class Toolbar {
   enum class Field { kNone = -1, kCommit, kSearch, kDiffSearch };
   Field active_field_ = Field::kNone;
   bool tooltip_suppressed_ = false;
-
-  // CSD button state for foreground draw list rendering and raw input.
-  enum class CSDButton { kNone, kMinimize, kMaximize, kClose };
-  CSDButton csd_pressed_ = CSDButton::kNone;
-  ImVec2 csd_app_icon_min_{};
-  ImVec2 csd_app_icon_max_{};
 
   std::string search_term_;
   CommitSearchMode search_mode_ = CommitSearchMode::kContaining;

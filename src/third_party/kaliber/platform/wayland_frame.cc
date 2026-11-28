@@ -161,6 +161,10 @@ WaylandFrame::~WaylandFrame() {
   DestroyParts();
 }
 
+bool WaylandFrame::activated() const {
+  return activated_;
+}
+
 bool WaylandFrame::Update() {
   _GLFWwindow* w = Internal(window_);
   if (!w->wl.xdg.toplevel)
@@ -182,6 +186,12 @@ bool WaylandFrame::Update() {
     client_side = false;
   if (client_side != client_side_) {
     client_side_ = client_side;
+    changed = true;
+  }
+
+  // The title bar shows whether the window is active.
+  if (w->wl.activated != activated_) {
+    activated_ = w->wl.activated;
     changed = true;
   }
 

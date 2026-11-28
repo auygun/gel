@@ -103,6 +103,7 @@ MainWindow::MainWindow(GraphicsDelegate& graphics_delegate,
           main_thread_busy_),
       lower_panel_(settings_),
       toolbar_(*this, runner_, git_repo_, settings_),
+      title_bar_(*this),
       settings_modal_(graphics_delegate_),
       help_modal_(*this),
       console_window_(runner_, settings_),
@@ -397,22 +398,33 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
   ApplyPendingStyle();
 
 #if defined(OS_LINUX)
-  // Read the desktop's title bar layout once there is a title bar to draw.
+  // Read the desktop's title bar layout and color scheme once there is a
+  // title bar to draw: both run a command.
   if (!csd_buttons_queried_ && using_csd()) {
     csd_buttons_queried_ = true;
     auto vis = platform_.GetCSDButtonVisibility();
     show_minimize_button_ = vis.minimize;
     show_maximize_button_ = vis.maximize;
+    dark_title_bar_ = platform_.IsDarkMode();
   }
 #endif
 
   if (!popup_modal_.IsVisible())
     HandleKeyboardShortcuts();
 
-  // Full-window ImGui frame with no decoration or background.
+  // Full-window ImGui frame with no decoration or background, below the
+  // title bar when the window draws its own.
   const ImGuiViewport* viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImVec2 frame_pos = viewport->WorkPos;
+  ImVec2 frame_size = viewport->WorkSize;
+  if (using_csd()) {
+    title_bar_.Update();
+    float title_height = TitleBar::GetHeight();
+    frame_pos.y += title_height;
+    frame_size.y = std::max(0.0f, frame_size.y - title_height);
+  }
+  ImGui::SetNextWindowPos(frame_pos);
+  ImGui::SetNextWindowSize(frame_size);
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
   bool gel_open = ImGui::Begin(
@@ -837,12 +849,22 @@ LowerView MainWindow::GetLowerView() const {
   return settings_.lower_view;
 }
 
-bool MainWindow::IsUsingCSD() const {
-  return using_csd();
+bool MainWindow::IsWindowActive() const {
+#if defined(OS_LINUX)
+  return platform_.IsWindowActivated();
+#else
+  return window_focused_;
+#endif
 }
 
-bool MainWindow::IsMaximized() const {
+bool MainWindow::IsWindowMaximized() const {
   return platform_.IsMaximized();
+}
+
+bool MainWindow::IsDarkMode() const {
+  // The desktop's preference, as the title bars of other windows follow it
+  // whatever gel's own style.
+  return dark_title_bar_;
 }
 
 bool MainWindow::ShowMinimizeButton() const {
@@ -865,7 +887,7 @@ void MainWindow::OnCloseRequested() {
   platform_.Exit();
 }
 
-void MainWindow::OnTitleBarDragRequested() {
+void MainWindow::OnMoveRequested() {
 #if defined(OS_LINUX)
   csd_interactive_ = true;
   platform_.BeginInteractiveMove();

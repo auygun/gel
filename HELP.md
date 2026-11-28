@@ -98,15 +98,14 @@ waiting.
 ### Client-Side Decorations
 
 On Wayland desktops that leave window decorations to applications (GNOME),
-gel draws its own title bar in the toolbar. Elsewhere (Windows, macOS, X11 and
-Wayland desktops such as KDE Plasma) the desktop draws the title bar as usual.
+gel draws its own title bar above the toolbar, in the style of GNOME's. Elsewhere
+(Windows, macOS, X11 and Wayland desktops such as KDE Plasma) the desktop draws
+the title bar as usual.
 
-The app icon appears at the left edge of the toolbar -- right-click it to
-open the window menu. Minimize, maximize/restore, and close buttons appear at
-the right edge, following the desktop's title bar button layout. The window
-title is displayed in the toolbar between the controls; drag it to move the
-window and double-click it to maximize or restore. Drag the window's shadow to
-resize it.
+The title bar shows the window title and, at the right, the window buttons the
+desktop's title bar button layout includes. Drag the title bar to move the
+window, double-click it to maximize or restore, and right-click it for the
+window menu. Drag the window's shadow to resize it.
 
 ## Keyboard Shortcuts
 

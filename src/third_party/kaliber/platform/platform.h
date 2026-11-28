@@ -195,6 +195,9 @@ class Platform {
   // is shown. The rest of the frame (a shadow that also resizes the window)
   // is drawn here. Elsewhere the window manager decorates the window.
   bool UsesClientDecorations() const;
+  // Whether the window shows as the active one, for the title bar to follow.
+  // Always true where the window does not draw its own title bar.
+  bool IsWindowActivated() const;
   // Hands the window to the compositor to move, for a press on the title bar.
   void BeginInteractiveMove();
   // Shows the compositor's window menu at |x|, |y| in the window.
