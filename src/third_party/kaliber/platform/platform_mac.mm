@@ -301,33 +301,6 @@ const char* Platform::GetPrimarySelection() {
   return "";
 }
 
-void Platform::BeginInteractiveMove() {
-  NSWindow* nswindow = (NSWindow*)glfwGetCocoaWindow(window_);
-  NSPoint loc = [nswindow mouseLocationOutsideOfEventStream];
-  NSEvent* event =
-      [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown
-                         location:loc
-                    modifierFlags:0
-                        timestamp:[[NSProcessInfo processInfo] systemUptime]
-                     windowNumber:[nswindow windowNumber]
-                          context:nil
-                      eventNumber:0
-                       clickCount:1
-                         pressure:1.0];
-  [nswindow performWindowDragWithEvent:event];
-}
-
-void Platform::ShowWindowMenu(int /*x*/, int /*y*/) {}
-
-Platform::CSDButtonVisibility Platform::GetCSDButtonVisibility() const {
-  return {};
-}
-
-void Platform::BeginInteractiveResize(int /*edges*/) {
-  // macOS handles resize natively via NSWindowStyleMaskResizable even for
-  // borderless windows, so no custom interactive resize is needed.
-}
-
 void Platform::SetWindowIcon(int width,
                              int height,
                              const unsigned char* rgba_pixels) {

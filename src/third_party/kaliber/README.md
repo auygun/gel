@@ -23,7 +23,7 @@ All engine types live in the `eng` namespace. Base/utility types live in `base`.
 - `timer.h`, `interpolation.h`, `hash.h`, `file.h` — Small utilities.
 
 **platform/** — Windowing and input via GLFW:
-- `Platform` — Creates/manages the GLFW window, tracks input state (keys, mouse, scroll), handles DPI scaling, clipboard, primary selection, CSD (client-side decorations), font enumeration, and dark mode detection. Platform-specific code in `platform_linux.cc`, `platform_win.cc`, `platform_mac.mm`.
+- `Platform` — Creates/manages the GLFW window, tracks input state (keys, mouse, scroll), handles DPI scaling, clipboard, primary selection, window decorations on Wayland compositors that leave them to the client (`wayland_frame.cc`), font enumeration, and dark mode detection. Platform-specific code in `platform_linux.cc`, `platform_win.cc`, `platform_mac.mm`.
 - `PlatformObserver` — Interface for window lifecycle callbacks (`OnWindowCreated`, `OnFramebufferResized`, `LostFocus`, etc.).
 - Linux-specific: Wayland primary selection protocol (`wayland_selection.h`), XDG desktop entry installation (`desktop_entry_linux.cc`).
 

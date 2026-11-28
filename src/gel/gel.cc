@@ -275,19 +275,9 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
   }
 #endif
 
-  // Remove the window manager title bar and use client-side decorations
-  // (custom window controls drawn in the toolbar).
-  if (settings_.client_side_decorations)
-    platform_->SetDecorated(false);
-
   if (!CreateRenderer(settings_.renderer_type)) {
     LOG(0) << "Failed to create renderer";
     return {};
-  }
-
-  if (!platform_->IsDecorated()) {
-    auto vis = platform_->GetCSDButtonVisibility();
-    main_window_.SetUsingCSD(true, vis.minimize, vis.maximize);
   }
 
   renderer_->SetClearColor(IsDarkMode()
@@ -399,15 +389,14 @@ std::pair<std::unique_ptr<Renderer>, std::unique_ptr<ImguiBackend>> Gel::Run(
     // Confine the cursor to the content area while ImGui is capturing the mouse
     // with a button held (e.g. scrollbar drag).  This prevents the cursor from
     // reaching window decorations where GLFW/WM would consume the button
-    // release and leave ImGui's capture state stuck. Not needed with CSD since
-    // there are no WM decorations.
-    if (!main_window_.using_csd()) {
-      platform_->SetCursorCaptured(
-          ImGui::GetIO().WantCaptureMouse &&
-          (platform_->IsMouseButtonDown(MouseButton::Left) ||
-           platform_->IsMouseButtonDown(MouseButton::Right) ||
-           platform_->IsMouseButtonDown(MouseButton::Middle)));
-    }
+    // release and leave ImGui's capture state stuck. Not needed when the
+    // window draws its own title bar, which can start any time (Wayland), so
+    // the capture is released then.
+    platform_->SetCursorCaptured(
+        !main_window_.using_csd() && ImGui::GetIO().WantCaptureMouse &&
+        (platform_->IsMouseButtonDown(MouseButton::Left) ||
+         platform_->IsMouseButtonDown(MouseButton::Right) ||
+         platform_->IsMouseButtonDown(MouseButton::Middle)));
 
     TaskRunner::GetThreadLocalTaskRunner()->RunTasks<Consumer::Single>();
 

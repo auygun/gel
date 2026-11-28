@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "third_party/kaliber/base/log.h"
+#include "third_party/kaliber/platform/wayland_frame.h"
 #include "third_party/kaliber/platform/wayland_selection.h"
 #define _GLFW_X11
 #define _GLFW_WAYLAND
@@ -342,93 +343,29 @@ bool Platform::PlatformUpdate(double wait_timeout) {
   return false;
 }
 
+bool Platform::UsesClientDecorations() const {
+  return wayland_frame_ && wayland_frame_->client_side();
+}
+
 void Platform::BeginInteractiveMove() {
-  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-    auto* wl = GetWaylandSelection();
-    if (!wl || !wl->seat)
-      return;
-    auto* toplevel = ((_GLFWwindow*)window_)->wl.xdg.toplevel;
-    if (toplevel)
-      xdg_toplevel_move(toplevel, wl->seat, wl->serial);
-    mouse_buttons_down_[static_cast<int>(MouseButton::Left)] = false;
+  auto* wl = GetWaylandSelection();
+  if (!wayland_frame_ || !wl || !wl->seat)
     return;
-  }
-
-  if (glfwGetPlatform() != GLFW_PLATFORM_X11)
+  auto* toplevel = reinterpret_cast<_GLFWwindow*>(window_)->wl.xdg.toplevel;
+  if (!toplevel)
     return;
-  Display* display = glfwGetX11Display();
-  Window xwindow = glfwGetX11Window(window_);
-
-  // Release any grabbed pointer so the WM can take over.
-  XUngrabPointer(display, CurrentTime);
-  XFlush(display);
-
-  // _NET_WM_MOVERESIZE direction for move.
-  constexpr long kMoveResize_MOVE = 8;
-
-  Atom wm_moveresize = XInternAtom(display, "_NET_WM_MOVERESIZE", False);
-  Window root = DefaultRootWindow(display);
-
-  // Get absolute mouse position.
-  Window child_ret;
-  int root_x, root_y, win_x, win_y;
-  unsigned int mask;
-  XQueryPointer(display, xwindow, &root, &child_ret, &root_x, &root_y, &win_x,
-                &win_y, &mask);
-
-  XEvent ev = {};
-  ev.xclient.type = ClientMessage;
-  ev.xclient.window = xwindow;
-  ev.xclient.message_type = wm_moveresize;
-  ev.xclient.format = 32;
-  ev.xclient.data.l[0] = root_x;
-  ev.xclient.data.l[1] = root_y;
-  ev.xclient.data.l[2] = kMoveResize_MOVE;
-  ev.xclient.data.l[3] = Button1;
-  ev.xclient.data.l[4] = 1;  // source indication: normal application
-
-  XSendEvent(display, root, False,
-             SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-  XFlush(display);
+  xdg_toplevel_move(toplevel, wl->seat, wl->serial);
+  // The compositor takes the pointer, along with the button's release.
   mouse_buttons_down_[static_cast<int>(MouseButton::Left)] = false;
 }
 
 void Platform::ShowWindowMenu(int x, int y) {
-  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-    auto* wl = GetWaylandSelection();
-    if (!wl || !wl->seat)
-      return;
-    auto* toplevel = ((_GLFWwindow*)window_)->wl.xdg.toplevel;
-    if (toplevel)
-      xdg_toplevel_show_window_menu(toplevel, wl->seat, wl->serial, x, y);
+  auto* wl = GetWaylandSelection();
+  if (!wayland_frame_ || !wl || !wl->seat)
     return;
-  }
-
-  if (glfwGetPlatform() != GLFW_PLATFORM_X11)
-    return;
-  Display* display = glfwGetX11Display();
-  Window xwindow = glfwGetX11Window(window_);
-  Window root = DefaultRootWindow(display);
-
-  // Convert window-relative coordinates to root coordinates.
-  Window child_ret;
-  int root_x, root_y;
-  XTranslateCoordinates(display, xwindow, root, x, y, &root_x, &root_y,
-                        &child_ret);
-
-  Atom show_menu = XInternAtom(display, "_GTK_SHOW_WINDOW_MENU", False);
-  XEvent ev = {};
-  ev.xclient.type = ClientMessage;
-  ev.xclient.window = xwindow;
-  ev.xclient.message_type = show_menu;
-  ev.xclient.format = 32;
-  ev.xclient.data.l[0] = 0;  // device id (pointer)
-  ev.xclient.data.l[1] = root_x;
-  ev.xclient.data.l[2] = root_y;
-
-  XSendEvent(display, root, False,
-             SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-  XFlush(display);
+  auto* toplevel = reinterpret_cast<_GLFWwindow*>(window_)->wl.xdg.toplevel;
+  if (toplevel)
+    xdg_toplevel_show_window_menu(toplevel, wl->seat, wl->serial, x, y);
 }
 
 Platform::CSDButtonVisibility Platform::GetCSDButtonVisibility() const {
@@ -453,66 +390,6 @@ Platform::CSDButtonVisibility Platform::GetCSDButtonVisibility() const {
     }
   }
   return vis;
-}
-
-void Platform::BeginInteractiveResize(int edges) {
-  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-    auto* wl = GetWaylandSelection();
-    if (!wl || !wl->seat)
-      return;
-    // Convert from _NET_WM_MOVERESIZE direction to xdg_toplevel_resize_edge.
-    // The caller uses X11 direction values (0-7); map to Wayland edge bitmask.
-    constexpr uint32_t kMap[] = {
-        XDG_TOPLEVEL_RESIZE_EDGE_TOP_LEFT,      // 0: _SIZE_TOPLEFT
-        XDG_TOPLEVEL_RESIZE_EDGE_TOP,           // 1: _SIZE_TOP
-        XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT,     // 2: _SIZE_TOPRIGHT
-        XDG_TOPLEVEL_RESIZE_EDGE_RIGHT,         // 3: _SIZE_RIGHT
-        XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT,  // 4: _SIZE_BOTTOMRIGHT
-        XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM,        // 5: _SIZE_BOTTOM
-        XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT,   // 6: _SIZE_BOTTOMLEFT
-        XDG_TOPLEVEL_RESIZE_EDGE_LEFT,          // 7: _SIZE_LEFT
-    };
-    if (edges < 0 || edges > 7)
-      return;
-    auto* toplevel = ((_GLFWwindow*)window_)->wl.xdg.toplevel;
-    if (toplevel)
-      xdg_toplevel_resize(toplevel, wl->seat, wl->serial, kMap[edges]);
-    mouse_buttons_down_[static_cast<int>(MouseButton::Left)] = false;
-    return;
-  }
-
-  if (glfwGetPlatform() != GLFW_PLATFORM_X11)
-    return;
-  Display* display = glfwGetX11Display();
-  Window xwindow = glfwGetX11Window(window_);
-
-  XUngrabPointer(display, CurrentTime);
-  XFlush(display);
-
-  Atom wm_moveresize = XInternAtom(display, "_NET_WM_MOVERESIZE", False);
-  Window root = DefaultRootWindow(display);
-
-  Window child_ret;
-  int root_x, root_y, win_x, win_y;
-  unsigned int mask;
-  XQueryPointer(display, xwindow, &root, &child_ret, &root_x, &root_y, &win_x,
-                &win_y, &mask);
-
-  XEvent ev = {};
-  ev.xclient.type = ClientMessage;
-  ev.xclient.window = xwindow;
-  ev.xclient.message_type = wm_moveresize;
-  ev.xclient.format = 32;
-  ev.xclient.data.l[0] = root_x;
-  ev.xclient.data.l[1] = root_y;
-  ev.xclient.data.l[2] = edges;
-  ev.xclient.data.l[3] = Button1;
-  ev.xclient.data.l[4] = 1;
-
-  XSendEvent(display, root, False,
-             SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-  XFlush(display);
-  mouse_buttons_down_[static_cast<int>(MouseButton::Left)] = false;
 }
 
 void Platform::SetWindowBackgroundColor(float r, float g, float b) {

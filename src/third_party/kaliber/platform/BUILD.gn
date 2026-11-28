@@ -9,6 +9,8 @@ source_set("platform") {
     sources += [
       "desktop_entry_linux.cc",
       "platform_linux.cc",
+      "wayland_frame.cc",
+      "wayland_frame.h",
       "wayland_selection.cc",
       "wayland_selection.h",
     ]

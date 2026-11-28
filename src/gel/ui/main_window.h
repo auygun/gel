@@ -79,9 +79,6 @@ class MainWindow final : public CommitHistory::Delegate,
   // Sets the initial pending style so it is applied on the first frame.
   void SetPendingStyle(Style style, Layout layout, float font_scale);
 
-  // CSD (client-side decoration) state.
-  void SetUsingCSD(bool csd, bool show_minimize, bool show_maximize);
-
   // CSD interactive state (move/resize in progress).
   void SetCSDInteractive(bool interactive) { csd_interactive_ = interactive; }
 
@@ -92,7 +89,9 @@ class MainWindow final : public CommitHistory::Delegate,
   void OnLostFocus();
   void OnGainedFocus();
 
-  bool using_csd() const { return using_csd_; }
+  // Whether the window draws its own title bar, in the toolbar: on Wayland
+  // compositors that do not decorate windows (GNOME). Can change at any time.
+  bool using_csd() const;
   bool IsWindowFocused() const final { return window_focused_; }
   bool IsSettingsModalOpen() const;
   bool IsDirectoryBrowserOpen() const;
@@ -134,9 +133,11 @@ class MainWindow final : public CommitHistory::Delegate,
 
   std::optional<std::tuple<Style, Layout, float>> pending_style_;
 
-  bool using_csd_ = false;
   bool csd_interactive_ = false;
   bool window_focused_ = true;
+  // Which title bar buttons the desktop shows, read once the title bar is
+  // first drawn.
+  bool csd_buttons_queried_ = false;
   bool show_minimize_button_ = true;
   bool show_maximize_button_ = true;
 
@@ -169,7 +170,6 @@ class MainWindow final : public CommitHistory::Delegate,
   bool IsDiffViewActive() const;
   void UpdateWindowTitle(const std::vector<std::string>& extra_args);
   void MergeWorkerData();
-  void HandleCSDResize();
   void ApplyPendingStyle();
   void HandleKeyboardShortcuts();
 

@@ -66,7 +66,6 @@ void SettingsModal::Open(PersistentSettings& settings,
   settings_side_pane_on_right_ = settings.side_pane_on_right;
   settings_show_line_numbers_ = settings.show_line_numbers;
   settings_commit_graph_max_lanes_ = settings.commit_graph_max_lanes;
-  settings_csd_ = settings.client_side_decorations;
   settings_display_backend_ = settings.display_backend;
   fonts_ = &fonts;
   settings_font_index_ = 0;
@@ -406,12 +405,6 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
         ImGui::EndCombo();
       }
     }
-#if defined(OS_LINUX)
-    ImGui::Checkbox("Client-side decorations", &settings_csd_);
-    if (settings_csd_ != settings.client_side_decorations)
-      ImGui::TextDisabled("Requires restart");
-    ImGui::Separator();
-#endif
     ImGui::SliderInt("Graph lanes", &settings_commit_graph_max_lanes_, 1,
                      CommitGraph::kMaxLanes, "%d",
                      ImGuiSliderFlags_AlwaysClamp);
@@ -621,9 +614,6 @@ SettingsModalResult SettingsModal::Update(PersistentSettings& settings,
       settings.table_columns = settings_table_columns_;
       settings.ext_mappings = settings_ext_mappings_;
       settings.side_pane_on_right = settings_side_pane_on_right_;
-#if defined(OS_LINUX)
-      settings.client_side_decorations = settings_csd_;
-#endif
       settings.display_backend = settings_display_backend_;
       if (fonts_) {
         if (settings_font_index_ == 0) {

@@ -72,16 +72,6 @@ void Platform::PlatformInit() {
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark_mode,
                           sizeof(use_dark_mode));
   }
-  if (!decorated_) {
-    // Let Window handle resize natively via WS_THICKFRAME, so no custom
-    // interactive resize is needed.
-    LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
-    style |= WS_THICKFRAME | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
-    SetWindowLongPtr(hwnd, GWL_STYLE, style);
-    // After changing the style, we need to notify the window manager.
-    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-  }
 }
 
 void Platform::PlatformShutdown() {}
@@ -373,35 +363,6 @@ void Platform::OpenURL(const char* url) {
 void Platform::SetPrimarySelection(const char* /*text*/) {}
 const char* Platform::GetPrimarySelection() {
   return "";
-}
-
-void Platform::BeginInteractiveMove() {
-  HWND hwnd = glfwGetWin32Window(window_);
-  ReleaseCapture();
-  SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-  mouse_buttons_down_[static_cast<int>(MouseButton::Left)] = false;
-}
-
-void Platform::ShowWindowMenu(int x, int y) {
-  HWND hwnd = glfwGetWin32Window(window_);
-  HMENU menu = GetSystemMenu(hwnd, FALSE);
-  if (!menu)
-    return;
-  POINT pt = {x, y};
-  ClientToScreen(hwnd, &pt);
-  int cmd = TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD,
-                           pt.x, pt.y, 0, hwnd, nullptr);
-  if (cmd)
-    PostMessage(hwnd, WM_SYSCOMMAND, cmd, 0);
-}
-
-Platform::CSDButtonVisibility Platform::GetCSDButtonVisibility() const {
-  return {};
-}
-
-void Platform::BeginInteractiveResize(int edges) {
-  // Windows handles resize natively via WS_THICKFRAME even for borderless
-  // windows, so no custom interactive resize is needed.
 }
 
 }  // namespace eng

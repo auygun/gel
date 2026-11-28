@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -16,6 +17,9 @@ struct GLFWwindow;
 namespace eng {
 
 class PlatformObserver;
+#if defined(OS_LINUX)
+class WaylandFrame;
+#endif
 
 // Codepoints probed to discover fallback fonts, one per script the default
 // font (DejaVu Sans Mono) does not cover. Each probe is resolved to a font
@@ -185,20 +189,24 @@ class Platform {
   void SetMaximized(bool maximized);
   void Minimize();
 
-  // Client-side decorations (CSD). When decorated is false the window manager
-  // title bar is removed and the application is responsible for drawing window
-  // controls and handling move/resize.
-  void SetDecorated(bool decorated);
-  bool IsDecorated() const;
+#if defined(OS_LINUX)
+  // Whether the window draws its own title bar: on Wayland, where the
+  // compositor does not decorate windows (GNOME). Can change while the window
+  // is shown. The rest of the frame (a shadow that also resizes the window)
+  // is drawn here. Elsewhere the window manager decorates the window.
+  bool UsesClientDecorations() const;
+  // Hands the window to the compositor to move, for a press on the title bar.
   void BeginInteractiveMove();
-  void BeginInteractiveResize(int edges);
+  // Shows the compositor's window menu at |x|, |y| in the window.
   void ShowWindowMenu(int x, int y);
 
+  // Title bar buttons the desktop is configured to show, besides close.
   struct CSDButtonVisibility {
     bool minimize = true;
     bool maximize = true;
   };
   CSDButtonVisibility GetCSDButtonVisibility() const;
+#endif
 
   // Set the window background color used by the window manager before any
   // rendering occurs.  On X11 this sets the X window background pixel.
@@ -225,9 +233,9 @@ class Platform {
 
  private:
   float device_scale_factor_ = 1.0f;
-  bool decorated_ = true;
 #if defined(OS_LINUX)
   int display_backend_hint_ = 0;
+  std::unique_ptr<WaylandFrame> wayland_frame_;
 #endif
 
   bool has_focus_ = false;

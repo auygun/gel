@@ -97,15 +97,16 @@ waiting.
 
 ### Client-Side Decorations
 
-Client-side decorations (CSD) are only available on Linux (X11 and Wayland);
-the setting is not shown on other platforms.
+On Wayland desktops that leave window decorations to applications (GNOME),
+gel draws its own title bar in the toolbar. Elsewhere (Windows, macOS, X11 and
+Wayland desktops such as KDE Plasma) the desktop draws the title bar as usual.
 
-When CSD is enabled, the native
-window title bar is replaced by custom window controls drawn in the toolbar.
 The app icon appears at the left edge of the toolbar -- right-click it to
-open the system window menu. Minimize, maximize/restore, and close buttons
-appear at the right edge. The window title is displayed in the toolbar between
-the controls. CSD can be toggled in Settings (requires restart).
+open the window menu. Minimize, maximize/restore, and close buttons appear at
+the right edge, following the desktop's title bar button layout. The window
+title is displayed in the toolbar between the controls; drag it to move the
+window and double-click it to maximize or restore. Drag the window's shadow to
+resize it.
 
 ## Keyboard Shortcuts
 
@@ -732,7 +733,6 @@ Open the settings modal via the gear button in the toolbar.
 - **Display** (Linux) -- Display backend: Auto, Wayland, or X11 (requires restart)
 - **Renderer** -- Vulkan or OpenGL (not available on macOS)
 - **GPU** -- Select which GPU to use (Vulkan only, shown when multiple GPUs are available)
-- **Client-side decorations** (Linux) -- Use custom title bar drawn in the toolbar (requires restart)
 - **Graph lanes** -- Slider from 1 to 5 (default 2): the most lanes
   the commit graph lays out side by side. See [Graph](#graph) for how
   branches that don't fit are shown

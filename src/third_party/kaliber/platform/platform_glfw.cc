@@ -4,6 +4,10 @@
 #include "third_party/kaliber/base/log.h"
 #include "third_party/kaliber/platform/platform_observer.h"
 
+#if defined(OS_LINUX)
+#include "third_party/kaliber/platform/wayland_frame.h"
+#endif
+
 namespace eng {
 
 namespace {
@@ -272,6 +276,9 @@ Platform::~Platform() {
       glfwDestroyCursor(c);
   }
   if (window_) {
+#if defined(OS_LINUX)
+    wayland_frame_.reset();
+#endif
     glfwDestroyWindow(window_);
     window_ = nullptr;
   }
@@ -287,6 +294,9 @@ void Platform::CreateMainWindow(bool use_opengl, int width, int height) {
         c = nullptr;
       }
     }
+#if defined(OS_LINUX)
+    wayland_frame_.reset();
+#endif
     glfwDestroyWindow(window_);
     window_ = nullptr;
     // Reset input state so keys/buttons held when the old window was destroyed
@@ -298,8 +308,10 @@ void Platform::CreateMainWindow(bool use_opengl, int width, int height) {
 #if defined(OS_LINUX)
   if (display_backend_hint_)
     glfwInitHint(GLFW_PLATFORM, display_backend_hint_);
-  if (!decorated_)
-    glfwInitHint(GLFW_WAYLAND_LIBDECOR, GLFW_WAYLAND_DISABLE_LIBDECOR);
+  // libdecor's GTK plugin, which GLFW decorates windows with where the Wayland
+  // compositor does not (GNOME), redraws a buffer the size of the window on
+  // every resize step. WaylandFrame decorates the window instead.
+  glfwInitHint(GLFW_WAYLAND_LIBDECOR, GLFW_WAYLAND_DISABLE_LIBDECOR);
 #endif
 
   if (!glfwInit()) {
@@ -318,9 +330,12 @@ void Platform::CreateMainWindow(bool use_opengl, int width, int height) {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   }
-  if (!decorated_)
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 #if defined(OS_LINUX)
+  // Keeps GLFW from drawing its own fallback decorations on Wayland, which
+  // also has it ask for client-side decorations. WaylandFrame asks for
+  // server-side ones and draws what the compositor leaves out.
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND)
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
   glfwWindowHintString(GLFW_X11_CLASS_NAME, "gel");
   glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "gel");
   glfwWindowHintString(GLFW_WAYLAND_APP_ID, "gel");
@@ -444,6 +459,11 @@ void Platform::CreateMainWindow(bool use_opengl, int width, int height) {
   cursors_[7] = glfwCreateStandardCursor(GLFW_POINTING_HAND_CURSOR);
   cursors_[10] = glfwCreateStandardCursor(GLFW_NOT_ALLOWED_CURSOR);
 
+#if defined(OS_LINUX)
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND)
+    wayland_frame_ = std::make_unique<WaylandFrame>(window_);
+#endif
+
   observer_->OnWindowCreated();
 
   PlatformInit();
@@ -466,6 +486,12 @@ void Platform::Update(double wait_timeout) {
       glfwPollEvents();
     }
   }
+
+#if defined(OS_LINUX)
+  // A change to the frame shows with the window's next frame.
+  if (wayland_frame_ && wayland_frame_->Update())
+    has_event_.store(true, std::memory_order_relaxed);
+#endif
 
   double cursor_x = 0, cursor_y = 0;
   glfwGetCursorPos(window_, &cursor_x, &cursor_y);
@@ -530,14 +556,6 @@ void Platform::SetMaximized(bool maximized) {
 
 void Platform::Minimize() {
   glfwIconifyWindow(window_);
-}
-
-void Platform::SetDecorated(bool decorated) {
-  decorated_ = decorated;
-}
-
-bool Platform::IsDecorated() const {
-  return decorated_;
 }
 
 void Platform::SetMouseCursor(int cursor) {

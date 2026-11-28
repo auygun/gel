@@ -267,11 +267,6 @@ void PersistentSettings::Load() {
       display_backend =
           static_cast<DisplayBackend>(j["display_backend"].get<int>());
   }
-#if defined(OS_LINUX)
-  if (j.contains("client_side_decorations") &&
-      j["client_side_decorations"].is_boolean())
-    client_side_decorations = j["client_side_decorations"].get<bool>();
-#endif
   if (j.contains("search_case_sensitive") &&
       j["search_case_sensitive"].is_boolean())
     search_options.case_sensitive = j["search_case_sensitive"].get<bool>();
@@ -417,7 +412,6 @@ void PersistentSettings::Save() {
   j["side_pane_on_right"] = side_pane_on_right;
   j["file_list_tree"] = file_list_tree;
   j["display_backend"] = GetDisplayBackendName(display_backend);
-  j["client_side_decorations"] = client_side_decorations;
   j["search_case_sensitive"] = search_options.case_sensitive;
   j["search_whole_word"] = search_options.whole_word;
   j["search_regex"] = search_regex;

@@ -64,7 +64,6 @@ class SettingsModal {
   bool settings_side_pane_on_right_ = false;
   bool settings_show_line_numbers_ = true;
   int settings_commit_graph_max_lanes_ = 2;
-  bool settings_csd_ = false;
   DisplayBackend settings_display_backend_ = DisplayBackend::kAuto;
   int settings_font_index_ = 0;
   int original_font_index_ = 0;

@@ -85,7 +85,6 @@ class PersistentSettings {
   bool side_pane_on_right = false;
   // Show the changed files as a directory tree instead of a flat list.
   bool file_list_tree = false;
-  bool client_side_decorations = false;
   base::MatchOptions search_options;
   base::MatchOptions diff_search_options;
   // Adding/removing string and changing lines matching commit search: the

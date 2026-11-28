@@ -159,10 +159,12 @@ void MainWindow::SetPendingStyle(Style style, Layout layout, float font_scale) {
   pending_style_ = std::make_tuple(style, layout, font_scale);
 }
 
-void MainWindow::SetUsingCSD(bool csd, bool show_minimize, bool show_maximize) {
-  using_csd_ = csd;
-  show_minimize_button_ = show_minimize;
-  show_maximize_button_ = show_maximize;
+bool MainWindow::using_csd() const {
+#if defined(OS_LINUX)
+  return platform_.UsesClientDecorations();
+#else
+  return false;
+#endif
 }
 
 void MainWindow::OnLostFocus() {
@@ -392,8 +394,17 @@ void MainWindow::MergeWorkerData() {
 MainWindow::UpdateResult MainWindow::Update(float delta_time,
                                             int mouse_busy_tasks) {
   MergeWorkerData();
-  HandleCSDResize();
   ApplyPendingStyle();
+
+#if defined(OS_LINUX)
+  // Read the desktop's title bar layout once there is a title bar to draw.
+  if (!csd_buttons_queried_ && using_csd()) {
+    csd_buttons_queried_ = true;
+    auto vis = platform_.GetCSDButtonVisibility();
+    show_minimize_button_ = vis.minimize;
+    show_maximize_button_ = vis.maximize;
+  }
+#endif
 
   if (!popup_modal_.IsVisible())
     HandleKeyboardShortcuts();
@@ -502,90 +513,6 @@ MainWindow::UpdateResult MainWindow::Update(float delta_time,
 #endif
 
   return result;
-}
-
-void MainWindow::HandleCSDResize() {
-#if !defined(OS_APPLE) && !defined(OS_WIN)
-  if (using_csd_ && !platform_.IsMaximized()) {
-    int win_w = platform_.GetWindowWidth();
-    int win_h = platform_.GetWindowHeight();
-    int mx = platform_.GetMouseX();
-    int my = platform_.GetMouseY();
-
-    constexpr int kBorderSide = 5;
-    constexpr int kBorderTop = 3;
-    constexpr int kBorderBottom = 5;
-    constexpr int kCorner = 10;
-
-    constexpr int kSizeTopLeft = 0;
-    constexpr int kSizeTop = 1;
-    constexpr int kSizeTopRight = 2;
-    constexpr int kSizeRight = 3;
-    constexpr int kSizeBottomRight = 4;
-    constexpr int kSizeBottom = 5;
-    constexpr int kSizeBottomLeft = 6;
-    constexpr int kSizeLeft = 7;
-
-    bool at_left = mx < kBorderSide;
-    bool at_right = mx >= win_w - kBorderSide;
-    bool at_top = my < kBorderTop;
-    bool at_bottom = my >= win_h - kBorderBottom;
-    bool at_corner_top = my < kCorner;
-    bool at_corner_bottom = my >= win_h - kCorner;
-    bool at_corner_left = mx < kCorner;
-    bool at_corner_right = mx >= win_w - kCorner;
-
-    int direction = -1;
-    int cursor = -1;
-
-    if (at_top && at_corner_left) {
-      direction = kSizeTopLeft;
-      cursor = 6;
-    } else if (at_top && at_corner_right) {
-      direction = kSizeTopRight;
-      cursor = 5;
-    } else if (at_bottom && at_corner_left) {
-      direction = kSizeBottomLeft;
-      cursor = 5;
-    } else if (at_bottom && at_corner_right) {
-      direction = kSizeBottomRight;
-      cursor = 6;
-    } else if (at_left && at_corner_top) {
-      direction = kSizeTopLeft;
-      cursor = 6;
-    } else if (at_left && at_corner_bottom) {
-      direction = kSizeBottomLeft;
-      cursor = 5;
-    } else if (at_right && at_corner_top) {
-      direction = kSizeTopRight;
-      cursor = 5;
-    } else if (at_right && at_corner_bottom) {
-      direction = kSizeBottomRight;
-      cursor = 6;
-    } else if (at_top) {
-      direction = kSizeTop;
-      cursor = 3;
-    } else if (at_bottom) {
-      direction = kSizeBottom;
-      cursor = 3;
-    } else if (at_left) {
-      direction = kSizeLeft;
-      cursor = 4;
-    } else if (at_right) {
-      direction = kSizeRight;
-      cursor = 4;
-    }
-
-    if (direction >= 0 && platform_.IsCursorInside()) {
-      ImGui::SetMouseCursor(static_cast<ImGuiMouseCursor>(cursor));
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        csd_interactive_ = true;
-        platform_.BeginInteractiveResize(direction);
-        ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
-      }
-    }
-  }
-#endif
 }
 
 void MainWindow::ApplyPendingStyle() {
@@ -911,7 +838,7 @@ LowerView MainWindow::GetLowerView() const {
 }
 
 bool MainWindow::IsUsingCSD() const {
-  return using_csd_;
+  return using_csd();
 }
 
 bool MainWindow::IsMaximized() const {
@@ -939,15 +866,16 @@ void MainWindow::OnCloseRequested() {
 }
 
 void MainWindow::OnTitleBarDragRequested() {
+#if defined(OS_LINUX)
   csd_interactive_ = true;
   platform_.BeginInteractiveMove();
-#if defined(OS_WIN)
-  csd_interactive_ = false;
 #endif
 }
 
 void MainWindow::OnWindowMenuRequested(int x, int y) {
+#if defined(OS_LINUX)
   platform_.ShowWindowMenu(x, y);
+#endif
 }
 
 const std::string& MainWindow::GetWindowTitle() const {
